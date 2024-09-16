@@ -108,28 +108,30 @@ func GetConnection(
 		return nil, fmt.Errorf("can't get cluster %s info: %w", configPath, err)
 	}
 
-	if len(clusterInfo) < shard {
-		return nil, fmt.Errorf("invalid shard num %d, max = %d", shard, len(clusterInfo))
+	if clusterInfo.Shards() < shard {
+		return nil, fmt.Errorf("invalid shard num %d, max = %d", shard, clusterInfo.Shards())
 	}
 
-	var configBox ShardInstance
+	var (
+		configBox ShardInstance
+		ok        bool
+	)
 
 	switch instType {
 	case ReplicaInstanceType:
-		if len(clusterInfo[shard].Replicas) == 0 {
+		configBox, ok = clusterInfo.NextReplica(shard)
+		if !ok {
 			return nil, fmt.Errorf("replicas not set")
 		}
-
-		configBox = clusterInfo[shard].NextReplica()
 	case ReplicaOrMasterInstanceType:
-		if len(clusterInfo[shard].Replicas) != 0 {
-			configBox = clusterInfo[shard].NextReplica()
+		configBox, ok = clusterInfo.NextReplica(shard)
+		if ok {
 			break
 		}
 
 		fallthrough
 	case MasterInstanceType:
-		configBox = clusterInfo[shard].NextMaster()
+		configBox = clusterInfo.NextMaster(shard)
 	}
 
 	return ConnectionCacher().GetOrAdd(configBox, getConnection)

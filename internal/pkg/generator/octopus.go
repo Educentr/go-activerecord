@@ -26,10 +26,6 @@ var OctopusTemplatesPath embed.FS
 var OctopusMockRepositoryTmpl string
 
 //nolint:revive
-//go:embed tmpl/octopus/main.tmpl
-var OctopusRootRepositoryTmpl string
-
-//nolint:revive
 //go:embed tmpl/octopus/fixture.tmpl
 var OctopusFixtureRepositoryTmpl string
 

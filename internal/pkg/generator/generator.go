@@ -90,10 +90,6 @@ type MetaData struct {
 //go:embed tmpl/meta.tmpl
 var MetaTmpl string
 
-//nolint:revive
-//go:embed tmpl/vars.tmpl
-var VarsTmpl string
-
 func GenerateMeta(params MetaData) ([]GenerateFile, *arerror.ErrGeneratorFile) {
 	metaWriter := bytes.Buffer{}
 	metaFile := bufio.NewWriter(&metaWriter)
