@@ -1,0 +1,75 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+{{ if eq .Server.Conf "" -}}
+	"time"
+{{ end }}
+	"strings"
+
+	"github.com/mailru/activerecord/pkg/iproto/iproto"
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ if eq .Server.Conf "" -}}
+var boxOption, _ = octopus.NewOptions(
+	"{{ .Server.Host }}:{{ .Server.Port }}",
+	octopus.ModeMaster,
+	octopus.WithTimeout(time.Millisecond * {{ .Server.Timeout }}, time.Millisecond * {{ .Server.Timeout }}),
+)
+
+var clusterInfo = activerecord.NewClusterInfo(
+	activerecord.WithShard([]activerecord.OptionInterface{boxOption}, []activerecord.OptionInterface{}),
+){{ end }}
+
+func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceType) (*octopus.Connection, error){
+	optionCreator := func(sic activerecord.ShardInstanceConfig) (activerecord.OptionInterface, error) {
+		return octopus.NewOptions(
+			sic.Addr,
+			octopus.ServerModeType(sic.Mode),
+			octopus.WithTimeout(sic.Timeout, sic.Timeout),
+			octopus.WithPoolSize(sic.PoolSize),
+			octopus.WithPoolLogger(activerecord.IprotoLogger{}),
+		)
+	}
+
+	conn, err := activerecord.GetConnection(
+		ctx,
+		"arcfg", // ToDo config path
+		activerecord.MapGlobParam{
+			Timeout:  octopus.DefaultConnectionTimeout,
+			PoolSize: octopus.DefaultPoolSize,
+		},
+		optionCreator,
+		instanceType,
+		0, // ToDo shard number
+		func(options interface{}) (activerecord.ConnectionInterface, error) {
+			octopusOpt, ok := options.(*octopus.ConnectionOptions)
+			if !ok {
+				return nil, fmt.Errorf("invalid type of options %T, want Options", options)
+			}
+
+			return octopus.GetConnection(ctx, octopusOpt)
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error from connectionCacher: %w", err)
+	}
+
+	box, ok := conn.(*octopus.Connection)
+	if !ok {
+		return nil, fmt.Errorf("invalid connection type %T, want *octopus.Connection", conn)
+	}
+
+	return box, nil
+}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/mailru/activerecord/pkg/activerecord"
 )
 
 func TestParseImport(t *testing.T) {
@@ -41,7 +42,7 @@ func TestParseImport(t *testing.T) {
 					PublicName:  "",
 					PackageName: "",
 				},
-				Backends:        []string{},
+				Backends:        []activerecord.Backend{},
 				ProcFieldsMap:   map[string]int{},
 				ProcOutFields:   map[int]ds.ProcFieldDeclaration{},
 				Fields:          []ds.FieldDeclaration{},

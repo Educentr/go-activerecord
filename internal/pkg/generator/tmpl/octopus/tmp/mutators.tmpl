@@ -1,0 +1,182 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+
+	"github.com/mailru/activerecord/pkg/octopus"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ $pkgName := .ARPkg }}
+{{ $serializers := .Serializers -}}
+{{ $mutators := .Mutators -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $LinkedObject := .LinkedObject }}
+{{ $flags := .Flags }}
+{{ $fields := .FieldList }}
+{{ $procfields := .ProcOutFieldList }}
+{{ $procInLen := len .ProcInFieldList }}
+{{ $mutatorLen := len .Mutators }}
+
+{{ if ne $mutatorLen 0 -}}
+    type Mutators struct {
+    {{- range $i, $mut := $mutators }}
+        {{$mut.Name}}    octopus.MutatorField
+		field{{ $mut.Name }}Original {{$mut.Type}}
+    {{- end }}
+    }
+{{ end -}}
+
+{{ range $ind, $fstruct := .FieldList -}}
+	{{ $packerparam := packerParam $fstruct.Format -}}
+
+	{{ range $i, $mut := $fstruct.Mutators -}}
+    {{ $customMutator := index $mutators $mut -}}
+    {{ $pfLen := len $customMutator.PartialFields }}
+	{{- if $customMutator.Name }}
+
+    {{ if ne $pfLen 0 }}
+func (obj *{{ $PublicStructName }}) pack{{ $fstruct.Name }}PartialFields(op octopus.OpCode) error {
+    pfs := obj.Mutators.{{ $customMutator.Name }}.PartialFields
+	if len(pfs) == 0 {
+		return nil
+	}
+
+    var (
+            mutatorArgs []string
+            err error
+        )
+
+	switch op {
+    {{ if ne $customMutator.Update "" -}}
+    case octopus.OpUpdate:
+        mutatorArgs, err = {{ $customMutator.ImportName }}.{{ $PublicStructName }}{{ $customMutator.Name }}Update(obj.field{{ $customMutator.Name }}Original, pfs)
+    {{ end }}
+    {{ if ne $customMutator.Replace "" -}}
+    case octopus.OpInsert:
+        mutatorArgs, err = {{ $customMutator.ImportName }}.{{ $PublicStructName }}{{ $customMutator.Name }}Replace(obj.field{{ $customMutator.Name }}Original, pfs)
+    {{ end }}
+	}
+
+	if err != nil {
+		return err
+	}
+
+    data := octopus.PackLua(obj.Mutators.{{ $customMutator.Name }}.OpFunc[op], append([]string{obj.PrimaryString()}, mutatorArgs...)...)
+
+	{{- if eq $fstruct.Format "string" "[]byte" -}}
+		{{- if gt $fstruct.Size 0 }}
+
+	if len(data) > {{ $fstruct.Size }} {
+		return fmt.Errorf("max length of field '{{ $PublicStructName }}.{{ $fstruct.Name }}' is '%d' (received '%d')", {{ $fstruct.Size }}, len(data))
+	}
+		{{- else }}
+
+	logger := activerecord.Logger()
+
+	logger.Warn(context.TODO(), "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Size for field '{{ $fstruct.Name }}' not set. Cur field size: %d. Object: '{{ $PublicStructName }}'", len(data)))
+		{{- end }}
+	{{- end }}
+
+	obj.{{ $customMutator.Name }}.UpdateOps = []octopus.Ops{}
+
+    obj.{{ $customMutator.Name }}.UpdateOps = append(obj.{{ $customMutator.Name }}.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpUpdate, Value: data})
+
+    return nil
+}
+        {{ end }}
+
+	    {{ range $i, $f := $customMutator.PartialFields }}
+
+func (obj *{{ $PublicStructName }}) Set{{ $customMutator.Name }}{{ $f.Name }}({{ $f.Name }} {{ $f.Type }}) error {
+    obj.Mutators.{{ $customMutator.Name }}.PartialFields["{{ $f.Name }}"] = {{ $f.Name }}
+
+	if err := obj.pack{{ $fstruct.Name }}PartialFields(octopus.OpUpdate); err != nil {
+		return fmt.Errorf("pack {{ $customMutator.Name }}{{ $f.Name }}: %w", err)
+	}
+
+    return nil
+}
+        {{ end }}
+	{{else}}
+		{{ $mutatorparam := mutatorParam $mut $fstruct.Format -}}
+		{{ $mtype := $fstruct.Format }}
+
+func (obj *{{ $PublicStructName }}) {{ $mutatorparam.Name }}{{ $fstruct.Name }}(mutArg {{ $mtype }}) error {
+		{{- if eq $mutatorparam.Name "Inc" }}
+	if mutArg == 0 {
+		return nil
+	}
+
+	if uint64({{ $packerparam.MaxValue }} - obj.field{{ $fstruct.Name }}) < uint64(mutArg) {
+		return fmt.Errorf("overflow type '{{ $fstruct.Format }}' after Inc %d", mutArg)
+	}
+
+	data := iproto.PackUint32([]byte{}, uint32(mutArg), iproto.ModeDefault)
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpAdd, Value: data})
+	obj.field{{ $fstruct.Name }} += {{ $packerparam.MutatorTypeConv }}(mutArg)
+		{{- else if eq $mutatorparam.Name "Dec" }}
+	if mutArg == 0 {
+		return nil
+	}
+
+	if uint64(obj.field{{ $fstruct.Name }} - {{ $packerparam.MinValue }}) < uint64(mutArg) {
+		return fmt.Errorf("overflow type '{{ $fstruct.Format }}' after Dec %d", mutArg)
+	}
+
+	data := iproto.PackUint32([]byte{}, uint32(-mutArg), iproto.ModeDefault)
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpAdd, Value: data})
+	obj.field{{ $fstruct.Name }} -= {{ $packerparam.MutatorTypeConv }}(mutArg)
+		{{- else if eq $mutatorparam.Name "And" }}
+	if obj.field{{ $fstruct.Name }} == 0 || obj.field{{ $fstruct.Name }} & mutArg == obj.field{{ $fstruct.Name }} {
+		return nil
+	}
+
+	data := iproto.PackUint32([]byte{}, uint32(mutArg), iproto.ModeDefault)
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpAnd, Value: data})
+	obj.field{{ $fstruct.Name }} &= mutArg
+		{{- else if eq $mutatorparam.Name "Or" "SetBit" }}
+	if mutArg == 0 || obj.field{{ $fstruct.Name }} | mutArg == obj.field{{ $fstruct.Name }} {
+		return nil
+	}
+
+	data := iproto.PackUint32([]byte{}, uint32(mutArg), iproto.ModeDefault)
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpOr, Value: data})
+	obj.field{{ $fstruct.Name }} |= mutArg
+		{{- else if eq $mutatorparam.Name "ClearBit" }}
+	if mutArg == 0 || obj.field{{ $fstruct.Name }} & ^mutArg == obj.field{{ $fstruct.Name }} {
+		return nil
+	}
+
+	data := iproto.PackUint32([]byte{}, uint32(^mutArg), iproto.ModeDefault)
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpAnd, Value: data})
+	obj.field{{ $fstruct.Name }} &= ^mutArg
+		{{- else if eq $mutatorparam.Name "Xor" }}
+	if mutArg == 0 || obj.field{{ $fstruct.Name }} ^ mutArg == obj.field{{ $fstruct.Name }} {
+		return nil
+	}
+
+	data := iproto.PackUint32([]byte{}, uint32(mutArg), iproto.ModeDefault)
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpXor, Value: data})
+	obj.field{{ $fstruct.Name }} ^= mutArg
+		{{- else }}
+	Unknown mutator type in template!!!
+		{{- end }}
+
+	return nil
+}
+	{{- end }}
+	{{- end }}
+{{- end }}

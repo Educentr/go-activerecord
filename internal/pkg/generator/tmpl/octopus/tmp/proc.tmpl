@@ -1,0 +1,261 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+{{ if eq .Server.Conf "" -}}
+	"time"
+{{ end }}
+	"strings"
+
+	"github.com/mailru/activerecord/pkg/iproto/iproto"
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ $serializers := .Serializers -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $procfields := .ProcOutFieldList }}
+{{ $procInLen := len .ProcInFieldList }}
+
+{{ if $procfields }}
+type {{ $PublicStructName }} struct {
+    params {{ $PublicStructName }}Params
+{{- range $ind, $fstruct := .ProcOutFieldList }}
+    {{ $rtype := $fstruct.Format -}}
+    {{ $serlen := len $fstruct.Serializer -}}
+    {{ if ne $serlen 0 -}}
+        {{ $sname := index $fstruct.Serializer 0 -}}
+        {{ $serializer := index $serializers $sname -}}
+        {{ $rtype = $serializer.Type -}}
+    {{ end -}}
+    field{{- $fstruct.Name }} {{ $rtype -}}
+{{ end }}
+}
+
+type {{ $PublicStructName }}List []*{{ $PublicStructName }}
+
+const (
+    procName string = "{{ .Container.ObjectName }}"
+    cntOutFields uint32 = {{ len .ProcOutFieldList }}
+    )
+
+{{- range $ind, $fstruct := .ProcOutFieldList -}}
+{{ $rtype := $fstruct.Format -}}
+{{ $sname := $fstruct.Serializer.Name -}}
+{{ if ne $sname "" -}}
+    {{ $serializer := index $serializers $sname -}}
+    {{ $rtype = $serializer.Type -}}
+{{ end }}
+    func (obj *{{ $PublicStructName }}) Get{{ $fstruct.Name }}() {{ $rtype }} {
+        return obj.field{{ $fstruct.Name }}
+    }
+{{ end }}
+
+type {{ $PublicStructName }}Params struct {
+{{- range $ind, $fstruct := .ProcInFieldList -}}
+    {{ $rtype := $fstruct.Format -}}
+    {{ $serlen := len $fstruct.Serializer -}}
+    {{ if ne $serlen 0 -}}
+        {{ $sname := index $fstruct.Serializer 0 -}}
+        {{ $serializer := index $serializers $sname -}}
+        {{ $rtype = $serializer.Type -}}
+    {{ end }}
+    {{ $fstruct.Name }} {{ $rtype -}}
+{{ end }}
+}
+
+func (obj *{{ $PublicStructName }}) GetParams() {{ $PublicStructName }}Params {
+    return obj.params
+}
+
+func  (obj *{{ $PublicStructName }}) setParams(params {{ $PublicStructName }}Params) error {
+	obj.params = params
+
+	return nil
+}
+
+{{ if ne $procInLen 0 }}
+func (obj *{{ $PublicStructName }}Params) arrayValues() ([]string, error)  {
+ret := []string{}
+{{ range $ind, $fstruct := .ProcInFieldList -}}
+    {{ $sname := $fstruct.Serializer.Name -}}
+	{{ $bvar :=  $fstruct.Name -}}
+	{{ if ne $sname "" -}}
+		{{ $serializer := index $serializers $sname -}}
+		{{ $serparams := $fstruct.Serializer.Params -}}
+	pvar{{ $fstruct.Name }}, err := {{ $serializer.ImportName }}.{{ $serializer.Marshaler }}({{ $serparams }}obj.{{ $bvar }})
+	if err != nil {
+		return nil, fmt.Errorf("error marshal param field {{ $fstruct.Name }}: %w", err)
+	}
+
+        {{ if eq $fstruct.Format "[]string" }}
+        ret = append(ret, pvar{{ $fstruct.Name }}...)
+	    {{ else }}
+	    ret = append(ret, string(pvar{{ $fstruct.Name }}))
+	    {{- end }}
+	{{- else -}}
+	ret = append(ret, string(obj.{{ $fstruct.Name }}))
+	{{- end }}
+{{ end }}
+	return ret, nil
+}
+{{ end }}
+
+func (obj {{ $PublicStructName }}Params) PK() string {
+    return fmt.Sprint({{ if ne $procInLen 0 }}obj.arrayValues(){{ end }})
+}
+
+func Call(ctx context.Context{{ if ne $procInLen 0 }}, params {{ $PublicStructName }}Params{{ end }}) (*{{ $PublicStructName }}, error) {
+    return call(ctx{{ if ne $procInLen 0 }}, params{{ end }}, activerecord.ReplicaOrMasterInstanceType)
+}
+
+func CallOnMaster(ctx context.Context{{ if ne $procInLen 0 }}, params {{ $PublicStructName }}Params{{ end }}) (*{{ $PublicStructName }}, error) {
+    return call(ctx{{ if ne $procInLen 0 }}, params{{ end }}, activerecord.MasterInstanceType)
+}
+
+func call(ctx context.Context{{ if ne $procInLen 0 }}, params {{ $PublicStructName }}Params{{ end }}, instanceType activerecord.ShardInstanceType) (*{{ $PublicStructName }}, error) {
+	logger := activerecord.Logger()
+	ctx = logger.SetLoggerValueToContext(ctx, map[string]interface{}{"LuaProc": procName})
+	metricTimer := activerecord.Metric().Timer(string(octopus.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(octopus.Backend), "{{ $PublicStructName }}")
+
+    metricTimer.Timing(ctx, "call_proc")
+
+	connection, err := getConnection(ctx, instanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "call_proc_preparebox", 1)
+		logger.Error(ctx, fmt.Sprintf("Error get box '%s'", err))
+
+		return nil, err
+	}
+
+	var args []string
+	{{ if ne $procInLen 0 }}
+	args, err = params.arrayValues()
+	if err != nil {
+		metricErrCnt.Inc(ctx, "call_proc_preparebox", 1)
+		return nil, fmt.Errorf("Error parse args of procedure %s: %w", procName, err)
+	}
+	{{ end }}
+
+	td, err := octopus.CallLua(ctx, connection, procName, args...)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "call_proc", 1)
+		return nil, fmt.Errorf("call lua procedure %s: %w", procName, err)
+	}
+
+    if len(td) != 1 {
+        return nil, fmt.Errorf("invalid response len from lua call: %d. Only one tuple supported", len(td))
+    }
+
+	ret, err := TupleToStruct(ctx, td[0])
+	if err != nil {
+		metricErrCnt.Inc(ctx, "call_proc_preparebox", 1)
+		logger.Error(ctx, "Error in response: ", err)
+
+		return nil, err
+	}
+
+	metricTimer.Finish(ctx, "call_proc")
+
+	activerecord.Logger().CollectQueries(ctx, CallMockerLogger({{ if ne $procInLen 0 }}params, {{ end }}{{ $PublicStructName }}List([]*{{ $PublicStructName }}{ret})))
+
+	return ret, nil
+}
+
+func TupleToStruct(ctx context.Context, tuple octopus.TupleData) (*{{ $PublicStructName }}, error) {
+    if tuple.Cnt < cntOutFields {
+        return nil, fmt.Errorf("not enought selected fields %d in response tuple: %d but expected %d fields", tuple.Cnt, tuple.Cnt, cntOutFields)
+    }
+
+	np := {{ $PublicStructName }}{}
+
+	{{ range $ind, $fstruct := .ProcOutFieldList -}}
+	val{{ $fstruct.Name }}, err := Unpack{{ $fstruct.Name -}}(bytes.NewReader(tuple.Data[{{$ind}}]))
+	if err != nil {
+		return nil, err
+	}
+
+	np.field{{ $fstruct.Name }} = val{{ $fstruct.Name }}
+	{{ end }}
+
+	return &np, nil
+}
+
+{{ range $ind, $fstruct := .ProcOutFieldList -}}
+	{{ $packerparam := packerParam $fstruct.Format -}}
+	{{ $rtype := $fstruct.Format -}}
+	{{ $sname := $fstruct.Serializer.Name -}}
+	{{ if ne $sname "" -}}
+		{{ $serializer := index $serializers $sname -}}
+		{{ $rtype = $serializer.Type -}}
+	{{ end -}}
+func (obj *{{ $PublicStructName }}) Set{{ $fstruct.Name }}({{ $fstruct.Name }} {{ $rtype }}) error {
+	obj.field{{ $fstruct.Name }} = {{ $fstruct.Name}}
+
+	return nil
+}
+
+func Unpack{{ $fstruct.Name }}(r *bytes.Reader) (ret {{ $rtype }}, errRet error) {
+	var {{ $fstruct.Name }} {{ if ne $packerparam.UnpackType "" }}{{ $packerparam.UnpackType }}{{ else }}{{ $fstruct.Format }}{{ end }}
+	{{ $isPointer := hasPrefix (printf "%s" $rtype) "*" }}
+
+	err := {{ $packerparam.UnpackFunc }}(r, &{{ $fstruct.Name }}, iproto.ModeDefault)
+	if err != nil {
+		errRet = fmt.Errorf("error unpack field {{ $fstruct.Name }} in tuple: '%w'", err)
+		return
+	}
+
+	bvar := {{ if ne $packerparam.UnpackConvFunc "" -}}
+		{{ $packerparam.UnpackConvFunc }}({{ $fstruct.Name }})
+	{{ else -}}
+		{{ $fstruct.Name }}
+	{{ end -}}
+
+	{{ $underlyingType := trimPrefix (printf "%s" $rtype) "*"}}
+	{{ if ne $sname "" -}}
+		{{ $serializer := index $serializers $sname -}}
+		{{ $serparams := $fstruct.Serializer.Params }}
+
+	var svar {{$rtype}}
+
+	err = {{ $serializer.ImportName }}.{{ $serializer.Unmarshaler }}({{ $serparams }}bvar, &svar)
+	if err != nil {
+		errRet = fmt.Errorf("error unmarshal field {{ $fstruct.Name }}: %w", err)
+		return
+	}
+
+	{{ else -}}
+	svar := bvar
+
+	{{ end -}}
+
+	return svar, nil
+}
+
+func pack{{ $fstruct.Name }}(w []byte, {{ $fstruct.Name }} {{ $rtype }}) ([]byte, error) {
+	{{ $bvar :=  $packerparam.PackConvFunc $fstruct.Name -}}
+	{{ if ne $sname "" -}}
+		{{ $serializer := index $serializers $sname -}}
+		{{ $serparams := $fstruct.Serializer.Params -}}
+	pvar, err := {{ $serializer.ImportName }}.{{ $serializer.Marshaler }}({{ $serparams }}{{ $bvar }})
+	if err != nil {
+		return nil, fmt.Errorf("error marshal field {{ $fstruct.Name }}: %w", err)
+	}
+	{{- else -}}
+	pvar := {{ $bvar }}
+	{{- end }}
+
+	return {{ $packerparam.PackFunc }}(w, pvar, iproto.ModeDefault), nil
+}
+{{ end }}
+{{ end }}

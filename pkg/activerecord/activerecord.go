@@ -14,13 +14,13 @@ var ErrNoData = errors.New("no data")
 type SelectorLimiter interface {
 	Limit() uint32
 	Offset() uint32
-	FullfillWarn() bool
+	FulfillWarn() bool
 	fmt.Stringer
 }
 
 type Limiter struct {
 	limit, offset uint32
-	fullfillWarn  bool
+	fulfillWarn   bool
 }
 
 func EmptyLimiter() Limiter {
@@ -36,7 +36,7 @@ func NewLimitOffset(limit uint32, offset uint32) Limiter {
 }
 
 func NewThreshold(limit uint32) Limiter {
-	return Limiter{limit: limit, fullfillWarn: true}
+	return Limiter{limit: limit, fulfillWarn: true}
 }
 
 func (l Limiter) Offset() uint32 {
@@ -47,12 +47,12 @@ func (l Limiter) Limit() uint32 {
 	return l.limit
 }
 
-func (l Limiter) FullfillWarn() bool {
-	return l.fullfillWarn
+func (l Limiter) FulfillWarn() bool {
+	return l.fulfillWarn
 }
 
 func (l Limiter) String() string {
-	return fmt.Sprintf("Limit: %d, Offset: %d, Is Threshold: %t", l.limit, l.offset, l.fullfillWarn)
+	return fmt.Sprintf("Limit: %d, Offset: %d, Is Threshold: %t", l.limit, l.offset, l.fulfillWarn)
 }
 
 type ConfigInterface interface {

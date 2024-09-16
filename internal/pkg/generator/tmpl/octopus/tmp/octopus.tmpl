@@ -1,0 +1,352 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+{{ if eq .Server.Conf "" -}}
+	"time"
+{{ end }}
+	"strings"
+
+	"github.com/mailru/activerecord/pkg/iproto/iproto"
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ $pkgName := .ARPkg }}
+{{ $serializers := .Serializers -}}
+{{ $mutators := .Mutators -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $LinkedObject := .LinkedObject }}
+{{ $flags := .Flags }}
+{{ $fields := .FieldList }}
+{{ $procfields := .ProcOutFieldList }}
+{{ $procInLen := len .ProcInFieldList }}
+{{ $mutatorLen := len .Mutators }}
+
+{{ if $fields }} 
+func (obj *{{ $PublicStructName }}) Delete(ctx context.Context) error {
+	logger := activerecord.Logger()
+	metricTimer := activerecord.Metric().Timer(string(octopus.Backend), "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(string(octopus.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(octopus.Backend), "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "delete_request", 1)
+
+	if !obj.BaseField.Exists {
+		return fmt.Errorf("can't delete not exists object")
+	}
+
+	pk, err := obj.packPk()
+	if err != nil {
+		metricErrCnt.Inc(ctx, "delete_pack", 1)
+		return fmt.Errorf("error delete: %w", err)
+	}
+
+	w := octopus.PackDelete(namespace, pk)
+	log.Printf("Delete packed tuple: '%X'\n", w)
+
+	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "delete_preparebox", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Error get box '%s'", err))
+
+		return err
+	}
+
+	respBytes, errCall := connection.Call(ctx, octopus.RequestTypeDelete, w)
+	if errCall != nil {
+		metricErrCnt.Inc(ctx, "delete_box", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error delete from box", errCall, connection.Info())
+		
+		return errCall
+	}
+
+	metricTimer.Timing(ctx, "delete_box")
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Response from box '% X'", respBytes))
+
+	_, err = octopus.ProcessResp(respBytes, octopus.NeedRespFlag|octopus.UniqRespFlag)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "delete_resp", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error parse response: ", err)
+		
+		return err
+	}
+
+	metricStatCnt.Inc(ctx, "delete_success", 1)
+
+	obj.BaseField.Exists = false
+	obj.BaseField.UpdateOps = []octopus.Ops{}
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Success delete")
+
+	metricTimer.Finish(ctx, "delete")
+
+	return nil
+}
+
+func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
+	logger := activerecord.Logger()
+	metricTimer := activerecord.Metric().Timer(string(octopus.Backend), "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(string(octopus.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(octopus.Backend), "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "update_request", 1)
+
+	if !obj.BaseField.Exists {
+		metricErrCnt.Inc(ctx, "update_notexists", 1)
+		return fmt.Errorf("can't update not exists object")
+	}
+
+	if obj.BaseField.Repaired {
+		metricStatCnt.Inc(ctx, "update_repaired", 1)
+		logger.Debug(ctx, "", obj.PrimaryString(), "Flag 'Repaired' is true! Insert instead Update")
+
+		return obj.Replace(ctx)
+	}
+
+	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "update_preparebox", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Error get box '%s'", err))
+		return err
+	}
+
+{{if eq $mutatorLen 0}}
+	if len(obj.BaseField.UpdateOps) == 0 {
+		metricStatCnt.Inc(ctx, "update_empty", 1)
+		logger.Debug(ctx, "", obj.PrimaryString(), "Empty update")
+
+		return nil
+	}
+{{else}}
+	if len(obj.BaseField.UpdateOps) > 0 {
+{{- end }}
+	pk, err := obj.packPk()
+	if err != nil {
+		metricErrCnt.Inc(ctx, "update_packpk", 1)
+		return fmt.Errorf("error update: %w", err)
+	}
+
+	w := octopus.PackUpdate(namespace, pk, obj.BaseField.UpdateOps)
+
+	log.Printf("Update packed tuple: '%X'\n", w)
+
+	respBytes, errCall := connection.Call(ctx, octopus.RequestTypeUpdate, w)
+	if errCall != nil {
+		metricErrCnt.Inc(ctx, "update_box", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error update ia a box", errCall, connection.Info())
+		return errCall
+	}
+
+	metricTimer.Timing(ctx, "update_box")
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Response from box '%X'", respBytes))
+
+	_, err = octopus.ProcessResp(respBytes, octopus.NeedRespFlag|octopus.UniqRespFlag)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "update_resp", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error parse response: ", err)
+		return err
+	}
+
+{{if gt $mutatorLen 0}}
+	}
+{{end}}
+{{if gt $mutatorLen 0}}
+{{ range $ind, $fstruct := .FieldList -}}
+	{{- range $i, $mut := $fstruct.Mutators -}}
+		{{ $customMutator := index $mutators $mut -}}
+		{{ $pfLen := len $customMutator.PartialFields }}
+		{{ if and (ne $pfLen 0) (ne $customMutator.Update "") $customMutator.Name }}
+	for _, op := range obj.{{$customMutator.Name}}.UpdateOps {
+		resp, errCall := connection.Call(ctx, octopus.RequestTypeCall, op.Value)
+		if errCall != nil {
+			metricErrCnt.Inc(ctx, "call_proc", 1)
+			logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error call proc in a box", errCall, connection.Info())
+			return errCall
+		}
+
+		_, err := octopus.ProcessResp(resp, 0)
+		if err != nil {
+			return fmt.Errorf("error unpack lua response: %w", err)
+		}
+	}
+
+	obj.{{$customMutator.Name}}.UpdateOps = []octopus.Ops{}
+	obj.{{$customMutator.Name}}.PartialFields = map[string]any{}
+		{{end}}
+	{{end}}
+{{end}}
+{{end}}
+
+	obj.BaseField.UpdateOps = []octopus.Ops{}
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Success update")
+
+	metricStatCnt.Inc(ctx, "update_success", 1)
+	metricTimer.Finish(ctx, "update")
+
+	return nil
+}
+
+func (obj *{{ $PublicStructName }}) Insert(ctx context.Context) error {
+	metricStatCnt := activerecord.Metric().StatCount(string(octopus.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(octopus.Backend), "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "insert_request", 1)
+
+	if obj.BaseField.Exists {
+		metricErrCnt.Inc(ctx, "insert_exists", 1)
+		return fmt.Errorf("can't insert already exists object")
+	}
+
+	err := obj.insertReplace(ctx, octopus.InsertModeInsert)
+
+	if err == nil {
+		metricStatCnt.Inc(ctx, "insert_success", 1)
+	}
+
+	return err
+}
+
+func (obj *{{ $PublicStructName }}) Replace(ctx context.Context) error {
+	metricStatCnt := activerecord.Metric().StatCount(string(octopus.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(octopus.Backend), "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "replace_request", 1)
+
+	if !obj.BaseField.Exists {
+		metricErrCnt.Inc(ctx, "replace_notexists", 1)
+		return fmt.Errorf("can't replace not exists object")
+	}
+
+	err := obj.insertReplace(ctx, octopus.InsertModeReplace)
+
+	if err == nil {
+		metricStatCnt.Inc(ctx, "replace_success", 1)
+	}
+
+	return err
+}
+
+func (obj *{{ $PublicStructName }}) InsertOrReplace(ctx context.Context) error {
+	metricStatCnt := activerecord.Metric().StatCount(string(octopus.Backend), "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "insertorreplace_request", 1)
+
+	err := obj.insertReplace(ctx, octopus.InsertModeInserOrReplace)
+
+	if err == nil {
+		metricStatCnt.Inc(ctx, "insertorreplace_success", 1)
+	}
+
+	return err
+}
+
+func (obj *{{ $PublicStructName }}) insertReplace(ctx context.Context, insertMode octopus.InsertMode) error {
+	var (
+		err error
+		tuple [][]byte
+		data []byte
+	)
+
+	metricTimer := activerecord.Metric().Timer(string(octopus.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(octopus.Backend), "{{ $PublicStructName }}")
+
+	{{ range $ind, $fstruct := .FieldList }}
+
+	data, err = pack{{ $fstruct.Name }}([]byte{}, obj.Get{{ $fstruct.Name }}())
+	if err != nil {
+		metricErrCnt.Inc(ctx, "insertreplace_packfield", 1)
+		return err
+	}
+
+	tuple = append(tuple, data)
+	{{ end }}
+
+	metricTimer.Timing(ctx, "insertreplace_packtuple")
+
+	if len(obj.BaseField.ExtraFields) > 0 {
+		tuple = append(tuple, obj.BaseField.ExtraFields...)
+	}
+
+	w := octopus.PackInsertReplace(namespace, insertMode, tuple)
+	logger := activerecord.Logger()
+
+	metricTimer.Timing(ctx, "insertreplace_pack")
+	logger.Trace(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Insert packed tuple: '%X'", w))
+
+	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "insertreplace_preparebox", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Error get box '%s'", err))
+
+		return err
+	}
+
+	respBytes, errCall := connection.Call(ctx, octopus.RequestTypeInsert, w)
+	if errCall != nil {
+		metricErrCnt.Inc(ctx, "insertreplace_box", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error insert into box", errCall, connection.Info())
+
+		return errCall
+	}
+
+	metricTimer.Timing(ctx, "insertreplace_box")
+
+	logger.Trace(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Response from box '%X'", respBytes))
+
+	tuplesData, err := octopus.ProcessResp(respBytes, octopus.NeedRespFlag|octopus.UniqRespFlag)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "insertreplace_prespreparebox", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error parse response: ", err)
+
+		return err
+	}
+
+	_, err = NewFromBox(ctx, tuplesData)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "insertreplace_obj", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error in response: ", err)
+
+		return err
+	}
+
+	obj.BaseField.Exists = true
+	obj.BaseField.UpdateOps = []octopus.Ops{}
+	{{- if gt $mutatorLen 0 }}
+	obj.ClearMutatorUpdateOpts()
+	{{- end }}
+	obj.BaseField.Repaired = false
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Success insert")
+
+	metricTimer.Finish(ctx, "insertreplace")
+
+	return nil
+}
+{{ end }}
+
+{{if gt $mutatorLen 0}}
+func (obj *{{ $PublicStructName }}) ClearMutatorUpdateOpts() {
+{{- range $ind, $fstruct := .FieldList -}}
+	{{- range $i, $mut := $fstruct.Mutators -}}
+		{{ $customMutator := index $mutators $mut -}}
+		{{ if and (ne $customMutator.Update "") $customMutator.Name -}}
+	obj.{{$customMutator.Name}}.UpdateOps = []octopus.Ops{}
+	obj.{{$customMutator.Name}}.PartialFields = map[string]any{}
+		{{- end }}
+	{{end}}
+{{- end -}}
+}
+{{end}}

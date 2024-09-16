@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/mailru/activerecord/pkg/activerecord"
 )
 
 func TestParseFields(t *testing.T) {
@@ -60,7 +61,7 @@ func TestParseFields(t *testing.T) {
 				IndexMap:      map[string]int{"ID": 0},
 				SelectorMap:   map[string]int{"SelectByID": 0},
 				ImportPackage: ds.NewImportPackage(),
-				Backends:      []string{},
+				Backends:      []activerecord.Backend{},
 				SerializerMap: map[string]ds.SerializerDeclaration{},
 				TriggerMap:    map[string]ds.TriggerDeclaration{},
 				FlagMap:       map[string]ds.FlagDeclaration{},

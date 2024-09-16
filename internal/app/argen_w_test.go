@@ -11,6 +11,7 @@ import (
 
 	"github.com/mailru/activerecord/internal/pkg/ds"
 	"github.com/mailru/activerecord/internal/pkg/testutil"
+	"github.com/mailru/activerecord/pkg/activerecord"
 	"github.com/mailru/activerecord/pkg/octopus"
 	"gotest.tools/assert"
 	"gotest.tools/assert/cmp"
@@ -111,7 +112,7 @@ func TestArGen_addRecordPackage(t *testing.T) {
 		return
 	}
 
-	got.Backends = []string{"testbackend"}
+	got.Backends = []activerecord.Backend{"testbackend"}
 	emptyRP.Backends = append(emptyRP.Backends, "testbackend")
 
 	if !reflect.DeepEqual(argen.packagesParsed["yarp"], emptyRP) {
@@ -355,7 +356,7 @@ func TestArGen_preparePackage(t *testing.T) {
 	}
 
 	rpFoo := ds.NewRecordPackage()
-	rpFoo.Backends = []string{"octopus"}
+	rpFoo.Backends = []activerecord.Backend{octopus.Backend}
 	rpFoo.Server = ds.ServerDeclaration{Host: "127.0.0.1", Port: "11011"}
 	rpFoo.Namespace = ds.NamespaceDeclaration{ObjectName: "0", PackageName: "foo", PublicName: "Foo"}
 
@@ -400,7 +401,7 @@ func TestArGen_preparePackage(t *testing.T) {
 	}
 
 	rpBar := ds.NewRecordPackage()
-	rpBar.Backends = []string{"octopus"}
+	rpBar.Backends = []activerecord.Backend{octopus.Backend}
 	rpBar.Namespace = ds.NamespaceDeclaration{ObjectName: "1", PackageName: "bar", PublicName: "Bar"}
 
 	err = rpBar.AddField(ds.FieldDeclaration{
@@ -708,7 +709,7 @@ type TriggersFoo struct {
 					},
 					IndexMap:      map[string]int{"Field1Field2": 0, "Field1Part": 1},
 					SelectorMap:   map[string]int{"SelectByField1": 1, "SelectByField1Field2": 0},
-					Backends:      []string{"octopus"},
+					Backends:      []activerecord.Backend{octopus.Backend},
 					SerializerMap: map[string]ds.SerializerDeclaration{},
 					ImportPackage: ds.ImportPackage{Imports: []ds.ImportDeclaration{
 						{

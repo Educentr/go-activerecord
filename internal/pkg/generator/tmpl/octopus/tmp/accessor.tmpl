@@ -1,0 +1,130 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+{{ if eq .Server.Conf "" -}}
+	"time"
+{{ end }}
+	"strings"
+
+	"github.com/mailru/activerecord/pkg/iproto/iproto"
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ $pkgName := .ARPkg }}
+{{ $serializers := .Serializers -}}
+{{ $mutators := .Mutators -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $LinkedObject := .LinkedObject }}
+{{ $flags := .Flags }}
+{{ $fields := .FieldList }}
+{{ $procfields := .ProcOutFieldList }}
+{{ $procInLen := len .ProcInFieldList }}
+{{ $mutatorLen := len .Mutators }}
+
+{{ range $ind, $fstruct := .FieldList -}}
+	{{ $rtype := $fstruct.Format -}}
+	{{ $serlen := len $fstruct.Serializer -}}
+	{{ if ne $serlen 0 -}}
+		{{ $sname := index $fstruct.Serializer 0 -}}
+		{{ $serializer := index $serializers $sname -}}
+		{{ $rtype = $serializer.Type -}}
+	{{ end }}
+
+
+func (obj *{{ $PublicStructName }}) Get{{ $fstruct.Name }}() {{ $rtype }} {
+	return obj.field{{ $fstruct.Name }}
+}
+
+func (obj *{{ $PublicStructName }}) Set{{ $fstruct.Name }}({{ $fstruct.Name }} {{ $rtype }}) error {
+	{{- if $fstruct.PrimaryKey }}
+	if obj.BaseField.Exists {
+		return fmt.Errorf("can't modify field included in primary key")
+	}
+
+	{{ end -}}
+	data, err := pack{{ $fstruct.Name }}([]byte{}, {{ $fstruct.Name }})
+	if err != nil {
+		return err
+	}
+
+	{{- if eq $fstruct.Format "string" "[]byte" -}}
+		{{- if gt $fstruct.Size 0 }}
+
+	if len(data) > {{ $fstruct.Size }} {
+		return fmt.Errorf("max length of field '{{ $PublicStructName }}.{{ $fstruct.Name }}' is '%d' (received '%d')", {{ $fstruct.Size }}, len(data))
+	}
+		{{- else }}
+
+	logger := activerecord.Logger()
+
+	logger.Warn(context.TODO(), "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Size for field '{{ $fstruct.Name }}' not set. Cur field size: %d. Object: '{{ $PublicStructName }}'", len(data)))
+		{{- end }}
+	{{- end }}
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpSet, Value: data})
+
+    {{- range $i, $mut := $fstruct.Mutators -}}
+    {{ $customMutator := index $mutators $mut -}}
+    {{ $pfLen := len $customMutator.PartialFields }}
+    {{ if and (eq $pfLen 0) (ne $customMutator.Update "") }}
+	obj.BaseField.UpdateOps = []octopus.Ops{}
+    data = octopus.PackLua("{{$customMutator.Update}}", obj.PrimaryString(), {{ $fstruct.Name}})
+    obj.{{ $customMutator.Name }}.UpdateOps = append(obj.{{ $customMutator.Name }}.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpUpdate, Value: data})
+	{{ else if ne $pfLen 0 }}
+	{{ $isPointer := hasPrefix (printf "%s" $rtype) "*" }}
+	{{ if $isPointer }}
+	if {{ $fstruct.Name }} != nil {
+		{{- range $i, $pf := $customMutator.PartialFields }}
+		if obj.Set{{ $customMutator.Name }}{{ $pf.Name }}({{ $fstruct.Name }}.{{$pf.Name}}); err != nil {
+			return err
+		}
+		{{ end -}}
+	}
+	{{ else }}
+		{{- range $i, $pf := $customMutator.PartialFields }}
+		if obj.Set{{ $customMutator.Name }}{{ $pf.Name }}({{ $fstruct.Name }}.{{$pf.Name}}); err != nil {
+			return err
+		}
+		{{ end }}
+	{{ end }}
+	obj.field{{ $customMutator.Name }}Original = obj.field{{ $fstruct.Name }}
+    {{ end }}
+    {{ end }}
+	obj.field{{ $fstruct.Name }} = {{ $fstruct.Name}}
+
+	{{- if ne $fstruct.ObjectLink "" }}
+	delete(obj.BaseField.Objects, "{{ $fstruct.ObjectLink }}")
+	{{- end }}
+
+	return nil
+}
+	{{ $fl := index $flags $fstruct.Name }}
+	{{- if $fl }}
+		{{- range $i, $flag := $fl.Flags }}
+
+func (obj *{{ $PublicStructName }}) Set{{ $fstruct.Name }}{{ $flag }}() error {
+	return obj.SetBit{{ $fstruct.Name }}( {{ $fstruct.Name }}{{ $flag }}Flag )
+}
+
+func (obj *{{ $PublicStructName }}) Clear{{ $fstruct.Name }}{{ $flag }}() error {
+	return obj.ClearBit{{ $fstruct.Name }}( {{ $fstruct.Name }}{{ $flag }}Flag )
+}
+
+func (obj *{{ $PublicStructName }}) Is{{ $fstruct.Name }}{{ $flag }}() bool {
+	return obj.Get{{ $fstruct.Name }}() & {{ $fstruct.Name }}{{ $flag }}Flag == {{ $fstruct.Name }}{{ $flag }}Flag
+}
+		{{ end }}
+	{{ end }}
+
+{{- end }}

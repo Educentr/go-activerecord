@@ -11,6 +11,7 @@ import (
 
 	"github.com/mailru/activerecord/internal/pkg/ds"
 	"github.com/mailru/activerecord/internal/pkg/parser"
+	"github.com/mailru/activerecord/pkg/activerecord"
 )
 
 func NewRecordPackage(t *testing.T) (*ds.RecordPackage, error) {
@@ -70,7 +71,7 @@ func TestParseMutator(t *testing.T) {
 				Indexes:         []ds.IndexDeclaration{},
 				IndexMap:        map[string]int{},
 				SelectorMap:     map[string]int{},
-				Backends:        []string{},
+				Backends:        []activerecord.Backend{},
 				SerializerMap:   map[string]ds.SerializerDeclaration{},
 				MutatorMap: map[string]ds.MutatorDeclaration{
 					"FooMutatorField": {

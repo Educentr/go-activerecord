@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/mailru/activerecord/internal/pkg/arerror"
-	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/mailru/activerecord/pkg/activerecord"
 )
 
 // Описание приложения. Информация необходимая для разметки артефактов
@@ -87,7 +87,7 @@ type RecordPackage struct {
 	Indexes               []IndexDeclaration                   // Список индексов, важна последовательность для некоторых хранилищ
 	IndexMap              map[string]int                       // Обратный индекс от имён для индексов
 	SelectorMap           map[string]int                       // Список селекторов, используется для контроля дублей
-	Backends              []string                             // Список бекендов для которых надо сгенерировать пакеты (сейчас допустим один и только один)
+	Backends              []activerecord.Backend               // Список бекендов для которых надо сгенерировать пакеты (сейчас допустим один и только один)
 	SerializerMap         map[string]SerializerDeclaration     // Список сериализаторов используемых в этой сущности
 	MutatorMap            map[string]MutatorDeclaration        // Список мутаторов используемых в этой сущности
 	TriggerMap            map[string]TriggerDeclaration        // Список триггеров используемых в сущности
@@ -123,7 +123,7 @@ func NewRecordPackage() *RecordPackage {
 		Indexes:               []IndexDeclaration{},
 		IndexMap:              map[string]int{},
 		SelectorMap:           map[string]int{},
-		Backends:              []string{},
+		Backends:              []activerecord.Backend{},
 		SerializerMap:         map[string]SerializerDeclaration{},
 		MutatorMap:            map[string]MutatorDeclaration{},
 		TriggerMap:            map[string]TriggerDeclaration{},
@@ -167,13 +167,13 @@ type Serializer []string
 
 // FieldDeclaration Тип описывающий поле в сущности
 type FieldDeclaration struct {
-	Name       string         // Название поля
-	Format     octopus.Format // формат поля
-	PrimaryKey bool           // участвует ли поле в первичном ключе (при изменении таких полей необходимо делать delete + insert вместо update)
-	Mutators   []string       // список мутаторов (атомарных действий на уровне БД)
-	Size       int64          // Размер поля, используется только для строковых значений
-	Serializer Serializer     // Сериализаторы для поля
-	ObjectLink string         // является ли поле ссылкой на другую сущность
+	Name       string              // Название поля
+	Format     activerecord.Format // формат поля
+	PrimaryKey bool                // участвует ли поле в первичном ключе (при изменении таких полей необходимо делать delete + insert вместо update)
+	Mutators   []string            // список мутаторов (атомарных действий на уровне БД)
+	Size       int64               // Размер поля, используется только для строковых значений
+	Serializer Serializer          // Сериализаторы для поля
+	ObjectLink string              // является ли поле ссылкой на другую сущность
 }
 
 // Name возвращает имя сериализатора, если он установлен, иначе пустую строку
@@ -224,12 +224,12 @@ const (
 
 // ProcFieldDeclaration Тип описывающий поле процедуры
 type ProcFieldDeclaration struct {
-	Name       string            // Название поля
-	Format     octopus.Format    // формат поля
-	Type       ProcParameterType // тип параметра (IN, OUT, INOUT)
-	Size       int64             // Размер поля, используется только для строковых значений
-	Serializer Serializer        // Сериализатора для поля
-	OrderIndex int               // Порядковый номер параметра в сигнатуре вызова процедуры
+	Name       string              // Название поля
+	Format     activerecord.Format // формат поля
+	Type       ProcParameterType   // тип параметра (IN, OUT, INOUT)
+	Size       int64               // Размер поля, используется только для строковых значений
+	Serializer Serializer          // Сериализатора для поля
+	OrderIndex int                 // Порядковый номер параметра в сигнатуре вызова процедуры
 }
 
 // ProcFieldDeclarations Индекс порядкового значения полей процедуры

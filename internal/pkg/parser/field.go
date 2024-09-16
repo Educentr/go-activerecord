@@ -8,7 +8,7 @@ import (
 
 	"github.com/mailru/activerecord/internal/pkg/arerror"
 	"github.com/mailru/activerecord/internal/pkg/ds"
-	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/mailru/activerecord/pkg/activerecord"
 )
 
 // Функция парсинга тегов полей модели
@@ -71,7 +71,7 @@ func ParseFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 
 		switch t := field.Type.(type) {
 		case *ast.Ident:
-			newfield.Format = octopus.Format(t.String())
+			newfield.Format = activerecord.Format(t.String())
 		case *ast.ArrayType:
 			//Todo точно ли массив надо, а не срез?
 			if t.Elt.(*ast.Ident).Name != "byte" {
@@ -173,7 +173,7 @@ func ParseProcFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 
 		switch t := field.Type.(type) {
 		case *ast.Ident:
-			newField.Format = octopus.Format(t.String())
+			newField.Format = activerecord.Format(t.String())
 		case *ast.ArrayType:
 			if t.Elt.(*ast.Ident).Name != "byte" && t.Elt.(*ast.Ident).Name != "string" {
 				return &arerror.ErrParseTypeFieldDecl{Name: newField.Name, FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseProcFieldArraySlice}
@@ -181,7 +181,7 @@ func ParseProcFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 
 			// если входной параметр slice
 			if newField.Type == ds.IN && t.Len == nil {
-				newField.Format = octopus.Format(fmt.Sprintf("[]%s", t.Elt.(*ast.Ident).Name))
+				newField.Format = activerecord.Format(fmt.Sprintf("[]%s", t.Elt.(*ast.Ident).Name))
 				break
 			}
 

@@ -20,6 +20,7 @@ import (
 	"{{ $imp }}"
 {{- end }}
 )
+{{ template "vars" .}}
 {{ $pkgName := .ARPkg }}
 {{ $serializers := .Serializers -}}
 {{ $mutators := .Mutators -}}
@@ -31,14 +32,14 @@ import (
 {{ $procInLen := len .ProcInFieldList }}
 {{ $mutatorLen := len .Mutators }}
 
-    {{ if ne $mutatorLen 0 -}}
+{{ if ne $mutatorLen 0 -}}
     type Mutators struct {
     {{- range $i, $mut := $mutators }}
         {{$mut.Name}}    octopus.MutatorField
 		field{{ $mut.Name }}Original {{$mut.Type}}
     {{- end }}
     }
-    {{ end -}}
+{{ end -}}
 
 {{ if $fields }}
     type {{ $PublicStructName }} struct {
@@ -183,12 +184,12 @@ func CallOnMaster(ctx context.Context{{ if ne $procInLen 0 }}, params {{ $Public
 func call(ctx context.Context{{ if ne $procInLen 0 }}, params {{ $PublicStructName }}Params{{ end }}, instanceType activerecord.ShardInstanceType) (*{{ $PublicStructName }}, error) {
 	logger := activerecord.Logger()
 	ctx = logger.SetLoggerValueToContext(ctx, map[string]interface{}{"LuaProc": procName})
-	metricTimer := activerecord.Metric().Timer("octopus", "{{ $PublicStructName }}")
-	metricErrCnt := activerecord.Metric().ErrorCount("octopus", "{{ $PublicStructName }}")
+	metricTimer := activerecord.Metric().Timer(octopus.Backend, "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(octopus.Backend, "{{ $PublicStructName }}")
 
     metricTimer.Timing(ctx, "call_proc")
 
-	connection, err := octopus.Box(ctx, 0, instanceType, "arcfg", nil)
+	connection, err := getConnection(ctx, instanceType)
 	if err != nil {
 		metricErrCnt.Inc(ctx, "call_proc_preparebox", 1)
 		logger.Error(ctx, fmt.Sprintf("Error get box '%s'", err))
@@ -330,6 +331,48 @@ var boxOption, _ = octopus.NewOptions(
 var clusterInfo = activerecord.NewClusterInfo(
 	activerecord.WithShard([]activerecord.OptionInterface{boxOption}, []activerecord.OptionInterface{}),
 ){{ end }}
+
+func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceType) (*octopus.Connection, error){
+	optionCreator := func(sic activerecord.ShardInstanceConfig) (activerecord.OptionInterface, error) {
+		return octopus.NewOptions(
+			sic.Addr,
+			octopus.ServerModeType(sic.Mode),
+			octopus.WithTimeout(sic.Timeout, sic.Timeout),
+			octopus.WithPoolSize(sic.PoolSize),
+			octopus.WithPoolLogger(activerecord.IprotoLogger{}),
+		)
+	}
+
+	conn, err := activerecord.GetConnection(
+		ctx,
+		"arcfg", // ToDo config path
+		activerecord.MapGlobParam{
+			Timeout:  octopus.DefaultConnectionTimeout,
+			PoolSize: octopus.DefaultPoolSize,
+		},
+		optionCreator,
+		instanceType,
+		0, // ToDo shard number
+		func(options interface{}) (activerecord.ConnectionInterface, error) {
+			octopusOpt, ok := options.(*octopus.ConnectionOptions)
+			if !ok {
+				return nil, fmt.Errorf("invalid type of options %T, want Options", options)
+			}
+
+			return octopus.GetConnection(ctx, octopusOpt)
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error from connectionCacher: %w", err)
+	}
+
+	box, ok := conn.(*octopus.Connection)
+	if !ok {
+		return nil, fmt.Errorf("invalid connection type %T, want *octopus.Connection", conn)
+	}
+
+	return box, nil
+}
 
 func New(ctx context.Context) *{{ $PublicStructName }} {
 	newObj := {{ $PublicStructName }}{}
@@ -768,9 +811,9 @@ func (obj *{{ $PublicStructName }}) Is{{ $fstruct.Name }}{{ $flag }}() bool {
 func selectBox (ctx context.Context, indexnum uint32, keysPacked [][][]byte, limiter activerecord.SelectorLimiter) ([]*{{ $PublicStructName }}, error) {
 	logger := activerecord.Logger()
 	ctx = logger.SetLoggerValueToContext(ctx, activerecord.ValueLogPrefix{"limiter": limiter.String()})
-	metricTimer := activerecord.Metric().Timer("octopus", "{{ $PublicStructName }}")
-	metricStatCnt := activerecord.Metric().StatCount("octopus", "{{ $PublicStructName }}")
-	metricErrCnt := activerecord.Metric().ErrorCount("octopus", "{{ $PublicStructName }}")
+	metricTimer := activerecord.Metric().Timer(octopus.Backend, "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(octopus.Backend, "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(octopus.Backend, "{{ $PublicStructName }}")
 
 	w := octopus.PackSelect(namespace, indexnum, limiter.Offset(), limiter.Limit(), keysPacked)
 
@@ -779,7 +822,7 @@ func selectBox (ctx context.Context, indexnum uint32, keysPacked [][][]byte, lim
 
 	logger.Debug(ctx, fmt.Sprintf("Select packed tuple: '% X'", w))
 
-	connection, err := octopus.Box(ctx, 0, activerecord.ReplicaOrMasterInstanceType, "arcfg", nil)
+	connection, err := getConnection(ctx, activerecord.ReplicaOrMasterInstanceType)
 	if err != nil {
 		metricErrCnt.Inc(ctx, "select_preparebox", 1)
 		logger.Error(ctx, fmt.Sprintf("Error get box '%s'", err))
@@ -820,7 +863,7 @@ func selectBox (ctx context.Context, indexnum uint32, keysPacked [][][]byte, lim
 
 	metricTimer.Timing(ctx, "select_newobj")
 
-	if limiter.FullfillWarn() && len(nps) == int(limiter.Limit()) {
+	if limiter.FulfillWarn() && len(nps) == int(limiter.Limit()) {
 		logger.Warn(ctx, "Select limit reached. Result may less than db records.")
 	}
 
@@ -1176,9 +1219,9 @@ func (obj *{{ $PublicStructName }}) packPk() ([][]byte, error) {
 
 func (obj *{{ $PublicStructName }}) Delete(ctx context.Context) error {
 	logger := activerecord.Logger()
-	metricTimer := activerecord.Metric().Timer("octopus", "{{ $PublicStructName }}")
-	metricStatCnt := activerecord.Metric().StatCount("octopus", "{{ $PublicStructName }}")
-	metricErrCnt := activerecord.Metric().ErrorCount("octopus", "{{ $PublicStructName }}")
+	metricTimer := activerecord.Metric().Timer(octopus.Backend, "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(octopus.Backend, "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(octopus.Backend, "{{ $PublicStructName }}")
 
 	metricStatCnt.Inc(ctx, "delete_request", 1)
 
@@ -1195,7 +1238,7 @@ func (obj *{{ $PublicStructName }}) Delete(ctx context.Context) error {
 	w := octopus.PackDelete(namespace, pk)
 	log.Printf("Delete packed tuple: '%X'\n", w)
 
-	connection, err := octopus.Box(ctx, 0, activerecord.MasterInstanceType, "arcfg", nil)
+	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
 	if err != nil {
 		metricErrCnt.Inc(ctx, "delete_preparebox", 1)
 		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Error get box '%s'", err))
@@ -1237,9 +1280,9 @@ func (obj *{{ $PublicStructName }}) Delete(ctx context.Context) error {
 
 func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
 	logger := activerecord.Logger()
-	metricTimer := activerecord.Metric().Timer("octopus", "{{ $PublicStructName }}")
-	metricStatCnt := activerecord.Metric().StatCount("octopus", "{{ $PublicStructName }}")
-	metricErrCnt := activerecord.Metric().ErrorCount("octopus", "{{ $PublicStructName }}")
+	metricTimer := activerecord.Metric().Timer(octopus.Backend, "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(octopus.Backend, "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(octopus.Backend, "{{ $PublicStructName }}")
 
 	metricStatCnt.Inc(ctx, "update_request", 1)
 
@@ -1255,7 +1298,7 @@ func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
 		return obj.Replace(ctx)
 	}
 
-	connection, err := octopus.Box(ctx, 0, activerecord.MasterInstanceType, "arcfg", nil)
+	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
 	if err != nil {
 		metricErrCnt.Inc(ctx, "update_preparebox", 1)
 		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Error get box '%s'", err))
@@ -1341,8 +1384,8 @@ func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
 }
 
 func (obj *{{ $PublicStructName }}) Insert(ctx context.Context) error {
-	metricStatCnt := activerecord.Metric().StatCount("octopus", "{{ $PublicStructName }}")
-	metricErrCnt := activerecord.Metric().ErrorCount("octopus", "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(octopus.Backend, "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(octopus.Backend, "{{ $PublicStructName }}")
 
 	metricStatCnt.Inc(ctx, "insert_request", 1)
 
@@ -1361,8 +1404,8 @@ func (obj *{{ $PublicStructName }}) Insert(ctx context.Context) error {
 }
 
 func (obj *{{ $PublicStructName }}) Replace(ctx context.Context) error {
-	metricStatCnt := activerecord.Metric().StatCount("octopus", "{{ $PublicStructName }}")
-	metricErrCnt := activerecord.Metric().ErrorCount("octopus", "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(octopus.Backend, "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(octopus.Backend, "{{ $PublicStructName }}")
 
 	metricStatCnt.Inc(ctx, "replace_request", 1)
 
@@ -1381,7 +1424,7 @@ func (obj *{{ $PublicStructName }}) Replace(ctx context.Context) error {
 }
 
 func (obj *{{ $PublicStructName }}) InsertOrReplace(ctx context.Context) error {
-	metricStatCnt := activerecord.Metric().StatCount("octopus", "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(octopus.Backend, "{{ $PublicStructName }}")
 
 	metricStatCnt.Inc(ctx, "insertorreplace_request", 1)
 
@@ -1401,8 +1444,8 @@ func (obj *{{ $PublicStructName }}) insertReplace(ctx context.Context, insertMod
 		data []byte
 	)
 
-	metricTimer := activerecord.Metric().Timer("octopus", "{{ $PublicStructName }}")
-	metricErrCnt := activerecord.Metric().ErrorCount("octopus", "{{ $PublicStructName }}")
+	metricTimer := activerecord.Metric().Timer(octopus.Backend, "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(octopus.Backend, "{{ $PublicStructName }}")
 
 	{{ range $ind, $fstruct := .FieldList }}
 
@@ -1427,7 +1470,7 @@ func (obj *{{ $PublicStructName }}) insertReplace(ctx context.Context, insertMod
 	metricTimer.Timing(ctx, "insertreplace_pack")
 	logger.Trace(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Insert packed tuple: '%X'", w))
 
-	connection, err := octopus.Box(ctx, 0, activerecord.MasterInstanceType, "arcfg", nil)
+	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
 	if err != nil {
 		metricErrCnt.Inc(ctx, "insertreplace_preparebox", 1)
 		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Error get box '%s'", err))

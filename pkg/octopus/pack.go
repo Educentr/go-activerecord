@@ -300,7 +300,7 @@ func UnpackOffset(r *bytes.Reader) (uint32, error) {
 	return limit, nil
 }
 
-func UnpackResopnseStatus(data []byte) (uint32, []byte, error) {
+func UnpackResponseStatus(data []byte) (uint32, []byte, error) {
 	rdr := bytes.NewReader(data)
 
 	var retCode uint32

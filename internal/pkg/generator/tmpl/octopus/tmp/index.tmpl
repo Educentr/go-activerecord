@@ -1,0 +1,290 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+{{ if eq .Server.Conf "" -}}
+	"time"
+{{ end }}
+	"strings"
+
+	"github.com/mailru/activerecord/pkg/iproto/iproto"
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ $pkgName := .ARPkg }}
+{{ $serializers := .Serializers -}}
+{{ $mutators := .Mutators -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $LinkedObject := .LinkedObject }}
+{{ $flags := .Flags }}
+{{ $fields := .FieldList }}
+{{ $procfields := .ProcOutFieldList }}
+{{ $procInLen := len .ProcInFieldList }}
+{{ $mutatorLen := len .Mutators }}
+
+{{ if $fields }} // indexes
+{{ $pktype := "" }}
+{{ $pklenfld := 1 }}
+{{ $pkind := index .Indexes 0 }}
+{{ range $num, $ind := .Indexes -}}
+{{ $lenfld := len $ind.Fields -}}
+	{{ if $ind.Primary }}
+		{{ $pktype = $ind.Type }}
+		{{ $pklenfld = len $ind.Fields }}
+		{{ $pkind = $ind }}
+func (obj *{{ $PublicStructName }}) Primary() {{ $ind.Type }} {
+		{{ if ne $lenfld 1 }}
+	return {{ $ind.Type }}{
+			{{- range $_, $fieldNum := $ind.Fields }}
+				{{- $ifield := index $fields $fieldNum }}
+		{{ $ifield.Name }}: obj.Get{{ $ifield.Name }}(),
+			{{- end }}
+	}
+		{{ else }}
+			{{- range $_, $fieldNum := $ind.Fields }}
+				{{- $ifield := index $fields $fieldNum }}
+	return obj.Get{{ $ifield.Name }}()
+			{{- end }}
+		{{ end -}}
+}
+
+func SelectByPrimary(ctx context.Context, pk {{ $ind.Type }}) (*{{ $PublicStructName }}, error) {
+	return {{ $ind.Selector }}(ctx, pk)
+}
+	{{ end }}
+{{ end }}
+
+{{ range $num, $ind := .Indexes -}}
+	{{ $lenfld := len $ind.Fields -}}
+	{{ if ne $lenfld 1 }}
+type {{ $ind.Type }} struct {
+		{{- range $_, $fieldNum := $ind.Fields }}
+			{{- $ifield := index $fields $fieldNum }}
+	{{ $rtype := $ifield.Format -}}
+	{{ $serlen := len $ifield.Serializer -}}
+	{{ if ne $serlen 0 -}}
+		{{ $sname := index $ifield.Serializer 0 -}}
+		{{ $serializer := index $serializers $sname -}}
+		{{ $rtype = $serializer.Type -}}
+	{{ end }}
+	{{ $ifield.Name }} {{ $rtype -}}
+		{{- end }}
+}
+	{{ end -}}
+
+func PackKeyIndex{{ $ind.Name }}(ctx context.Context, keys []{{ $ind.Type }}) ([][][]byte, error) {
+	keysPacked := [][][]byte{}
+
+	for _, key := range keys {
+		keysField := [][]byte{}
+		{{ if ne $lenfld 1 -}}
+			{{ range $numf, $ifld := $ind.Fields -}}
+				{{ $sfield := index $fields $ifld -}}
+				{{ $packerparam := packerParam $sfield.Format -}}
+				{{ $packparam := printf "key.%s" $sfield.Name -}}
+				{{ $serlen := len $sfield.Serializer }}
+				{{ if ne $serlen 0 }}
+					{{ $sname := index $sfield.Serializer 0 -}}
+					{{ $serializer := index $serializers $sname -}}
+					{{ $serparams := $sfield.Serializer.Params -}}
+					skey, err := {{ $serializer.ImportName }}.{{ $serializer.Marshaler }}({{ $serparams }}{{ $packparam }})
+					if err != nil {
+						return nil, err
+					}
+					{{ $packparam = "skey" }}
+				{{ end }}
+
+		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc $packparam }}, iproto.ModeDefault))
+			{{ end -}}
+		{{ else -}}
+			{{ $ifield := index $ind.Fields 0 -}}
+			{{ $sfield := index $fields $ifield -}}
+			{{ $packerparam := packerParam $sfield.Format -}}
+		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc "key" }}, iproto.ModeDefault))
+		{{ end -}}
+		keysPacked = append(keysPacked, keysField)
+	}
+
+	return keysPacked, nil
+}
+func UnpackKeyIndex{{ $ind.Name }}(packedKeys [][][]byte) ([]{{ $ind.Type }}, error) {
+	ret := []{{ $ind.Type }}{}
+
+	for _, packedKey := range packedKeys {
+		{{ if ne $lenfld 1 }}
+		newIField := {{ $ind.Type }}{}
+		
+		var err error
+
+		{{- range $num, $fieldNum := $ind.Fields }}
+			{{- $ifield := index $fields $fieldNum }}
+			newIField.{{ $ifield.Name }}, err = Unpack{{ $ifield.Name }}(bytes.NewReader(packedKey[{{$num}}]))
+			if err != nil {
+				return nil, fmt.Errorf("can't unpack index: %s", err)
+			}
+		{{ end }}
+		{{ else }}
+		{{- $fieldNum := index $ind.Fields 0 }}
+		{{- $ifield := index $fields $fieldNum }}
+		newIField, err := Unpack{{ $ifield.Name }}(bytes.NewReader(packedKey[0]))
+		if err != nil {
+			return nil, fmt.Errorf("can't unpack index: %s", err)
+		}
+		{{ end }}
+		ret = append(ret, newIField)
+	}
+
+	return ret, nil
+}
+/*
+
+	keysPacked := [][][]byte{}
+
+	for _, key := range keys {
+		keysField := [][]byte{}
+		{{ if ne $lenfld 1 -}}
+			{{ range $numf, $ifld := $ind.Fields -}}
+				{{ $sfield := index $fields $ifld -}}
+				{{ $packerparam := packerParam $sfield.Format -}}
+				{{ $packparam := printf "key.%s" $sfield.Name -}}
+				{{ $serlen := len $sfield.Serializer }}
+				{{ if ne $serlen 0 }}
+					{{ $sname := index $sfield.Serializer 0 -}}
+					{{ $serializer := index $serializers $sname -}}
+					{{ $serparams := $sfield.Serializer.Params -}}
+					skey, err := {{ $serializer.ImportName }}.{{ $serializer.Marshaler }}({{ $serparams }}{{ $packparam }})
+					if err != nil {
+						return nil, err
+					}
+					{{ $packparam = "skey" }}
+				{{ end }}
+
+		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc $packparam }}, iproto.ModeDefault))
+			{{ end -}}
+		{{ else -}}
+			{{ $ifield := index $ind.Fields 0 -}}
+			{{ $sfield := index $fields $ifield -}}
+			{{ $packerparam := packerParam $sfield.Format -}}
+		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc "key" }}, iproto.ModeDefault))
+		{{ end -}}
+		keysPacked = append(keysPacked, keysField)
+	}
+
+	return keysPacked, nil
+}
+*/
+func {{ $ind.Selector }}s(ctx context.Context, keys []{{ $ind.Type }}{{ if not $ind.Unique }}, limiter activerecord.SelectorLimiter{{ end }}) ([]*{{ $PublicStructName }}, error) {
+	ctx = activerecord.Logger().SetLoggerValueToContext(ctx, map[string]interface{}{"{{ $ind.Selector }}s": keys, "Repo": "{{ $PublicStructName }}" })
+
+	keysPacked, err := PackKeyIndex{{ $ind.Name }}(ctx, keys)
+	if err != nil {
+		return nil, fmt.Errorf("can't pack index key: %s", err)
+	}
+
+	{{ if $ind.Unique -}}
+	limiter := activerecord.EmptyLimiter()
+	{{ end }}
+
+	res, err := selectBox(ctx, {{ $ind.Num }}, keysPacked, limiter)
+	if err != nil {
+		return res, err	
+	}
+
+	activerecord.Logger().CollectQueries(ctx, {{ $ind.Selector }}MockerLogger(keys, {{ $PublicStructName }}List(res){{ if not $ind.Unique }}, limiter {{ end }}))
+
+	return res, err
+}
+
+func {{ $ind.Selector }}(ctx context.Context, key {{ $ind.Type }}{{ if not $ind.Unique }}, limiter activerecord.SelectorLimiter{{ end }}) ({{ if $ind.Unique }}{{ else }}[]{{ end }}*{{ $PublicStructName }}, error) {
+	selected, err := {{ $ind.Selector }}s(ctx, []{{ $ind.Type }}{key}{{ if not $ind.Unique }}, limiter{{ end }})
+	if err != nil {
+		return nil, err
+	}
+
+	{{ if $ind.Unique -}}
+	if len(selected) > 0 {
+		if len(selected) > 1 {
+			activerecord.Logger().Error(ctx, "{{ $PublicStructName }}", "More than one tuple for uniq key ID '%s': %d", key, len(selected))
+		}
+
+		return selected[0], nil
+	}
+
+	return nil, nil
+	{{- else }}
+
+	return selected, nil
+	{{- end }}
+}
+{{ end }}
+
+func (obj *{{ $PublicStructName }}) PrimaryString() string {
+	ret := []string{
+	{{- range $ind, $fstruct := .FieldList }}
+		{{- if $fstruct.PrimaryKey }}
+			{{- $packerparam := packerParam $fstruct.Format }}
+			{{- $tostr := $packerparam.ToString }} 
+			{{ index $tostr 0 }}obj.Get{{ $fstruct.Name }}(){{ index $tostr 1 }},
+		{{- end }}
+	{{- end }}
+	}
+
+	return strings.Join(ret, ", ")
+}
+
+{{ $pktype := "" }}
+{{ $pklenfld := 1 }}
+{{ $pkind := index .Indexes 0 }}
+{{ range $num, $ind := .Indexes -}}
+{{ $lenfld := len $ind.Fields -}}
+	{{ if $ind.Primary }}
+		{{ $pktype = $ind.Type }}
+		{{ $pklenfld = len $ind.Fields }}
+		{{ $pkind = $ind }}
+func (obj *{{ $PublicStructName }}) packPk() ([][]byte, error) {
+	packedPk := [][]byte{}
+
+	var (
+		data []byte
+		err error
+	)
+		{{ if ne $lenfld 1 }}
+			{{- range $_, $fieldNum := $ind.Fields }}
+				{{- $ifield := index $fields $fieldNum }}
+
+					data, err = pack{{ $ifield.Name }}([]byte{}, obj.Get{{ $ifield.Name }}())
+                	if err != nil {
+                		return [][]byte{}, err
+                	}
+
+                	packedPk = append(packedPk, data)
+			{{- end }}
+		{{ else }}
+			{{- range $_, $fieldNum := $ind.Fields }}
+				{{- $ifield := index $fields $fieldNum }}
+
+					data, err = pack{{ $ifield.Name }}([]byte{}, obj.Get{{ $ifield.Name }}())
+                	if err != nil {
+                		return [][]byte{}, err
+                	}
+
+                	packedPk = append(packedPk, data)
+			{{- end }}
+		{{ end }}
+
+		return packedPk, nil
+}
+	{{ end }}
+{{ end }}
+
+{{ end }}// end indexes

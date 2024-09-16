@@ -2,6 +2,8 @@ package arerror
 
 import (
 	"errors"
+
+	"github.com/mailru/activerecord/pkg/activerecord"
 )
 
 var ErrCheckBackendEmpty = errors.New("backend empty")
@@ -23,12 +25,13 @@ var ErrCheckObjectNotFound = errors.New("linked object not found")
 var ErrCheckFieldTypeNotFound = errors.New("procedure field type not found")
 var ErrCheckFieldsEmpty = errors.New("empty required field declaration")
 var ErrCheckFieldsManyDecl = errors.New("few declarations of fields not supported")
+var ErrCheckFieldsProcNotImpl = errors.New("proc fields not implemented")
 var ErrCheckFieldsOrderDecl = errors.New("incorrect order of fields")
 
 // Описание ошибки декларации пакета
 type ErrCheckPackageDecl struct {
 	Pkg     string
-	Backend string
+	Backend activerecord.Backend
 	Err     error
 }
 

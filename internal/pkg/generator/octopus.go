@@ -3,18 +3,23 @@ package generator
 import (
 	"bufio"
 	"bytes"
-	_ "embed"
+	"embed"
 	"log"
+	"path"
 	"strings"
 	"text/template"
 
 	"github.com/mailru/activerecord/internal/pkg/arerror"
 	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/mailru/activerecord/pkg/activerecord"
 	"github.com/mailru/activerecord/pkg/iproto/util/text"
 	"github.com/mailru/activerecord/pkg/octopus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
+
+//go:embed tmpl/octopus/tmp/*
+var OctopusTemplatesPath embed.FS
 
 //nolint:revive
 //go:embed tmpl/octopus/mock.tmpl
@@ -30,50 +35,90 @@ var OctopusFixtureRepositoryTmpl string
 
 var funcs = template.FuncMap{"snakeCase": text.ToSnakeCase}
 
-func GenerateOctopus(params PkgData) (map[string]bytes.Buffer, *arerror.ErrGeneratorPhases) {
-	octopusWriter := bytes.Buffer{}
-	mockWriter := bytes.Buffer{}
-	fixtureWriter := bytes.Buffer{}
+const tmplPath = "tmpl/octopus/tmp"
 
-	octopusFile := bufio.NewWriter(&octopusWriter)
-
-	//TODO возможно имеет смысл разделить большой шаблон OctopusRootRepositoryTmpl для удобства поддержки
-	err := GenerateByTmpl(octopusFile, params, "octopus", OctopusRootRepositoryTmpl)
+func GenerateOctopus(params PkgData) (map[string]*bytes.Buffer, *arerror.ErrGeneratorPhases) {
+	templates, err := OctopusTemplatesPath.ReadDir(tmplPath)
 	if err != nil {
-		return nil, err
+		return nil, &arerror.ErrGeneratorPhases{Backend: "octopus", Phase: "generate", Err: err}
 	}
 
-	octopusFile.Flush()
+	ret := make(map[string]*bytes.Buffer, len(templates))
 
-	mockFile := bufio.NewWriter(&mockWriter)
+	for _, template := range templates {
+		if !strings.HasSuffix(template.Name(), ".tmpl") {
+			if !template.IsDir() {
+				log.Printf("%s has no suffix tmpl. skip", template.Name())
+			}
 
-	err = GenerateByTmpl(mockFile, params, "octopus", OctopusMockRepositoryTmpl)
-	if err != nil {
-		return nil, err
+			continue
+		}
+
+		tmpl, err := OctopusTemplatesPath.ReadFile(path.Join(tmplPath, template.Name()))
+		if err != nil {
+			return nil, &arerror.ErrGeneratorPhases{Backend: "octopus", Name: template.Name(), Phase: "generate", Err: err}
+		}
+
+		fileName := template.Name()[:len(template.Name())-5]
+
+		ret[fileName] = &bytes.Buffer{}
+		writer := bufio.NewWriter(ret[fileName])
+
+		aeErr := GenerateByTmpl(writer, params, "octopus", string(tmpl))
+		if aeErr != nil {
+			return nil, aeErr
+		}
+
+		err = writer.Flush()
+		if err != nil {
+			return nil, &arerror.ErrGeneratorPhases{Backend: "octopus", Name: template.Name(), Phase: "generate", Err: err}
+		}
 	}
 
-	mockFile.Flush()
+	// octopusWriter := bytes.Buffer{}
+	// mockWriter := bytes.Buffer{}
+	// fixtureWriter := bytes.Buffer{}
 
-	fixtureFile := bufio.NewWriter(&fixtureWriter)
+	// octopusFile := bufio.NewWriter(&octopusWriter)
 
-	err = GenerateByTmpl(fixtureFile, params, "octopus", OctopusFixtureRepositoryTmpl)
-	if err != nil {
-		return nil, err
-	}
+	// // TODO возможно имеет смысл разделить большой шаблон OctopusRootRepositoryTmpl для удобства поддержки
+	// err := GenerateByTmpl(octopusFile, params, "octopus", VarsTmpl+OctopusRootRepositoryTmpl)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	fixtureFile.Flush()
+	// octopusFile.Flush()
 
-	ret := map[string]bytes.Buffer{
-		"octopus": octopusWriter,
-		"mock":    mockWriter,
-		"fixture": fixtureWriter,
-	}
+	// mockFile := bufio.NewWriter(&mockWriter)
+
+	// err = GenerateByTmpl(mockFile, params, "octopus", OctopusMockRepositoryTmpl)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// mockFile.Flush()
+
+	// fixtureFile := bufio.NewWriter(&fixtureWriter)
+
+	// err = GenerateByTmpl(fixtureFile, params, "octopus", OctopusFixtureRepositoryTmpl)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// fixtureFile.Flush()
+
+	// ret := map[string]bytes.Buffer{
+	// 	"octopus": octopusWriter,
+	// 	"mock":    mockWriter,
+	// 	"fixture": fixtureWriter,
+	// }
 
 	return ret, nil
 }
 
 var OctopusTemplateFuncs = template.FuncMap{
-	"packerParam": func(format octopus.Format) OctopusFormatParam {
+	"split": strings.Split,
+	"packerParam": func(format activerecord.Format) OctopusFormatParam {
 		ret, ex := OctopusFormatMapper[format]
 		if !ex {
 			log.Fatalf("packer for type `%s` not found", format)
@@ -81,7 +126,7 @@ var OctopusTemplateFuncs = template.FuncMap{
 
 		return ret
 	},
-	"mutatorParam": func(mut string, format octopus.Format) OctopusMutatorParam {
+	"mutatorParam": func(mut string, format activerecord.Format) OctopusMutatorParam {
 		ret, ex := OctopusMutatorMapper[mut]
 		if !ex {
 			log.Fatalf("mutator packer for type `%s` not found", format)
@@ -232,11 +277,11 @@ func (p OctopusFormatParam) MutatorTypeConv() string {
 
 type OctopusMutatorParam struct {
 	Name          string
-	AvailableType []octopus.Format
+	AvailableType []activerecord.Format
 	ArgType       string
 }
 
-var OctopusFormatMapper = map[octopus.Format]OctopusFormatParam{
+var OctopusFormatMapper = map[activerecord.Format]OctopusFormatParam{
 	octopus.Bool:    {Name: "Uint8", len: 2, convstr: "strconv.FormatBool(%%)", packConvFunc: "octopus.BoolToUint", UnpackConvFunc: "octopus.UintToBool", unpackType: "uint8"},
 	octopus.Uint8:   {Name: "Uint8", len: 2, convstr: "strconv.FormatUint(uint64(%%), 10)"},
 	octopus.Uint16:  {Name: "Uint16", len: 3, convstr: "strconv.FormatUint(uint64(%%), 10)"},

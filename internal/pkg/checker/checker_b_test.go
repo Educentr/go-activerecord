@@ -5,12 +5,13 @@ import (
 	"testing"
 
 	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/mailru/activerecord/pkg/activerecord"
 	"github.com/mailru/activerecord/pkg/octopus"
 )
 
 func TestCheck(t *testing.T) {
 	rpFoo := ds.NewRecordPackage()
-	rpFoo.Backends = []string{"octopus"}
+	rpFoo.Backends = []activerecord.Backend{octopus.Backend}
 	rpFoo.Namespace = ds.NamespaceDeclaration{ObjectName: "0", PackageName: "foo", PublicName: "Foo"}
 	rpFoo.Server = ds.ServerDeclaration{Host: "127.0.0.1", Port: "11011"}
 
@@ -55,7 +56,7 @@ func TestCheck(t *testing.T) {
 	}
 
 	rpInvalidFormat := ds.NewRecordPackage()
-	rpInvalidFormat.Backends = []string{"octopus"}
+	rpInvalidFormat.Backends = []activerecord.Backend{octopus.Backend}
 	rpInvalidFormat.Namespace = ds.NamespaceDeclaration{ObjectName: "0", PackageName: "invform", PublicName: "InvalidFormat"}
 	rpInvalidFormat.Server = ds.ServerDeclaration{Host: "127.0.0.1", Port: "11011"}
 
@@ -74,7 +75,7 @@ func TestCheck(t *testing.T) {
 	}
 
 	onInvalidFormat := ds.NewRecordPackage()
-	onInvalidFormat.Backends = []string{"octopus"}
+	onInvalidFormat.Backends = []activerecord.Backend{octopus.Backend}
 	onInvalidFormat.Namespace = ds.NamespaceDeclaration{ObjectName: "invalid", PackageName: "invform", PublicName: "InvalidFormat"}
 	onInvalidFormat.Server = ds.ServerDeclaration{Host: "127.0.0.1", Port: "11011", Conf: "box"}
 

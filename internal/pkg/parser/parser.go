@@ -10,6 +10,7 @@ import (
 
 	"github.com/mailru/activerecord/internal/pkg/arerror"
 	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/mailru/activerecord/pkg/activerecord"
 )
 
 type StructNameType string
@@ -244,7 +245,10 @@ func parseDoc(dst *ds.RecordPackage, nodeName string, doc *ast.CommentGroup) err
 						return &arerror.ErrParseDocDecl{Name: kv[0], Value: kv[1], Err: arerror.ErrParseDocNamespaceDecl}
 					}
 				case "backend":
-					dst.Backends = strings.Split(kv[1], ",")
+					be := strings.Split(kv[1], ",")
+					for _, b := range be {
+						dst.Backends = append(dst.Backends, activerecord.Backend(b))
+					}
 				default:
 					retErr := arerror.ErrParseDocDecl{Name: kv[0], Err: arerror.ErrUnknown}
 					if len(kv) > 1 {

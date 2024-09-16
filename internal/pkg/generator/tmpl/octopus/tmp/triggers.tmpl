@@ -1,0 +1,42 @@
+package {{ .ARPkg }}
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ $PublicStructName := .ARPkgTitle -}}
+
+{{- if .Triggers.RepairTuple }}
+func repairTuple(ctx context.Context, tuple *octopus.TupleData) error {
+	{{- if .Triggers.RepairTuple.ImportName }}
+	logger := activerecord.Logger()
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", "Repair trigger called")
+
+	err := {{ .Triggers.RepairTuple.ImportName }}.{{ .Triggers.RepairTuple.Func }}(tuple, cntFields)
+	if err != nil {
+		return fmt.Errorf("trigger can't repair tuple %w", err)
+	}
+	{{- else if .Triggers.RepairTuple.Params.Defaults }}
+	logger := activerecord.Logger()
+
+	logger.Warn(ctx, "{{ $PublicStructName }}", "Repair trigger set defaults")
+	for f := tuple.Cnt; f < cntFields; f++ {
+		tuple.Data = append(tuple.Data, defaultValue[f])
+	}
+	tuple.Cnt = cntFields
+	{{- end }}
+
+	return nil
+}
+{{- end }}

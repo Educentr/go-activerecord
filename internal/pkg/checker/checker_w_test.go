@@ -4,13 +4,16 @@ import (
 	"testing"
 
 	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/mailru/activerecord/pkg/postgres"
 )
 
 func Test_checkBackend(t *testing.T) {
 	rcOctopus := ds.NewRecordPackage()
-	rcOctopus.Backends = []string{"octopus"}
+	rcOctopus.Backends = []activerecord.Backend{octopus.Backend}
 	rcMany := ds.NewRecordPackage()
-	rcMany.Backends = []string{"octopus", "postgres"}
+	rcMany.Backends = []activerecord.Backend{octopus.Backend, postgres.Backend}
 
 	type args struct {
 		cl *ds.RecordPackage

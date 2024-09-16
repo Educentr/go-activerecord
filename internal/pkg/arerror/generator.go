@@ -1,6 +1,10 @@
 package arerror
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/mailru/activerecord/pkg/activerecord"
+)
 
 var ErrGeneratorBackendUnknown = errors.New("backend unknown")
 var ErrGeneratorBackendNotImplemented = errors.New("backend not implemented")
@@ -22,7 +26,7 @@ func (e *ErrGeneratorPkg) Error() string {
 type ErrGeneratorFile struct {
 	Name     string
 	Filename string
-	Backend  string
+	Backend  activerecord.Backend
 	Err      error
 }
 

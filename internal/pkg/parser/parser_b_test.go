@@ -8,6 +8,8 @@ import (
 	"github.com/mailru/activerecord/internal/pkg/ds"
 	"github.com/mailru/activerecord/internal/pkg/parser"
 	"github.com/mailru/activerecord/internal/pkg/testutil"
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
 	"gotest.tools/assert"
 	"gotest.tools/assert/cmp"
 )
@@ -112,7 +114,7 @@ type TriggersFoo struct {
 				},
 				IndexMap:      map[string]int{"Field1Field2": 0, "Field1Part": 1},
 				SelectorMap:   map[string]int{"SelectByField1": 1, "SelectByField1Field2": 0},
-				Backends:      []string{"octopus"},
+				Backends:      []activerecord.Backend{octopus.Backend},
 				SerializerMap: map[string]ds.SerializerDeclaration{},
 				ImportPackage: ds.ImportPackage{
 					Imports: []ds.ImportDeclaration{
@@ -223,7 +225,7 @@ type ProcFieldsFoo struct {
 				Indexes:               []ds.IndexDeclaration{},
 				IndexMap:              map[string]int{},
 				SelectorMap:           map[string]int{},
-				Backends:              []string{"octopus"},
+				Backends:              []activerecord.Backend{octopus.Backend},
 				SerializerMap:         map[string]ds.SerializerDeclaration{},
 				ImportPackage:         ds.NewImportPackage(),
 				TriggerMap:            map[string]ds.TriggerDeclaration{},

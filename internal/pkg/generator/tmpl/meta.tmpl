@@ -227,7 +227,7 @@ func (n NSPackage) GetInsertDebugInfo(ns uint32, needRetVal bool, insertMode oct
 	return fmtStr
 }
 
-func (n NSPackage) formatInsertMockFixture(ns uint32, spacemeta SpaceMeta, needRetVal bool, insertMode octopus.InsertMode, tuple octopus.TupleData) string {
+func (n NSPackage) formatInsertMockFixture(ns uint32, spacemeta SpaceMeta, _ bool, insertMode octopus.InsertMode, tuple octopus.TupleData) string {
 	strMode := octopus.GetInsertModeName(insertMode)
 
 	strObj, err := spacemeta.Unpacker(context.TODO(), tuple)

@@ -6,6 +6,8 @@ import (
 
 	"github.com/mailru/activerecord/internal/pkg/ds"
 	"github.com/mailru/activerecord/internal/pkg/testutil"
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
 )
 
 func TestGenerate(t *testing.T) {
@@ -35,7 +37,7 @@ func TestGenerate(t *testing.T) {
 						PublicName:  "Bar",
 						PackageName: "bar",
 					},
-					Backends: []string{"octopus"},
+					Backends: []activerecord.Backend{octopus.Backend},
 					Fields: []ds.FieldDeclaration{
 						{Name: "Field1", Format: "int", PrimaryKey: true, Mutators: []string{}, Size: 5, Serializer: []string{}},
 					},
@@ -67,20 +69,68 @@ func TestGenerate(t *testing.T) {
 			wantRet: []GenerateFile{
 				{
 					Dir:     "bar",
-					Name:    "octopus.go",
-					Backend: "octopus",
+					Name:    "accessor.go",
+					Backend: octopus.Backend,
+					Data:    []byte{},
+				},
+				{
+					Dir:     "bar",
+					Name:    "connection.go",
+					Backend: octopus.Backend,
+					Data:    []byte{},
+				},
+				{
+					Dir:     "bar",
+					Name:    "index.go",
+					Backend: octopus.Backend,
+					Data:    []byte{},
+				},
+				{
+					Dir:     "bar",
+					Name:    "link.go",
+					Backend: octopus.Backend,
+					Data:    []byte{},
+				},
+				{
+					Dir:     "bar",
+					Name:    "main.go",
+					Backend: octopus.Backend,
 					Data:    []byte{},
 				},
 				{
 					Dir:     "bar",
 					Name:    "mock.go",
-					Backend: "octopus",
+					Backend: octopus.Backend,
 					Data:    []byte{},
 				},
 				{
 					Dir:     "bar",
-					Name:    "fixture.go",
-					Backend: "octopus",
+					Name:    "mutators.go",
+					Backend: octopus.Backend,
+					Data:    []byte{},
+				},
+				{
+					Dir:     "bar",
+					Name:    "octopus.go",
+					Backend: octopus.Backend,
+					Data:    []byte{},
+				},
+				{
+					Dir:     "bar",
+					Name:    "pack.go",
+					Backend: octopus.Backend,
+					Data:    []byte{},
+				},
+				{
+					Dir:     "bar",
+					Name:    "proc.go",
+					Backend: octopus.Backend,
+					Data:    []byte{},
+				},
+				{
+					Dir:     "bar",
+					Name:    "triggers.go",
+					Backend: octopus.Backend,
 					Data:    []byte{},
 				},
 			},

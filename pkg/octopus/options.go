@@ -87,20 +87,22 @@ func (o *ConnectionOptions) UpdateHash(data ...interface{}) error {
 		return fmt.Errorf("can't update hash after calculate")
 	}
 
-	for _, data := range data {
+	for _, d := range data {
 		var err error
 
-		switch v := data.(type) {
+		switch v := d.(type) {
 		case string:
 			err = binary.Write(o.connectionHash, binary.LittleEndian, []byte(v))
 		case int:
 			err = binary.Write(o.connectionHash, binary.LittleEndian, int64(v))
+		case nil:
+			err = fmt.Errorf("nil data to uprateHash[%+v]", data)
 		default:
 			err = binary.Write(o.connectionHash, binary.LittleEndian, v)
 		}
 
 		if err != nil {
-			return fmt.Errorf("can't calculate connectionID: %w", err)
+			return fmt.Errorf("can't calculate connectionID [%+v]: %w", data, err)
 		}
 	}
 

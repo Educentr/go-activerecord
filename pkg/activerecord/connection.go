@@ -85,3 +85,52 @@ func (cp *connectionPool) CloseConnection(ctx context.Context) {
 
 	cp.lock.Unlock()
 }
+
+// TODO
+// - сделать статистику по используемым инстансам
+// - прикрутить локальный пингер и исключать недоступные инстансы
+func GetConnection(
+	ctx context.Context,
+	configPath string,
+	globParam MapGlobParam,
+	optionCreator func(ShardInstanceConfig) (OptionInterface, error),
+	instType ShardInstanceType,
+	shard int,
+	getConnection func(options interface{}) (ConnectionInterface, error),
+) (ConnectionInterface, error) {
+	clusterInfo, err := ConfigCacher().Get(
+		ctx,
+		configPath,
+		globParam,
+		optionCreator,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("can't get cluster %s info: %w", configPath, err)
+	}
+
+	if len(clusterInfo) < shard {
+		return nil, fmt.Errorf("invalid shard num %d, max = %d", shard, len(clusterInfo))
+	}
+
+	var configBox ShardInstance
+
+	switch instType {
+	case ReplicaInstanceType:
+		if len(clusterInfo[shard].Replicas) == 0 {
+			return nil, fmt.Errorf("replicas not set")
+		}
+
+		configBox = clusterInfo[shard].NextReplica()
+	case ReplicaOrMasterInstanceType:
+		if len(clusterInfo[shard].Replicas) != 0 {
+			configBox = clusterInfo[shard].NextReplica()
+			break
+		}
+
+		fallthrough
+	case MasterInstanceType:
+		configBox = clusterInfo[shard].NextMaster()
+	}
+
+	return ConnectionCacher().GetOrAdd(configBox, getConnection)
+}

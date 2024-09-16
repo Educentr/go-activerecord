@@ -1,0 +1,78 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+{{ if eq .Server.Conf "" -}}
+	"time"
+{{ end }}
+	"strings"
+
+	"github.com/mailru/activerecord/pkg/iproto/iproto"
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ $pkgName := .ARPkg }}
+{{ $serializers := .Serializers -}}
+{{ $mutators := .Mutators -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $LinkedObject := .LinkedObject }}
+{{ $flags := .Flags }}
+{{ $fields := .FieldList }}
+{{ $procfields := .ProcOutFieldList }}
+{{ $procInLen := len .ProcInFieldList }}
+{{ $mutatorLen := len .Mutators }}
+
+{{ range $name, $fobj := .FieldObject -}}
+{{ $linkedobj := index $LinkedObject $fobj.ObjectName }}
+func (obj *{{ $PublicStructName }}) Get{{ $name }}(ctx context.Context) ({{ if not $fobj.Unique }}[]{{ end }}*{{ $linkedobj.Namespace.PackageName }}.{{ $linkedobj.Namespace.PublicName }}, error){
+	{{- if $fobj.Unique }}
+	if ret, ok := obj.BaseField.Objects["{{ $name }}"]; ok && len(ret) == 1 {
+		return ret[0].(*{{ $linkedobj.Namespace.PackageName }}.{{ $linkedobj.Namespace.PublicName }}), nil
+	}
+
+	ret, err := {{ $linkedobj.Namespace.PackageName }}.SelectBy{{ $fobj.Key }}(ctx, obj.Get{{ $fobj.Field }}())
+	if err != nil {
+		return nil, err
+	}
+
+	obj.BaseField.Objects["{{ $name }}"] = []octopus.ModelStruct{ret}
+	{{- else }}
+
+	var ret []*{{ $linkedobj.Namespace.PackageName }}.{{ $linkedobj.Namespace.PublicName }}
+
+	if retI, ok := obj.BaseField.Objects["{{ $name }}"]; ok && len(retI) > 0 {
+		for _, ri := range retI {
+			ret = append(ret, ri.(*{{ $linkedobj.Namespace.PackageName }}.{{ $linkedobj.Namespace.PublicName }}))
+		}
+
+		return ret, nil
+	}
+
+	ret, err := {{ $linkedobj.Namespace.PackageName }}.SelectBy{{ $fobj.Key }}(ctx, obj.Get{{ $fobj.Field }}(), activerecord.NewLimiter(100)) //ToDo default limit for multi object
+	if err != nil {
+		return nil, err
+	}
+
+	if len(ret) == 100 {
+		activerecord.Logger().Warn(ctx, "limit for multiple linked object riched '{{ $linkedobj.Namespace.PackageName }}.{{ $linkedobj.Namespace.PublicName }}' '{{ $PublicStructName }}'")
+	}
+
+	for _, r := range ret {
+		obj.BaseField.Objects["{{ $name }}"] = append(obj.BaseField.Objects["{{ $name }}"], r)
+	}
+	{{- end }}
+
+	return ret, nil
+}
+
+{{ end -}}

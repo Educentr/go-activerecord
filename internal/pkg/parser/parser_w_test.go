@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/mailru/activerecord/pkg/activerecord"
 	"github.com/mailru/activerecord/pkg/octopus"
 )
 
@@ -46,7 +47,7 @@ func Test_parseDoc(t *testing.T) {
 					PublicName:  "",
 					PackageName: "",
 				},
-				Backends:              []string{"octopus"},
+				Backends:              []activerecord.Backend{octopus.Backend},
 				Fields:                []ds.FieldDeclaration{},
 				FieldsMap:             map[string]int{},
 				ProcFieldsMap:         map[string]int{},
@@ -112,7 +113,7 @@ func Test_parseGen(t *testing.T) {
 		genD *ast.GenDecl
 	}
 	w := ds.NewRecordPackage()
-	w.Backends = []string{"octopus"}
+	w.Backends = []activerecord.Backend{octopus.Backend}
 	w.Namespace = ds.NamespaceDeclaration{
 		ObjectName:  "5",
 		PublicName:  "Baz",
@@ -124,7 +125,7 @@ func Test_parseGen(t *testing.T) {
 		Port:    "11011",
 	}
 	wLinked := ds.NewRecordPackage()
-	wLinked.Backends = []string{"octopus"}
+	wLinked.Backends = []activerecord.Backend{octopus.Backend}
 	wLinked.Namespace = ds.NamespaceDeclaration{
 		ObjectName:  "5",
 		PublicName:  "Foo",
@@ -376,7 +377,7 @@ func Test_parseAst(t *testing.T) {
 				Indexes:               []ds.IndexDeclaration{},
 				IndexMap:              map[string]int{},
 				SelectorMap:           map[string]int{},
-				Backends:              []string{"octopus"},
+				Backends:              []activerecord.Backend{octopus.Backend},
 				SerializerMap:         map[string]ds.SerializerDeclaration{},
 				ImportPackage:         ds.NewImportPackage(),
 				TriggerMap:            map[string]ds.TriggerDeclaration{},

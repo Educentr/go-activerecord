@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	// ToDo не очень правильная зависимость, с такими успехами придётся тащить все логгеры для всех бекендов, непонятно зачем
 	"github.com/mailru/activerecord/pkg/iproto/iproto"
 )
 
@@ -26,7 +27,7 @@ const (
 )
 
 const (
-	ContextLogprefix ctxKey = iota
+	ContextLogPrefix ctxKey = iota
 )
 
 const (
@@ -45,7 +46,7 @@ func (l *DefaultLogger) getLoggerFromContext(ctx context.Context) LoggerInterfac
 }
 
 func (l *DefaultLogger) SetLoggerValueToContext(ctx context.Context, val ValueLogPrefix) context.Context {
-	ctxVal := ctx.Value(ContextLogprefix)
+	ctxVal := ctx.Value(ContextLogPrefix)
 	if ctxVal != nil {
 		lprefix, ok := ctxVal.(ValueLogPrefix)
 		if !ok {
@@ -60,14 +61,14 @@ func (l *DefaultLogger) SetLoggerValueToContext(ctx context.Context, val ValueLo
 		}
 	}
 
-	return context.WithValue(ctx, ContextLogprefix, val)
+	return context.WithValue(ctx, ContextLogPrefix, val)
 }
 
 func (l *DefaultLogger) getLoggerFromContextAndValue(ctx context.Context, addVal ValueLogPrefix) LoggerInterface {
 	// Думаю что надо закешировать один раз инстанс логгера для контекста
 	// Но надо учитывать, что мог измениться уровень логирования хотим ли мы в рамках одного запроса
 	// менять уровни логирования?
-	// Еще надо добавить в логгер конфигурацию, что бы уровни ролирования можно было
+	// Еще надо добавить в логгер конфигурацию, что бы уровни логирования можно было
 	// настраивать на уровне моделей
 	nl := NewLogger()
 	nl.level = l.level
@@ -80,7 +81,7 @@ func (l *DefaultLogger) getLoggerFromContextAndValue(ctx context.Context, addVal
 		nl.Fields[k] = v
 	}
 
-	ctxVal := ctx.Value(ContextLogprefix)
+	ctxVal := ctx.Value(ContextLogPrefix)
 	if ctxVal == nil {
 		nl.Fields["logger.context"] = "empty"
 	} else {
@@ -141,16 +142,17 @@ func (l *DefaultLogger) Panic(ctx context.Context, args ...interface{}) {
 func (l *DefaultLogger) CollectQueries(ctx context.Context, f func() (MockerLogger, error)) {
 }
 
-type IprotoLogger struct{}
-
+// ToDo подумать как унести в пакет octopus но так что бы октопус на начал зависеть от activerecord
 var _ iproto.Logger = IprotoLogger{}
 
-func (IprotoLogger) Printf(ctx context.Context, fmtStr string, v ...interface{}) {
+type IprotoLogger struct{}
+
+func (il IprotoLogger) Printf(ctx context.Context, fmtStr string, v ...interface{}) {
 	ctx = Logger().SetLoggerValueToContext(ctx, map[string]interface{}{"iproto": "client"})
 	Logger().Info(ctx, fmt.Sprintf(fmtStr, v...))
 }
 
-func (IprotoLogger) Debugf(ctx context.Context, fmtStr string, v ...interface{}) {
+func (il IprotoLogger) Debugf(ctx context.Context, fmtStr string, v ...interface{}) {
 	ctx = Logger().SetLoggerValueToContext(ctx, map[string]interface{}{"iproto": "client"})
 	Logger().Debug(ctx, fmt.Sprintf(fmtStr, v...))
 }

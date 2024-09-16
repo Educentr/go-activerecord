@@ -1,0 +1,288 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+{{ if eq .Server.Conf "" -}}
+	"time"
+{{ end }}
+	"strings"
+
+	"github.com/mailru/activerecord/pkg/iproto/iproto"
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/octopus"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ $pkgName := .ARPkg }}
+{{ $serializers := .Serializers -}}
+{{ $mutators := .Mutators -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $LinkedObject := .LinkedObject }}
+{{ $flags := .Flags }}
+{{ $fields := .FieldList }}
+{{ $procfields := .ProcOutFieldList }}
+{{ $procInLen := len .ProcInFieldList }}
+{{ $mutatorLen := len .Mutators }}
+
+func New(ctx context.Context) *{{ $PublicStructName }} {
+	newObj := {{ $PublicStructName }}{}
+	{{- if $fields }}
+	newObj.BaseField.UpdateOps = []octopus.Ops{}
+	newObj.BaseField.ExtraFields = [][]byte{}
+	newObj.BaseField.Objects = map[string][]octopus.ModelStruct{}
+    {{ end }}
+    {{- if ne $mutatorLen 0 -}}
+    {{- range $i, $mut := $mutators }}
+    newObj.{{$mut.Name}}.PartialFields = map[string]any{}
+    {{ if ne $mut.Update "" -}}
+    newObj.{{$mut.Name}}.OpFunc = map[octopus.OpCode]string{octopus.OpUpdate: "{{$mut.Update}}"}
+    {{ end }}
+    {{ if ne $mut.Replace "" -}}
+    newObj.{{$mut.Name}}.OpFunc = map[octopus.OpCode]string{octopus.OpInsert: "{{$mut.Replace}}"}
+    {{ end }}
+    {{- end }}
+    {{ end }}
+	return &newObj
+}
+
+{{ if $fields }}
+    type {{ $PublicStructName }} struct {
+        octopus.BaseField
+        {{- if ne $mutatorLen 0 }}
+        Mutators
+        {{- end -}}
+    {{- range $ind, $fstruct := .FieldList -}}
+        {{ $rtype := $fstruct.Format -}}
+        {{ $serlen := len $fstruct.Serializer -}}
+        {{ if ne $serlen 0 -}}
+            {{ $sname := index $fstruct.Serializer 0 -}}
+            {{ $serializer := index $serializers $sname -}}
+            {{ $rtype = $serializer.Type -}}
+        {{ end }}
+        field{{ $fstruct.Name }} {{ $rtype -}}
+    {{ end }}
+    }
+
+    type {{ $PublicStructName }}List []*{{ $PublicStructName }}
+
+    const (
+        namespace uint32 = {{ .Container.ObjectName }}
+        cntFields uint32 = {{ len .FieldList }}
+    {{- range $fieldname, $flag := .Flags -}}
+        {{ range $i, $flagname := $flag.Flags }}
+        {{ $fieldname }}{{ $flagname }}Flag = 1 << {{ $i -}}
+        {{ end -}}
+    {{ end }}
+    )
+
+    {{ if .Triggers.RepairTuple.Params.Defaults -}}
+    var defaultValue = [][]byte{
+    {{- $notfirst := false -}}
+    {{ range $ind, $fstruct := .FieldList -}}
+        {{ $packerparam := packerParam $fstruct.Format -}}
+        {{ if $notfirst }},{{ end -}}
+        {{ $notfirst = true }}
+        {{ $packerparam.DefaultValue -}}
+    {{ end -}}
+    }
+    {{- end }}
+
+func TupleToStruct(ctx context.Context, tuple octopus.TupleData) (*{{ $PublicStructName }}, error) {
+	np := New(ctx)
+
+	{{ range $ind, $fstruct := .FieldList -}}
+	val{{ $fstruct.Name }}, err := Unpack{{ $fstruct.Name -}}(bytes.NewReader(tuple.Data[{{$ind}}]))
+	if err != nil {
+		return nil, err
+	}
+
+	np.Set{{ $fstruct.Name }}(val{{ $fstruct.Name }})
+	{{ end }}
+
+	np.BaseField.Exists = true
+	np.BaseField.UpdateOps = []octopus.Ops{}
+	{{if gt $mutatorLen 0}}
+	np.ClearMutatorUpdateOpts()
+	{{end}}
+
+	if tuple.Cnt > cntFields {
+		logger := activerecord.Logger()
+
+		logger.Warn(ctx, "{{ $PublicStructName }}", np.PrimaryString(), "Extra fields")
+
+		np.BaseField.ExtraFields = tuple.Data[cntFields:]
+	}
+
+	return np, nil
+}
+
+func NewFromBox(ctx context.Context, tuples []octopus.TupleData) ([]*{{ $PublicStructName }}, error) {
+	logger := activerecord.Logger()
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", fmt.Sprintf("Cnt tuples %d", len(tuples)))
+
+	ret := make([]*{{ $PublicStructName }}, 0, len(tuples))
+
+	for num, tuple := range tuples {
+		var repaired bool
+		{{- if .Triggers.RepairTuple }}
+
+		if tuple.Cnt != cntFields {
+			err := repairTuple(ctx, &tuple)
+			if err != nil {
+				logger.Error(ctx, "{{ $PublicStructName }}", fmt.Errorf("%d tuple in response has %d fields but expected: %d. Repair fault: %w", num, tuple.Cnt, cntFields, err))
+				continue
+			}
+
+			repaired = true
+		}
+		{{- end }}
+
+		if tuple.Cnt < cntFields {
+			return nil, fmt.Errorf("not enought selected fields %d in response tuple: %d but expected %d fields", tuple.Cnt, num, cntFields)
+		}
+
+		np, err := TupleToStruct(ctx, tuple)
+		{{- if .Triggers.RepairTuple }}
+		if err != nil {
+			logger.Warn(ctx, "{{ $PublicStructName }}", fmt.Sprintf("error unpack tuple %s. Try to repair", err))
+
+			err = repairTuple(ctx, &tuple)
+			if err != nil {
+				logger.Error(ctx, "{{ $PublicStructName }}", fmt.Sprintf("can't repair: %s", err))
+				continue
+			}
+
+			repaired = true
+
+			np, err = TupleToStruct(ctx, tuple)
+		}
+		{{- end }}
+		if err != nil {
+			logger.Error(ctx, "{{ $PublicStructName }}", fmt.Sprintf("error unpack tuple %s", err))
+			return nil, err
+		}
+
+		np.BaseField.Repaired = repaired
+		ret = append(ret, np)
+	}
+
+	return ret, nil
+}
+
+func selectBox (ctx context.Context, indexnum uint32, keysPacked [][][]byte, limiter activerecord.SelectorLimiter) ([]*{{ $PublicStructName }}, error) {
+	logger := activerecord.Logger()
+	ctx = logger.SetLoggerValueToContext(ctx, activerecord.ValueLogPrefix{"limiter": limiter.String()})
+	metricTimer := activerecord.Metric().Timer(string(octopus.Backend), "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(string(octopus.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(octopus.Backend), "{{ $PublicStructName }}")
+
+	w := octopus.PackSelect(namespace, indexnum, limiter.Offset(), limiter.Limit(), keysPacked)
+
+	metricTimer.Timing(ctx, "select_pack")
+	metricStatCnt.Inc(ctx, "select_keys", float64(len(keysPacked)))
+
+	logger.Debug(ctx, fmt.Sprintf("Select packed tuple: '% X'", w))
+
+	connection, err := getConnection(ctx, activerecord.ReplicaOrMasterInstanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "select_preparebox", 1)
+		logger.Error(ctx, fmt.Sprintf("Error get box '%s'", err))
+
+		return nil, err
+	}
+
+	respBytes, errCall := connection.Call(ctx, octopus.RequestTypeSelect, w)
+	if errCall != nil {
+		metricErrCnt.Inc(ctx, "select_box", 1)
+		logger.Error(ctx, "Error select from box", errCall, connection.Info())
+
+		return nil, errCall
+	}
+
+	metricTimer.Timing(ctx, "select_box")
+
+	logger.Debug(ctx, fmt.Sprintf("Response from box '%X'", respBytes))
+
+	tuplesData, err := octopus.ProcessResp(respBytes, 0)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "select_resp", 1)
+		logger.Error(ctx, "Error parse response: ", err)
+
+		return nil, err
+	}
+
+	metricTimer.Timing(ctx, "select_process")
+	metricStatCnt.Inc(ctx, "select_tuples_res", float64(len(tuplesData)))
+
+	nps, err := NewFromBox(ctx, tuplesData)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "select_preparebox", 1)
+		logger.Error(ctx, "Error in response: ", err)
+
+		return nil, err
+	}
+
+	metricTimer.Timing(ctx, "select_newobj")
+
+	if limiter.FulfillWarn() && len(nps) == int(limiter.Limit()) {
+		logger.Warn(ctx, "Select limit reached. Result may less than db records.")
+	}
+
+	mode, ok := connection.InstanceMode().(octopus.ServerModeType)
+	if !ok || activerecord.ServerModeType(mode) == activerecord.ModeReplica {
+		if !ok {
+			logger.Error(ctx, "Invalid server mode type: %T", connection.InstanceMode())
+		}
+
+		for npNum := range nps {
+			nps[npNum].IsReplica = true
+			nps[npNum].Readonly = true
+		}
+	}
+
+	logger.Debug(ctx, "Success select")
+
+	metricTimer.Finish(ctx, "select")
+
+	return nps, nil
+}
+
+func (obj *{{ $PublicStructName }}) Equal (anotherObjI any) bool {
+	anotherObj, ok := anotherObjI.(*{{ $PublicStructName }})
+	if !ok {
+		return false
+	}
+
+	var dataObj []byte
+	var dataAnotherObj []byte
+	var err error
+
+	{{- range $ind, $fstruct := .FieldList }} 
+	dataObj, err = pack{{ $fstruct.Name }}([]byte{}, obj.Get{{ $fstruct.Name }}())
+	if err != nil {
+		return false
+	}
+
+	dataAnotherObj, err = pack{{ $fstruct.Name }}([]byte{}, anotherObj.Get{{ $fstruct.Name }}())
+	if err != nil {
+		return false
+	}
+
+	if string(dataObj) != string(dataAnotherObj) {
+		return false
+	}
+	{{ end }}
+
+	return true
+}
+
+{{ end -}}
