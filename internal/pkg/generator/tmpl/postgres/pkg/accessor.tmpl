@@ -1,3 +1,4 @@
+// Work with field of object
 package {{ .ARPkg }}
 
 import (
@@ -5,14 +6,10 @@ import (
 	"context"
 	"fmt"
 	"log"
-{{ if eq .Server.Conf "" -}}
-	"time"
-{{ end }}
 	"strings"
 
-	"github.com/mailru/activerecord/pkg/iproto/iproto"
 	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/mailru/activerecord/pkg/postgres"
 {{- range $ind, $imp := .Imports }}
 	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
 {{- end }}
@@ -53,35 +50,31 @@ func (obj *{{ $PublicStructName }}) Set{{ $fstruct.Name }}({{ $fstruct.Name }} {
 	}
 
 	{{ end -}}
-	data, err := pack{{ $fstruct.Name }}([]byte{}, {{ $fstruct.Name }})
-	if err != nil {
-		return err
-	}
 
 	{{- if eq $fstruct.Format "string" "[]byte" -}}
 		{{- if gt $fstruct.Size 0 }}
 
-	if len(data) > {{ $fstruct.Size }} {
-		return fmt.Errorf("max length of field '{{ $PublicStructName }}.{{ $fstruct.Name }}' is '%d' (received '%d')", {{ $fstruct.Size }}, len(data))
+	if len({{ $fstruct.Name }}) > {{ $fstruct.Size }} {
+		return fmt.Errorf("max length of field '{{ $PublicStructName }}.{{ $fstruct.Name }}' is '%d' (received '%d')", {{ $fstruct.Size }}, len({{ $fstruct.Name }}))
 	}
 		{{- else }}
 
 	logger := activerecord.Logger()
 
-	logger.Warn(context.TODO(), "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Size for field '{{ $fstruct.Name }}' not set. Cur field size: %d. Object: '{{ $PublicStructName }}'", len(data)))
+	logger.Warn(context.TODO(), "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Size for field '{{ $fstruct.Name }}' not set. Cur field size: %d. Object: '{{ $PublicStructName }}'", len({{ $fstruct.Name }})))
 		{{- end }}
 	{{- end }}
 
-	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpSet, Value: data})
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Ops{Field: "{{ $fstruct.Name }}", Op: activerecord.OpSet, Value: {{ $fstruct.Name }}})
 
     {{- range $i, $mut := $fstruct.Mutators -}}
     {{ $customMutator := index $mutators $mut -}}
     {{ $pfLen := len $customMutator.PartialFields }}
-    {{ if and (eq $pfLen 0) (ne $customMutator.Update "") }}
-	obj.BaseField.UpdateOps = []octopus.Ops{}
-    data = octopus.PackLua("{{$customMutator.Update}}", obj.PrimaryString(), {{ $fstruct.Name}})
-    obj.{{ $customMutator.Name }}.UpdateOps = append(obj.{{ $customMutator.Name }}.UpdateOps, octopus.Ops{Field: {{ $ind }}, Op: octopus.OpUpdate, Value: data})
-	{{ else if ne $pfLen 0 }}
+    {{ if and (eq $pfLen 0) (ne $customMutator.Update "") }}// ToDo customMutator for postgres
+	obj.BaseField.UpdateOps = []postgres.Ops{}
+    data = postgres.PackLua("{{$customMutator.Update}}", obj.PrimaryString(), {{ $fstruct.Name}})
+    obj.{{ $customMutator.Name }}.UpdateOps = append(obj.{{ $customMutator.Name }}.UpdateOps, postgres.Ops{Field: {{ $ind }}, Op: activerecord.OpUpdate, Value: data})
+	{{ else if ne $pfLen 0 }}// ToDo customMutator for postgres
 	{{ $isPointer := hasPrefix (printf "%s" $rtype) "*" }}
 	{{ if $isPointer }}
 	if {{ $fstruct.Name }} != nil {
@@ -102,7 +95,9 @@ func (obj *{{ $PublicStructName }}) Set{{ $fstruct.Name }}({{ $fstruct.Name }} {
     {{ end }}
     {{ end }}
 	obj.field{{ $fstruct.Name }} = {{ $fstruct.Name}}
-
+	{{ if $fstruct.InitByDB }}
+	obj.isInited{{ $fstruct.Name }} = true
+	{{ end }}
 	{{- if ne $fstruct.ObjectLink "" }}
 	delete(obj.BaseField.Objects, "{{ $fstruct.ObjectLink }}")
 	{{- end }}

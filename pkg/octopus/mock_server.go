@@ -445,6 +445,19 @@ func (oms *MockServer) GetServerHostPort() string {
 	return oms.host + ":" + oms.port
 }
 
+func (oms *MockServer) GetServerHost() string {
+	return oms.host
+}
+
+func (oms *MockServer) GetServerPort() uint16 {
+	port, err := strconv.ParseUint(oms.port, 10, 16)
+	if err != nil {
+		panic("invalid port defenition")
+	}
+
+	return uint16(port)
+}
+
 func (oms *MockServer) Start() error {
 	ctx, cancel := context.WithCancel(context.Background())
 

@@ -116,7 +116,7 @@ func TestArGen_Run(t *testing.T) {
 
 	textTestPkg := `package repository
 
-	//ar:serverHost:127.0.0.1;serverPort:11111;serverTimeout:500
+	//ar:serverConf:testArGenConfKey
 	//ar:namespace:2
 	//ar:backend:octopus
 	type FieldsFoo struct {

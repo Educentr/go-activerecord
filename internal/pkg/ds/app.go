@@ -63,13 +63,6 @@ type NamespaceDeclaration struct {
 	ModuleName  string
 }
 
-// Структура для описания конфигурации сервера
-// Может быть указан путь к конфигурации `Conf` или параметры подключения напрямую
-type ServerDeclaration struct {
-	Timeout          int64
-	Host, Port, Conf string
-}
-
 type ImportPackage struct {
 	Imports      []ImportDeclaration // Список необходимых дополнительных импортов, формируется из директивы import
 	ImportMap    map[string]int      // Обратный индекс от имен по импортам
@@ -79,7 +72,7 @@ type ImportPackage struct {
 // Структура описывающая отдельную сущность представленную в декларативном файле
 type RecordPackage struct {
 	ImportPackage
-	Server                ServerDeclaration                    // Описание сервера
+	ServerConfKey         string                               // Путь к настройкам в конфиге
 	Namespace             NamespaceDeclaration                 // Описание неймспейса/таблицы
 	Fields                []FieldDeclaration                   // Описание полей, важна последовательность для некоторых хранилищ
 	FieldsMap             map[string]int                       // Обратный индекс от имен к полям
@@ -115,7 +108,6 @@ func NewRecordPackage() *RecordPackage {
 			ImportMap:    map[string]int{},
 			ImportPkgMap: map[string]int{},
 		},
-		Server:                ServerDeclaration{},
 		Namespace:             NamespaceDeclaration{},
 		Fields:                []FieldDeclaration{},
 		FieldsMap:             map[string]int{},
@@ -174,6 +166,7 @@ type FieldDeclaration struct {
 	Size       int64               // Размер поля, используется только для строковых значений
 	Serializer Serializer          // Сериализаторы для поля
 	ObjectLink string              // является ли поле ссылкой на другую сущность
+	InitByDB   bool                // Может ли база проинициализоровать поле при вставке
 }
 
 // Name возвращает имя сериализатора, если он установлен, иначе пустую строку

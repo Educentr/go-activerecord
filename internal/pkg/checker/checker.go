@@ -168,10 +168,14 @@ func Check(files map[string]*ds.RecordPackage, linkedObjects map[string]string) 
 		}
 
 		if err := backendChecker.check(cl); err != nil {
-			return nil
+			return err
 		}
 
 		if err := backendChecker.checkFields(cl); err != nil {
+			return err
+		}
+
+		if err := backendChecker.checkNamespace(cl); err != nil {
 			return err
 		}
 
@@ -184,16 +188,8 @@ func Check(files map[string]*ds.RecordPackage, linkedObjects map[string]string) 
 }
 
 func checkServerConfig(cl *ds.RecordPackage) error {
-	if cl.Server.Host == "" && cl.Server.Conf == "" {
+	if cl.ServerConfKey == "" {
 		return &arerror.ErrCheckPackageDecl{Pkg: cl.Namespace.PackageName, Err: arerror.ErrCheckServerEmpty}
-	}
-
-	if cl.Server.Host == "" && cl.Server.Port != "" {
-		return &arerror.ErrCheckPackageDecl{Pkg: cl.Namespace.PackageName, Err: arerror.ErrCheckPortEmpty}
-	}
-
-	if cl.Server.Host != "" && cl.Server.Conf != "" {
-		return &arerror.ErrCheckPackageDecl{Pkg: cl.Namespace.PackageName, Err: arerror.ErrCheckServerConflict}
 	}
 
 	return nil

@@ -1,3 +1,5 @@
+// Work with fixtures
+// Todo fixture
 package {{ .ARPkg }}
 
 import (
@@ -5,15 +7,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-{{ if eq .Server.Conf "" -}}
-	"time"
-{{ end }}
 	"strings"
 
     "gopkg.in/yaml.v3"
 
 	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/mailru/activerecord/pkg/postgres"
 {{- range $ind, $imp := .Imports }}
 	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
 {{- end }}
@@ -282,7 +281,7 @@ func UnmarshalUpdateFixtures(source []byte) []*{{$PublicStructName}} {
                              log.Fatalf("error Set{{ $fieldNamePK }}: %v", err)
                         }
                         obj.BaseField.Exists = true
-                        obj.BaseField.UpdateOps = []octopus.Ops{}
+                        obj.BaseField.UpdateOps = []postgres.Ops{}
                     {{ end }}
                 {{ end }}
             {{ end }}

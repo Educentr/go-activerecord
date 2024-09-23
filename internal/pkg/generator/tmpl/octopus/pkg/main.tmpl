@@ -5,12 +5,8 @@ import (
 	"context"
 	"fmt"
 	"log"
-{{ if eq .Server.Conf "" -}}
-	"time"
-{{ end }}
 	"strings"
 
-	"github.com/mailru/activerecord/pkg/iproto/iproto"
 	"github.com/mailru/activerecord/pkg/activerecord"
 	"github.com/mailru/activerecord/pkg/octopus"
 {{- range $ind, $imp := .Imports }}
@@ -37,42 +33,50 @@ func New(ctx context.Context) *{{ $PublicStructName }} {
 	{{- if $fields }}
 	newObj.BaseField.UpdateOps = []octopus.Ops{}
 	newObj.BaseField.ExtraFields = [][]byte{}
-	newObj.BaseField.Objects = map[string][]octopus.ModelStruct{}
+	newObj.BaseField.Objects = map[string][]activerecord.ModelStruct{}
     {{ end }}
     {{- if ne $mutatorLen 0 -}}
     {{- range $i, $mut := $mutators }}
     newObj.{{$mut.Name}}.PartialFields = map[string]any{}
+	newObj.{{$mut.Name}}.OpFunc = map[activerecord.OpCode]string{}
     {{ if ne $mut.Update "" -}}
-    newObj.{{$mut.Name}}.OpFunc = map[octopus.OpCode]string{octopus.OpUpdate: "{{$mut.Update}}"}
+    newObj.{{$mut.Name}}.OpFunc[activerecord.OpUpdate] = "{{$mut.Update}}"
     {{ end }}
     {{ if ne $mut.Replace "" -}}
-    newObj.{{$mut.Name}}.OpFunc = map[octopus.OpCode]string{octopus.OpInsert: "{{$mut.Replace}}"}
+    newObj.{{$mut.Name}}.OpFunc[activerecord.OpInsert] = "{{$mut.Replace}}"
     {{ end }}
     {{- end }}
     {{ end }}
 	return &newObj
 }
 
+{{ $list := .FieldList }}
+type {{ $PublicStructName }} struct {
+{{ if $procfields }}
+    params {{ $PublicStructName }}Params
+	{{ $list = .ProcOutFieldList }}
+{{ else if $fields }}
+	octopus.BaseField
+	{{- if ne $mutatorLen 0 }}
+	Mutators
+	{{- end -}}
+{{ end }}
+
+{{- range $ind, $fstruct := $list }}
+    {{ $rtype := $fstruct.Format -}}
+    {{ $serlen := len $fstruct.Serializer -}}
+    {{ if ne $serlen 0 -}}
+        {{ $sname := index $fstruct.Serializer 0 -}}
+        {{ $serializer := index $serializers $sname -}}
+        {{ $rtype = $serializer.Type -}}
+    {{ end -}}
+    field{{- $fstruct.Name }} {{ $rtype -}}
+{{ end }}
+}
+
+type {{ $PublicStructName }}List []*{{ $PublicStructName }}
+
 {{ if $fields }}
-    type {{ $PublicStructName }} struct {
-        octopus.BaseField
-        {{- if ne $mutatorLen 0 }}
-        Mutators
-        {{- end -}}
-    {{- range $ind, $fstruct := .FieldList -}}
-        {{ $rtype := $fstruct.Format -}}
-        {{ $serlen := len $fstruct.Serializer -}}
-        {{ if ne $serlen 0 -}}
-            {{ $sname := index $fstruct.Serializer 0 -}}
-            {{ $serializer := index $serializers $sname -}}
-            {{ $rtype = $serializer.Type -}}
-        {{ end }}
-        field{{ $fstruct.Name }} {{ $rtype -}}
-    {{ end }}
-    }
-
-    type {{ $PublicStructName }}List []*{{ $PublicStructName }}
-
     const (
         namespace uint32 = {{ .Container.ObjectName }}
         cntFields uint32 = {{ len .FieldList }}
@@ -176,84 +180,6 @@ func NewFromBox(ctx context.Context, tuples []octopus.TupleData) ([]*{{ $PublicS
 	}
 
 	return ret, nil
-}
-
-func selectBox (ctx context.Context, indexnum uint32, keysPacked [][][]byte, limiter activerecord.SelectorLimiter) ([]*{{ $PublicStructName }}, error) {
-	logger := activerecord.Logger()
-	ctx = logger.SetLoggerValueToContext(ctx, activerecord.ValueLogPrefix{"limiter": limiter.String()})
-	metricTimer := activerecord.Metric().Timer(string(octopus.Backend), "{{ $PublicStructName }}")
-	metricStatCnt := activerecord.Metric().StatCount(string(octopus.Backend), "{{ $PublicStructName }}")
-	metricErrCnt := activerecord.Metric().ErrorCount(string(octopus.Backend), "{{ $PublicStructName }}")
-
-	w := octopus.PackSelect(namespace, indexnum, limiter.Offset(), limiter.Limit(), keysPacked)
-
-	metricTimer.Timing(ctx, "select_pack")
-	metricStatCnt.Inc(ctx, "select_keys", float64(len(keysPacked)))
-
-	logger.Debug(ctx, fmt.Sprintf("Select packed tuple: '% X'", w))
-
-	connection, err := getConnection(ctx, activerecord.ReplicaOrMasterInstanceType)
-	if err != nil {
-		metricErrCnt.Inc(ctx, "select_preparebox", 1)
-		logger.Error(ctx, fmt.Sprintf("Error get box '%s'", err))
-
-		return nil, err
-	}
-
-	respBytes, errCall := connection.Call(ctx, octopus.RequestTypeSelect, w)
-	if errCall != nil {
-		metricErrCnt.Inc(ctx, "select_box", 1)
-		logger.Error(ctx, "Error select from box", errCall, connection.Info())
-
-		return nil, errCall
-	}
-
-	metricTimer.Timing(ctx, "select_box")
-
-	logger.Debug(ctx, fmt.Sprintf("Response from box '%X'", respBytes))
-
-	tuplesData, err := octopus.ProcessResp(respBytes, 0)
-	if err != nil {
-		metricErrCnt.Inc(ctx, "select_resp", 1)
-		logger.Error(ctx, "Error parse response: ", err)
-
-		return nil, err
-	}
-
-	metricTimer.Timing(ctx, "select_process")
-	metricStatCnt.Inc(ctx, "select_tuples_res", float64(len(tuplesData)))
-
-	nps, err := NewFromBox(ctx, tuplesData)
-	if err != nil {
-		metricErrCnt.Inc(ctx, "select_preparebox", 1)
-		logger.Error(ctx, "Error in response: ", err)
-
-		return nil, err
-	}
-
-	metricTimer.Timing(ctx, "select_newobj")
-
-	if limiter.FulfillWarn() && len(nps) == int(limiter.Limit()) {
-		logger.Warn(ctx, "Select limit reached. Result may less than db records.")
-	}
-
-	mode, ok := connection.InstanceMode().(octopus.ServerModeType)
-	if !ok || activerecord.ServerModeType(mode) == activerecord.ModeReplica {
-		if !ok {
-			logger.Error(ctx, "Invalid server mode type: %T", connection.InstanceMode())
-		}
-
-		for npNum := range nps {
-			nps[npNum].IsReplica = true
-			nps[npNum].Readonly = true
-		}
-	}
-
-	logger.Debug(ctx, "Success select")
-
-	metricTimer.Finish(ctx, "select")
-
-	return nps, nil
 }
 
 func (obj *{{ $PublicStructName }}) Equal (anotherObjI any) bool {

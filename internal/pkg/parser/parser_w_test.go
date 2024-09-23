@@ -29,7 +29,7 @@ func Test_parseDoc(t *testing.T) {
 				dst: ds.NewRecordPackage(),
 				docs: &ast.CommentGroup{
 					List: []*ast.Comment{
-						{Text: `//ar:serverHost:127.0.0.1;serverPort:11011;serverTimeout:500`},
+						{Text: `//ar:serverConf:testparsedoc`},
 						{Text: `//ar:namespace:5`},
 						{Text: `//ar:backend:octopus`},
 					},
@@ -37,11 +37,7 @@ func Test_parseDoc(t *testing.T) {
 			},
 			wantErr: false,
 			want: &ds.RecordPackage{
-				Server: ds.ServerDeclaration{
-					Host:    "127.0.0.1",
-					Port:    "11011",
-					Timeout: 500,
-				},
+				ServerConfKey: "testparsedoc",
 				Namespace: ds.NamespaceDeclaration{
 					ObjectName:  "5",
 					PublicName:  "",
@@ -114,27 +110,19 @@ func Test_parseGen(t *testing.T) {
 	}
 	w := ds.NewRecordPackage()
 	w.Backends = []activerecord.Backend{octopus.Backend}
+	w.ServerConfKey = "confKey"
 	w.Namespace = ds.NamespaceDeclaration{
 		ObjectName:  "5",
 		PublicName:  "Baz",
 		PackageName: "baz",
 	}
-	w.Server = ds.ServerDeclaration{
-		Timeout: 500,
-		Host:    "127.0.0.1",
-		Port:    "11011",
-	}
 	wLinked := ds.NewRecordPackage()
+	wLinked.ServerConfKey = "confKey"
 	wLinked.Backends = []activerecord.Backend{octopus.Backend}
 	wLinked.Namespace = ds.NamespaceDeclaration{
 		ObjectName:  "5",
 		PublicName:  "Foo",
 		PackageName: "foo",
-	}
-	wLinked.Server = ds.ServerDeclaration{
-		Timeout: 500,
-		Host:    "127.0.0.1",
-		Port:    "11011",
 	}
 	wLinked.FieldsMap["ID"] = len(wLinked.Fields)
 	wLinked.Fields = append(wLinked.Fields, ds.FieldDeclaration{
@@ -190,7 +178,7 @@ func Test_parseGen(t *testing.T) {
 					Tok: token.TYPE,
 					Doc: &ast.CommentGroup{
 						List: []*ast.Comment{
-							{Text: `//ar:serverHost:127.0.0.1;serverPort:11011;serverTimeout:500`},
+							{Text: `//ar:serverConf:confKey`},
 							{Text: `//ar:namespace:5`},
 							{Text: `//ar:backend:octopus`},
 						},
@@ -220,7 +208,7 @@ func Test_parseGen(t *testing.T) {
 					Tok: token.TYPE,
 					Doc: &ast.CommentGroup{
 						List: []*ast.Comment{
-							{Text: `//ar:serverHost:127.0.0.1;serverPort:11011;serverTimeout:500`},
+							{Text: `//ar:serverConf:confKey`},
 							{Text: `//ar:namespace:5`},
 							{Text: `//ar:backend:octopus`},
 						},
@@ -260,7 +248,7 @@ func Test_parseGen(t *testing.T) {
 					Tok: token.TYPE,
 					Doc: &ast.CommentGroup{
 						List: []*ast.Comment{
-							{Text: `//ar:serverHost:127.0.0.1;serverPort:11011;serverTimeout:500`},
+							{Text: `//ar:serverConf:confKey`},
 							{Text: `//ar:namespace:5`},
 							{Text: `//ar:backend:octopus`},
 						},
@@ -345,7 +333,7 @@ func Test_parseAst(t *testing.T) {
 						Tok: token.TYPE,
 						Doc: &ast.CommentGroup{
 							List: []*ast.Comment{
-								{Text: `//ar:serverHost:127.0.0.1;serverPort:11011;serverTimeout:500`},
+								{Text: `//ar:serverConf:confKey`},
 								{Text: `//ar:namespace:5`},
 								{Text: `//ar:backend:octopus`},
 							},
@@ -367,8 +355,8 @@ func Test_parseAst(t *testing.T) {
 			},
 			wantErr: false,
 			want: &ds.RecordPackage{
-				Server:                ds.ServerDeclaration{Timeout: 500, Host: "127.0.0.1", Port: "11011"},
 				Namespace:             ds.NamespaceDeclaration{ObjectName: "5", PublicName: "Baz", PackageName: "baz"},
+				ServerConfKey:         "confKey",
 				ProcFieldsMap:         map[string]int{},
 				ProcOutFields:         map[int]ds.ProcFieldDeclaration{},
 				Fields:                []ds.FieldDeclaration{},

@@ -38,12 +38,16 @@ var NamespacePackages = NSPackage {
     "{{ $ns.Namespace.ObjectName }}": {
         PackageName: "{{ $ns.Namespace.PackageName }}",
         Unpacker: func(ctx context.Context, tuple octopus.TupleData) (any, error) { 
+			{{ if eq "octopus" ( index $ns.Backends 0 ) }}
             obj, err := {{ $ns.Namespace.PackageName }}.TupleToStruct(ctx, tuple)
             if err != nil {
                 return nil, fmt.Errorf("can't decode tuple: %s", err)
             }
 
             return {{ $ns.Namespace.PackageName }}.MarshalFixtures([]*{{ $ns.Namespace.PackageName }}.{{ $ns.Namespace.PublicName }}{obj})
+			{{ else }}
+			return nil, fmt.Errorf("not implemented")
+			{{ end }}
         },
 		FixtureUnpacker: func(ctx context.Context, source []byte) (res []any, err error) {
             fxts, err := {{ $ns.Namespace.PackageName }}.UnmarshalFixturesFromJSON(source)
@@ -63,6 +67,7 @@ var NamespacePackages = NSPackage {
             {
                 Name: "{{ $field.Name }}",
                 Unpacker: func(packedField []byte) (any, error){
+					{{ if eq "octopus" (index $ns.Backends 0) }}
                     {{ if ne $sname "" -}}
                     field, err :=  {{ $ns.Namespace.PackageName }}.Unpack{{ $field.Name }}(bytes.NewReader(packedField))
                     if err != nil {
@@ -73,6 +78,9 @@ var NamespacePackages = NSPackage {
                     {{- else }}
                     return {{ $ns.Namespace.PackageName }}.Unpack{{ $field.Name }}(bytes.NewReader(packedField))
                     {{- end }}
+					{{ else }}
+					return nil, fmt.Errorf("not implemented")
+					{{ end }}
                 },
             },
             {{- end }}
@@ -84,7 +92,13 @@ var NamespacePackages = NSPackage {
             {{- if $ind.Primary }}{{ $pk = $ind }}{{ end }}
             "{{ $ind.Num }}.{{ len $ind.Fields }}": {
                 Name: "{{ $ind.Name }}",
-                Unpacker: func(packedKeys [][][]byte) (any, error) { return {{ $ns.Namespace.PackageName }}.UnpackKeyIndex{{ $ind.Name }}(packedKeys)},
+                Unpacker: func(packedKeys [][][]byte) (any, error) { 
+					{{ if eq "octopus" (index $ns.Backends 0) }}
+					return {{ $ns.Namespace.PackageName }}.UnpackKeyIndex{{ $ind.Name }}(packedKeys)
+					{{ else }}
+					return nil, fmt.Errorf("not implemented")
+					{{ end }}
+				},
             },
         {{- end }}
         {{- end }}
@@ -93,7 +107,13 @@ var NamespacePackages = NSPackage {
             {{ if $ns.Indexes }}
             {{- $pk := index $ns.Indexes 0 }}
             Name: "{{ $pk.Name }}",
-            Unpacker: func(packedKeys [][][]byte) (any, error) { return {{ $ns.Namespace.PackageName }}.UnpackKeyIndex{{ $pk.Name }}(packedKeys)},
+            Unpacker: func(packedKeys [][][]byte) (any, error) { 
+				{{ if eq "octopus" (index $ns.Backends 0) }}
+				return {{ $ns.Namespace.PackageName }}.UnpackKeyIndex{{ $pk.Name }}(packedKeys)
+				{{ else }}
+				return nil, fmt.Errorf("not implemented")
+				{{ end }}
+			},
             {{- end }}
         },
     },

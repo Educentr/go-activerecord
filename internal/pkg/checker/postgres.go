@@ -1,6 +1,8 @@
 package checker
 
 import (
+	"regexp"
+
 	"github.com/mailru/activerecord/internal/pkg/arerror"
 	"github.com/mailru/activerecord/internal/pkg/ds"
 	"github.com/mailru/activerecord/pkg/activerecord"
@@ -42,5 +44,15 @@ func (c *postgresChecker) checkFields(cl *ds.RecordPackage) error {
 		return &arerror.ErrCheckPackageDecl{Pkg: cl.Namespace.PackageName, Err: arerror.ErrCheckFieldsEmpty}
 	}
 
+	return nil
+}
+
+var rxCanonicalTableName = regexp.MustCompile("^[a-z0-9]*$")
+
+func (c *postgresChecker) checkNamespace(cl *ds.RecordPackage) error {
+	if !rxCanonicalTableName.MatchString(cl.Namespace.ObjectName) {
+		return &arerror.ErrCheckPackageNamespaceDecl{Pkg: cl.Namespace.PackageName, Name: cl.Namespace.ObjectName, Err: arerror.ErrTableNameNotCanonical}
+
+	}
 	return nil
 }

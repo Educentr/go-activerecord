@@ -22,7 +22,6 @@ import (
 {{ $serializers := .Serializers -}}
 {{ $fidx := .FieldMap }}
 {{ $mutators := .Mutators -}}
-{{ $mutatorLen := len .Mutators }}
 
 {{ if $procfields }}
 func (obj *{{ $PublicStructName }}) MockSelectResponse() ([][]byte, error) {
@@ -346,7 +345,7 @@ func (obj *{{ $PublicStructName }}) MockMutator{{$customMutator.Name}}Update(ctx
 
 	for _, update := range obj.Mutators.{{ $customMutator.Name }}.UpdateOps {
 		switch update.Op {
-		case octopus.OpUpdate:
+		case activerecord.OpUpdate:
 			updateMutatorOps = append(updateMutatorOps, update.Value)
 		default:
 			continue

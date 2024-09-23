@@ -1,0 +1,177 @@
+// Work with indexes
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+	"strings"
+
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/postgres"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ $pkgName := .ARPkg }}
+{{ $serializers := .Serializers -}}
+{{ $mutators := .Mutators -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $LinkedObject := .LinkedObject }}
+{{ $flags := .Flags }}
+{{ $fields := .FieldList }}
+{{ $procfields := .ProcOutFieldList }}
+{{ $procInLen := len .ProcInFieldList }}
+{{ $mutatorLen := len .Mutators }}
+
+{{ $pktype := "" }}
+{{ $pklenfld := 1 }}
+{{ $pkind := index .Indexes 0 }}
+{{ range $num, $ind := .Indexes -}}
+{{ $lenfld := len $ind.Fields -}}
+	{{ if $ind.Primary }}
+		{{ $pktype = $ind.Type }}
+		{{ $pklenfld = len $ind.Fields }}
+		{{ $pkind = $ind }}
+func (obj *{{ $PublicStructName }}) Primary() {{ $ind.Type }} {
+		{{ if ne $lenfld 1 }}
+	return {{ $ind.Type }}{
+			{{- range $_, $fieldNum := $ind.Fields }}
+				{{- $ifield := index $fields $fieldNum }}
+		{{ $ifield.Name }}: obj.Get{{ $ifield.Name }}(),
+			{{- end }}
+	}
+		{{ else }}
+			{{- range $_, $fieldNum := $ind.Fields }}
+				{{- $ifield := index $fields $fieldNum }}
+	return obj.Get{{ $ifield.Name }}()
+			{{- end }}
+		{{ end -}}
+}
+
+func SelectByPrimary(ctx context.Context, pk {{ $ind.Type }}) (*{{ $PublicStructName }}, error) {
+	return {{ $ind.Selector }}(ctx, pk)
+}
+	{{ end }}
+{{ end }}
+
+{{ range $num, $ind := .Indexes -}}
+	{{ $lenfld := len $ind.Fields -}}
+	{{ if ne $lenfld 1 }}
+type {{ $ind.Type }} struct {
+		{{- range $_, $fieldNum := $ind.Fields }}
+			{{- $ifield := index $fields $fieldNum }}
+	{{ $rtype := $ifield.Format -}}
+	{{ $serlen := len $ifield.Serializer -}}
+	{{ if ne $serlen 0 -}}
+		{{ $sname := index $ifield.Serializer 0 -}}
+		{{ $serializer := index $serializers $sname -}}
+		{{ $rtype = $serializer.Type -}}
+	{{ end }}
+	{{ $ifield.Name }} {{ $rtype -}}
+		{{- end }}
+}
+
+func (is {{ $ind.Type }}) pack() []any {
+	return []any{ 
+		{{- range $_, $fieldNum := $ind.Fields }}
+			{{- $ifield := index $fields $fieldNum }}
+		is.{{ $ifield.Name }},
+		{{ end }}
+	}
+}
+	{{ end -}}
+
+var index{{ $ind.Name }} = postgres.Index{
+	Fields:       postgres.OrderedFields{
+		{{- range $_, $fieldNum := $ind.Fields }}
+			{{- $ifield := index $fields $fieldNum }}
+			{{- $iifield := index $ind.FieldsMap $ifield.Name }}
+		postgres.OrderField{Field: "{{ $ifield.Name }}", Order: {{ indexOrder $iifield }} },
+		{{ end }}
+	},
+	Unique:       {{ $ind.Unique }},
+	// Condition:    []string ToDo conditional index
+	DefaultLimit:	1000,   // ToDo defaultlimit
+}
+
+{{ if $ind.Primary }}
+var pk = index{{ $ind.Name }}
+{{ end }}
+
+func {{ $ind.Selector }}s(ctx context.Context, keys []{{ $ind.Type }}{{ if not $ind.Unique }}, limiter activerecord.SelectorLimiter{{ end }}) ([]*{{ $PublicStructName }}, error) {
+	ctx = activerecord.Logger().SetLoggerValueToContext(ctx, map[string]interface{}{"{{ $ind.Selector }}s": keys, "Repo": "{{ $PublicStructName }}" })
+
+	{{ if $ind.Unique -}}
+	limiter := activerecord.EmptyLimiter()
+	{{ end }}
+
+	packedKeys := [][]any{}
+
+	for _, ik := range keys {
+	{{ if ne $lenfld 1 }}
+		packedKeys = append(packedKeys, ik.pack())
+	{{ else }}
+		packedKeys = append(packedKeys, []any{ik})
+	{{ end }}
+	}
+
+	res, err := selectDB(ctx, index{{ $ind.Name }}, packedKeys, limiter)
+	if err != nil {
+		return res, err	
+	}
+
+	activerecord.Logger().CollectQueries(ctx, {{ $ind.Selector }}MockerLogger(keys, {{ $PublicStructName }}List(res){{ if not $ind.Unique }}, limiter {{ end }}))
+
+	return res, err
+}
+
+func {{ $ind.Selector }}(ctx context.Context, key {{ $ind.Type }}{{ if not $ind.Unique }}, limiter activerecord.SelectorLimiter{{ end }}) ({{ if $ind.Unique }}{{ else }}[]{{ end }}*{{ $PublicStructName }}, error) {
+	selected, err := {{ $ind.Selector }}s(ctx, []{{ $ind.Type }}{key}{{ if not $ind.Unique }}, limiter{{ end }})
+	if err != nil {
+		return nil, err
+	}
+
+	{{ if $ind.Unique -}}
+	if len(selected) > 0 {
+		if len(selected) > 1 {
+			activerecord.Logger().Error(ctx, "{{ $PublicStructName }}", "More than one tuple for uniq key ID '%s': %d", key, len(selected))
+		}
+
+		return selected[0], nil
+	}
+
+	return nil, nil
+	{{- else }}
+
+	return selected, nil
+	{{- end }}
+}
+{{ end }}
+
+func (obj *{{ $PublicStructName }}) PrimaryValues() []any {
+	ret := []any{
+	{{- range $ind, $fstruct := .FieldList }}
+		obj.Get{{ $fstruct.Name }}(),
+	{{- end }}
+	}
+
+	return ret
+}
+
+func (obj *{{ $PublicStructName }}) PrimaryString() string {
+	ret := []string{
+	{{- range $ind, $fstruct := .FieldList }}
+		{{- if $fstruct.PrimaryKey }}
+			fmt.Sprintf("%v", obj.Get{{ $fstruct.Name }}()),
+		{{- end }}
+	{{- end }}
+	}
+
+	return strings.Join(ret, ", ")
+}

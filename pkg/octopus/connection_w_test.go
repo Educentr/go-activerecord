@@ -4,11 +4,14 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/mailru/activerecord/pkg/activerecord"
 )
 
 func Test_prepareConnection(t *testing.T) {
 	type args struct {
 		server string
+		port   uint16
 		opts   []ConnectionOption
 	}
 	tests := []struct {
@@ -21,6 +24,7 @@ func Test_prepareConnection(t *testing.T) {
 			name: "connectionHash",
 			args: args{
 				server: "127.0.0.1",
+				port:   11011,
 				opts:   []ConnectionOption{},
 			},
 			want:    "ff9ed3cc",
@@ -30,6 +34,7 @@ func Test_prepareConnection(t *testing.T) {
 			name: "same connectionHash",
 			args: args{
 				server: "127.0.0.1",
+				port:   11011,
 				opts:   []ConnectionOption{},
 			},
 			want:    "ff9ed3cc",
@@ -39,6 +44,7 @@ func Test_prepareConnection(t *testing.T) {
 			name: "connectionHash with options",
 			args: args{
 				server: "127.0.0.1",
+				port:   11011,
 				opts: []ConnectionOption{
 					WithTimeout(time.Millisecond*50, time.Millisecond*100),
 				},
@@ -50,6 +56,7 @@ func Test_prepareConnection(t *testing.T) {
 			name: "yes another connectionHash with options",
 			args: args{
 				server: "127.0.0.1",
+				port:   11011,
 				opts: []ConnectionOption{
 					WithTimeout(time.Millisecond*50, time.Millisecond*100),
 					WithIntervals(time.Second*50, time.Second*50, time.Second*50),
@@ -62,6 +69,7 @@ func Test_prepareConnection(t *testing.T) {
 			name: "yes another connectionHash with options",
 			args: args{
 				server: "",
+				port:   0,
 				opts: []ConnectionOption{
 					WithTimeout(time.Millisecond*50, time.Millisecond*100),
 					WithIntervals(time.Second*50, time.Second*50, time.Second*50),
@@ -73,7 +81,7 @@ func Test_prepareConnection(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewOptions(tt.args.server, ModeMaster, tt.args.opts...)
+			got, err := NewConnectionOptions(tt.args.server, tt.args.port, activerecord.ModeMaster, tt.args.opts...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("prepareConnection() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -89,6 +97,7 @@ func TestGetConnection(t *testing.T) {
 	type args struct {
 		ctx    context.Context
 		server string
+		port   uint16
 		opts   []ConnectionOption
 	}
 	tests := []struct {
@@ -101,7 +110,8 @@ func TestGetConnection(t *testing.T) {
 			name: "first connection",
 			args: args{
 				ctx:    context.Background(),
-				server: "127.0.0.1:11211",
+				server: "127.0.0.1",
+				port:   11211,
 				opts:   []ConnectionOption{},
 			},
 			wantErr: false,
@@ -130,7 +140,7 @@ func TestGetConnection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			octopusOpts, err := NewOptions(tt.args.server, ModeMaster, tt.args.opts...)
+			octopusOpts, err := NewConnectionOptions(tt.args.server, tt.args.port, activerecord.ModeMaster, tt.args.opts...)
 			if err != nil {
 				t.Errorf("can't initialize options: %s", err)
 			}

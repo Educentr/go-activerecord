@@ -10,7 +10,7 @@
 ```go
 //ar:shard_by_func:shard_func
 //ar:shard_by_field:Id:7
-//ar:serverHost:127.0.0.1;serverPort:12345;serverTimeout:500;serverUser:test;serverPass:test
+//ar:serverConf:confKey
 //ar:backend:octopus,tarantool
 ```
 

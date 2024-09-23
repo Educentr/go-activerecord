@@ -357,7 +357,6 @@ func TestArGen_preparePackage(t *testing.T) {
 
 	rpFoo := ds.NewRecordPackage()
 	rpFoo.Backends = []activerecord.Backend{octopus.Backend}
-	rpFoo.Server = ds.ServerDeclaration{Host: "127.0.0.1", Port: "11011"}
 	rpFoo.Namespace = ds.NamespaceDeclaration{ObjectName: "0", PackageName: "foo", PublicName: "Foo"}
 
 	err := rpFoo.AddField(ds.FieldDeclaration{
@@ -621,7 +620,7 @@ func TestArGen_parse(t *testing.T) {
 	repositoryName := "foo"
 	textTestPkg := `package repository
 
-//ar:serverHost:127.0.0.1;serverPort:11111;serverTimeout:500
+//ar:serverConf:testConf
 //ar:namespace:2
 //ar:backend:octopus
 type FieldsFoo struct {
@@ -672,8 +671,8 @@ type TriggersFoo struct {
 			wantErr: false,
 			want: map[string]*ds.RecordPackage{
 				"foo": {
-					Namespace: ds.NamespaceDeclaration{ObjectName: "2", PublicName: "Foo", PackageName: "foo", ModuleName: "testmod"},
-					Server:    ds.ServerDeclaration{Timeout: 500, Host: "127.0.0.1", Port: "11111"},
+					Namespace:     ds.NamespaceDeclaration{ObjectName: "2", PublicName: "Foo", PackageName: "foo", ModuleName: "testmod"},
+					ServerConfKey: "testConf",
 					Fields: []ds.FieldDeclaration{
 						{Name: "Field1", Format: "int", PrimaryKey: true, Mutators: []string{}, Size: 5, Serializer: []string{}},
 						{Name: "Field2", Format: "string", PrimaryKey: true, Mutators: []string{}, Size: 5, Serializer: []string{}},

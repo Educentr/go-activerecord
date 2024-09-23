@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/mailru/activerecord/pkg/activerecord"
 	"github.com/mailru/activerecord/pkg/iproto/iproto"
 )
 
@@ -173,12 +174,12 @@ func TestMockServer_ProcessRequest(t *testing.T) {
 						Request: PackUpdate(42, pk, []Ops{
 							{
 								Field: 1,
-								Op:    OpSet,
+								Op:    activerecord.OpSet,
 								Value: []byte("u1"),
 							},
 							{
 								Field: 2,
-								Op:    OpSet,
+								Op:    activerecord.OpSet,
 								Value: []byte("u2"),
 							},
 						}),
@@ -191,7 +192,7 @@ func TestMockServer_ProcessRequest(t *testing.T) {
 				req: PackUpdate(42, pk, []Ops{
 					{
 						Field: 1,
-						Op:    OpSet,
+						Op:    activerecord.OpSet,
 						Value: []byte("u1"),
 					},
 				}),
@@ -204,7 +205,7 @@ func TestMockServer_ProcessRequest(t *testing.T) {
 					[]Ops{
 						{
 							Field: 1,
-							Op:    OpSet,
+							Op:    activerecord.OpSet,
 							Value: []byte("u1"),
 						},
 					},
@@ -213,12 +214,12 @@ func TestMockServer_ProcessRequest(t *testing.T) {
 						UpdateOps: []Ops{
 							{
 								Field: 1,
-								Op:    OpSet,
+								Op:    activerecord.OpSet,
 								Value: []byte("u1"),
 							},
 							{
 								Field: 2,
-								Op:    OpSet,
+								Op:    activerecord.OpSet,
 								Value: []byte("u2"),
 							},
 						},

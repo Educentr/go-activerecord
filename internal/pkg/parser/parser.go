@@ -5,7 +5,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"strconv"
 	"strings"
 
 	"github.com/mailru/activerecord/internal/pkg/arerror"
@@ -36,6 +35,7 @@ const (
 	MutatorsTag        TagNameType = "mutators"
 	SizeTag            TagNameType = "size"
 	SerializerTag      TagNameType = "serializer"
+	InitByDBTag        TagNameType = "init_by_db"
 	FieldsTag          TagNameType = "fields"
 	OrderDescTag       TagNameType = "orderdesc"
 	ProcInputParamTag  TagNameType = "input"
@@ -219,18 +219,7 @@ func parseDoc(dst *ds.RecordPackage, nodeName string, doc *ast.CommentGroup) err
 			for _, kv := range params {
 				switch kv[0] {
 				case "serverConf":
-					dst.Server.Conf = kv[1]
-				case "serverHost":
-					dst.Server.Host = kv[1]
-				case "serverPort":
-					dst.Server.Port = kv[1]
-				case "serverTimeout":
-					timeout, err := strconv.ParseInt(kv[1], 10, 64)
-					if err != nil {
-						return &arerror.ErrParseDocDecl{Name: kv[0], Value: kv[1], Err: arerror.ErrParseDocTimeoudDecl}
-					}
-
-					dst.Server.Timeout = timeout
+					dst.ServerConfKey = kv[1]
 				case "namespace":
 					switch StructNameType(nodeName) {
 					case Fields:

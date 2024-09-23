@@ -1,0 +1,62 @@
+// Work with connection
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+	"strings"
+
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/postgres"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceType) (*postgres.Connection, error){
+	conn, err := activerecord.GetConnection(
+		ctx,
+		"{{ .ServerConfKey }}",
+		activerecord.MapGlobParam{
+			Timeout:  postgres.DefaultConnectionTimeout,
+			PoolSize: postgres.DefaultPoolSize,
+		},
+		func(sic activerecord.ShardInstanceConfig) (activerecord.OptionInterface, error) {
+			return postgres.NewConnectionOptions(
+				sic.Addr,
+				sic.Port,
+				activerecord.ServerModeType(sic.Mode),
+				postgres.WithTimeout(sic.Timeout),
+				postgres.WithCredentials(sic.User, sic.Password),			
+				postgres.WithPoolSize(sic.PoolSize),
+				postgres.WithDatabase(sic.DB),
+			)
+		},
+		instanceType,
+		0, // ToDo shard number
+		func(options interface{}) (activerecord.ConnectionInterface, error) {
+			postgresOpt, ok := options.(*postgres.ConnectionOptions)
+			if !ok {
+				return nil, fmt.Errorf("invalid type of options %T, want Options", options)
+			}
+
+			return postgres.GetConnection(ctx, postgresOpt)
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error from connectionCacher: %w", err)
+	}
+
+	// ToDo create interface for connection
+	box, ok := conn.(*postgres.Connection)
+	if !ok {
+		return nil, fmt.Errorf("invalid connection type %T, want *postgres.Connection", conn)
+	}
+
+	return box, nil
+}

@@ -2,6 +2,26 @@ package postgres
 
 import "github.com/mailru/activerecord/pkg/activerecord"
 
+type OnConflictAction uint8
+
+type Ops struct {
+	Field string
+	Op    activerecord.OpCode
+	Value any
+}
+
+type BaseField struct {
+	activerecord.BaseField
+	UpdateOps []Ops
+}
+
+type UpdateParams struct {
+	PK  []any
+	Ops []Ops
+}
+
+const MaxLimit uint16 = 10000
+
 // ToDo numeric or numeric(p,s)
 // ToDo DATE TIME TIMESTAMP TIMESTAMPTZ INTERVAL
 const (
@@ -15,6 +35,18 @@ const (
 // ByteArray   Format = "[]byte"
 )
 
+// ToDo merge with octopus InsertModeInserOrReplace, e.t.c.
+const (
+	Replace OnConflictAction = iota
+	IgnoreDuplicate
+	UpdateDuplicate
+	NoDuplicateAction
+)
+
+type DefaultKeyword bool
+
+const DefaultValueDB DefaultKeyword = true
+
 var NumericFormat = []activerecord.Format{Int16, Int32, Int64}
 var FloatFormat = []activerecord.Format{Float32, Float64}
 var DataFormat = []activerecord.Format{String}
@@ -24,5 +56,3 @@ var AllFormat = append(append(append(
 	DataFormat...),
 	Bool,
 )
-
-const MaxLimit uint16 = 10000

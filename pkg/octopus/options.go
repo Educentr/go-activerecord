@@ -1,10 +1,7 @@
 package octopus
 
 import (
-	"encoding/binary"
-	"encoding/hex"
 	"fmt"
-	"hash"
 	"hash/crc32"
 	"time"
 
@@ -24,35 +21,22 @@ const (
 // Используется для подсчета connectionID
 var crc32table = crc32.MakeTable(0x4C11DB7)
 
-// ServerModeType - тип используемый для описания режима работы инстанса. см. ниже
-type ServerModeType uint8
-
-// Режим работы конкретного инстанса. Мастер или реплика.
-// При селекте из реплики быдет выставляться флаг readonly. Более подробно можно прочитать в доке.
-const (
-	ModeMaster ServerModeType = iota
-	ModeReplica
-)
-
 // ConnectionOptions - опции используемые для подключения
 type ConnectionOptions struct {
-	server         string
-	Mode           ServerModeType
-	poolCfg        *iproto.PoolConfig
-	connectionHash hash.Hash32
-	calculated     bool
+	activerecord.BaseConnectionOptions
+	server  string
+	poolCfg *iproto.PoolConfig
 }
 
-// NewOptions - cоздание структуры с опциями и дефолтными значениями. Для мидификации значений по умолчанию,
+// NewConnectionOptions - cоздание структуры с опциями и дефолтными значениями. Для мидификации значений по умолчанию,
 // надо передавать опции в конструктор
-func NewOptions(server string, mode ServerModeType, opts ...ConnectionOption) (*ConnectionOptions, error) {
+func NewConnectionOptions(server string, port uint16, mode activerecord.ServerModeType, opts ...ConnectionOption) (*ConnectionOptions, error) {
 	if server == "" {
 		return nil, fmt.Errorf("invalid param: server is empty")
 	}
 
 	octopusOpts := &ConnectionOptions{
-		server: server,
-		Mode:   mode,
+		server: fmt.Sprintf("%s:%d", server, port),
 		poolCfg: &iproto.PoolConfig{
 			Size:              DefaultPoolSize,
 			ConnectTimeout:    DefaultConnectionTimeout,
@@ -65,8 +49,10 @@ func NewOptions(server string, mode ServerModeType, opts ...ConnectionOption) (*
 				PingInterval:   DefaultPingInterval,
 			},
 		},
-		connectionHash: crc32.New(crc32table),
 	}
+
+	octopusOpts.BaseConnectionOptions.Mode = mode
+	octopusOpts.BaseConnectionOptions.ConnectionHash = crc32.New(crc32table)
 
 	for _, opt := range opts {
 		if err := opt.apply(octopusOpts); err != nil {
@@ -80,47 +66,6 @@ func NewOptions(server string, mode ServerModeType, opts ...ConnectionOption) (*
 	}
 
 	return octopusOpts, nil
-}
-
-// UpdateHash - функция расчета ConnectionID, необходима для шаринга конектов между моделями.
-func (o *ConnectionOptions) UpdateHash(data ...interface{}) error {
-	if o.calculated {
-		return fmt.Errorf("can't update hash after calculate")
-	}
-
-	for _, d := range data {
-		var err error
-
-		switch v := d.(type) {
-		case string:
-			err = binary.Write(o.connectionHash, binary.LittleEndian, []byte(v))
-		case int:
-			err = binary.Write(o.connectionHash, binary.LittleEndian, int64(v))
-		case nil:
-			err = fmt.Errorf("nil data to uprateHash[%+v]", data)
-		default:
-			err = binary.Write(o.connectionHash, binary.LittleEndian, v)
-		}
-
-		if err != nil {
-			return fmt.Errorf("can't calculate connectionID [%+v]: %w", data, err)
-		}
-	}
-
-	return nil
-}
-
-// GetConnectionID - получение ConnecitionID. После первого получения, больше нельзя его модифицировать. Можно только новый Options создать
-func (o *ConnectionOptions) GetConnectionID() string {
-	o.calculated = true
-	hashInBytes := o.connectionHash.Sum(nil)[:]
-
-	return hex.EncodeToString(hashInBytes)
-}
-
-// InstanceMode - метод для получения режима аботы инстанса RO или RW
-func (o *ConnectionOptions) InstanceMode() activerecord.ServerModeType {
-	return activerecord.ServerModeType(o.Mode)
 }
 
 // ConnectionOption - интерфейс которому должны соответствовать опции передаваемые в конструктор
@@ -158,9 +103,9 @@ func WithIntervals(redial, maxRedial, ping time.Duration) ConnectionOption {
 }
 
 // WithPoolSize - опция для изменения размера пулла подключений
-func WithPoolSize(size int) ConnectionOption {
+func WithPoolSize(size int32) ConnectionOption {
 	return optionConnectionFunc(func(octopusCfg *ConnectionOptions) error {
-		octopusCfg.poolCfg.Size = size
+		octopusCfg.poolCfg.Size = int(size) // ToDo check type conversion
 
 		return octopusCfg.UpdateHash("s", size)
 	})

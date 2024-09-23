@@ -137,15 +137,6 @@ func Test_checkFields(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "empty fields",
-			args: args{
-				cl: ds.RecordPackage{
-					Fields: []ds.FieldDeclaration{},
-				},
-			},
-			wantErr: true,
-		},
-		{
 			name: "empty format",
 			args: args{
 				cl: ds.RecordPackage{
@@ -392,120 +383,7 @@ func Test_checkProcFields(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{
-			name: "empty fields",
-			args: args{
-				cl: ds.RecordPackage{
-					ProcOutFields: ds.ProcFieldDeclarations{},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "2 fields declaration",
-			args: args{
-				cl: ds.RecordPackage{
-					Fields: []ds.FieldDeclaration{
-						{
-							Name:       "Foo",
-							Format:     "int",
-							PrimaryKey: true,
-						},
-					},
-					ProcOutFields: ds.ProcFieldDeclarations{
-						0: {
-							Name:   "Foo",
-							Format: "int",
-							Type:   ds.INOUT,
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty format",
-			args: args{
-				cl: ds.RecordPackage{
-					ProcOutFields: ds.ProcFieldDeclarations{
-						0: {
-							Name: "Foo",
-							Type: ds.OUT,
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid input format",
-			args: args{
-				cl: ds.RecordPackage{
-					ProcOutFields: ds.ProcFieldDeclarations{
-						0: {
-							Name:   "Foo",
-							Format: "int",
-							Type:   ds.OUT,
-						},
-					},
-					ProcInFields: []ds.ProcFieldDeclaration{
-						{
-							Name:   "Foo",
-							Format: "[]int",
-							Type:   ds.IN,
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid output format",
-			args: args{
-				cl: ds.RecordPackage{
-					ProcOutFields: ds.ProcFieldDeclarations{
-						0: {
-							Name:   "Foo",
-							Format: "[]int",
-							Type:   ds.OUT,
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "type not found",
-			args: args{
-				cl: ds.RecordPackage{
-					ProcOutFields: ds.ProcFieldDeclarations{
-						0: {
-							Name:   "Foo",
-							Format: "int",
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "incorrect fields order",
-			args: args{
-				cl: ds.RecordPackage{
-					ProcOutFields: ds.ProcFieldDeclarations{
-						0: {
-							Name:   "Foo",
-							Format: "int",
-						},
-						2: {
-							Name:   "Bar",
-							Format: "int",
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
+
 		{
 			name: "normal field",
 			args: args{
@@ -542,29 +420,6 @@ func Test_checkProcFields(t *testing.T) {
 				},
 			},
 			wantErr: false,
-		},
-		{
-			name: "serializer not declared",
-			args: args{
-				cl: ds.RecordPackage{
-					ProcOutFields: ds.ProcFieldDeclarations{
-						0: {
-							Name:   "Foo",
-							Format: "int",
-							Type:   ds.OUT,
-						},
-						1: {
-							Name:   "Foo",
-							Format: "int",
-							Type:   ds.OUT,
-							Serializer: []string{
-								"fser",
-							},
-						},
-					},
-				},
-			},
-			wantErr: true,
 		},
 	}
 	for _, tt := range tests {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/mailru/activerecord/pkg/activerecord"
 	"github.com/mailru/activerecord/pkg/iproto/iproto"
 )
 
@@ -186,7 +187,7 @@ func UnpackUpdate(data []byte) (ns uint32, primaryKey [][]byte, updateOps []Ops,
 				return
 			}
 
-			op.Op = OpCode(opCode)
+			op.Op = activerecord.OpCode(opCode)
 
 			err = iproto.UnpackBytes(rdr, &op.Value, iproto.ModeBER)
 			if err != nil {

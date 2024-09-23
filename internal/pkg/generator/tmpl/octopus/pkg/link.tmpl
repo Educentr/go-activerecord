@@ -5,9 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-{{ if eq .Server.Conf "" -}}
-	"time"
-{{ end }}
 	"strings"
 
 	"github.com/mailru/activerecord/pkg/iproto/iproto"
@@ -45,7 +42,7 @@ func (obj *{{ $PublicStructName }}) Get{{ $name }}(ctx context.Context) ({{ if n
 		return nil, err
 	}
 
-	obj.BaseField.Objects["{{ $name }}"] = []octopus.ModelStruct{ret}
+	obj.BaseField.Objects["{{ $name }}"] = []activerecord.ModelStruct{ret}
 	{{- else }}
 
 	var ret []*{{ $linkedobj.Namespace.PackageName }}.{{ $linkedobj.Namespace.PublicName }}

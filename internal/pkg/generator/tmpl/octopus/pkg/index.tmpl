@@ -5,9 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-{{ if eq .Server.Conf "" -}}
-	"time"
-{{ end }}
 	"strings"
 
 	"github.com/mailru/activerecord/pkg/iproto/iproto"
@@ -32,7 +29,7 @@ import (
 {{ $procInLen := len .ProcInFieldList }}
 {{ $mutatorLen := len .Mutators }}
 
-{{ if $fields }} // indexes
+{{ if $fields }}
 {{ $pktype := "" }}
 {{ $pklenfld := 1 }}
 {{ $pkind := index .Indexes 0 }}
@@ -287,4 +284,4 @@ func (obj *{{ $PublicStructName }}) packPk() ([][]byte, error) {
 	{{ end }}
 {{ end }}
 
-{{ end }}// end indexes
+{{ end }}

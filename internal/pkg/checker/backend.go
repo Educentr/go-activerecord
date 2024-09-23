@@ -12,6 +12,7 @@ import (
 type backendChecker interface {
 	check(cl *ds.RecordPackage) error
 	checkFields(cl *ds.RecordPackage) error
+	checkNamespace(cl *ds.RecordPackage) error
 }
 
 var (

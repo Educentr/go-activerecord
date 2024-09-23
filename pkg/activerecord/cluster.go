@@ -41,8 +41,12 @@ const (
 type ShardInstanceConfig struct {
 	Timeout  time.Duration
 	Mode     ServerModeType
-	PoolSize int
+	PoolSize int32
 	Addr     string
+	User     string
+	Password string
+	Port     uint16
+	DB       string
 }
 
 // Структура описывающая инстанс в кластере
@@ -322,6 +326,11 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 	shardTimeout := cfg.GetDuration(ctx, path+"/Timeout", globParam.Timeout)
 	shardPoolSize := cfg.GetInt(ctx, path+"/PoolSize", globParam.PoolSize)
 
+	// ToDo сделать возможность указать параметры на уровне кластера, если используются идентичные данные в каждом шарде
+	shardUserName := cfg.GetString(ctx, path+"/User", "")
+	shardPassword := cfg.GetString(ctx, path+"/Password", "")
+	shardDBName := cfg.GetString(ctx, path+"/DB", "")
+
 	// информация по местерам
 	master, exMaster := cfg.GetStringIfExists(ctx, path+"/master")
 	if !exMaster {
@@ -337,11 +346,21 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 				return Shard{}, fmt.Errorf("invalid master instance options: addr is empty")
 			}
 
+			hostport := strings.SplitN(inst, ":", 2) //ToDo check
+			port, err := strconv.Atoi(hostport[1])
+			if err != nil {
+				return Shard{}, fmt.Errorf("invalid port: %s", hostport[1])
+			}
+
 			shardCfg := ShardInstanceConfig{
-				Addr:     inst,
+				Addr:     hostport[0],
 				Mode:     ModeMaster,
-				PoolSize: shardPoolSize,
+				PoolSize: int32(shardPoolSize), // ToDo check type conversion
 				Timeout:  shardTimeout,
+				User:     shardUserName,
+				Password: shardPassword,
+				Port:     uint16(port), // ToDo check type conversion
+				DB:       shardDBName,
 			}
 
 			opt, err := optionCreator(shardCfg)
@@ -365,11 +384,21 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 				return Shard{}, fmt.Errorf("invalid slave instance options: addr is empty")
 			}
 
+			hostport := strings.SplitN(inst, ":", 2) //ToDo check
+			port, err := strconv.Atoi(hostport[1])
+			if err != nil {
+				return Shard{}, fmt.Errorf("invalid port: %s", hostport[1])
+			}
+
 			shardCfg := ShardInstanceConfig{
-				Addr:     inst,
+				Addr:     hostport[0],
 				Mode:     ModeReplica,
-				PoolSize: shardPoolSize,
+				PoolSize: int32(shardPoolSize), // ToDo check type conversion
 				Timeout:  shardTimeout,
+				User:     shardUserName,
+				Password: shardPassword,
+				Port:     uint16(port), // ToDo check type conversion
+				DB:       shardDBName,
 			}
 
 			opt, err := optionCreator(shardCfg)

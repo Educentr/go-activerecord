@@ -53,7 +53,7 @@ func generateFixture(params FixturePkgData) (map[string]bytes.Buffer, *arerror.E
 var tmpl string
 
 func GenerateFixtureTmpl(dstFile io.Writer, params FixturePkgData) *arerror.ErrGeneratorPhases {
-	templatePackage, err := template.New(TemplateName).Funcs(templateFuncs).Funcs(OctopusTemplateFuncs).Parse(disclaimer + tmpl)
+	templatePackage, err := template.New(TemplateName).Funcs(templateFuncs).Funcs(BaseTemplateFuncs).Funcs(OctopusTemplateFuncs).Parse(disclaimer + tmpl)
 	if err != nil {
 		tmplLines, errgetline := getTmplErrorLine(strings.SplitAfter(disclaimer+tmpl, "\n"), err.Error())
 		if errgetline != nil {

@@ -61,7 +61,6 @@ func TestParseMutator(t *testing.T) {
 				},
 			},
 			want: &ds.RecordPackage{
-				Server: ds.ServerDeclaration{},
 				Namespace: ds.NamespaceDeclaration{
 					ModuleName: "github.com/mailru/activerecord/internal/pkg/parser",
 				},

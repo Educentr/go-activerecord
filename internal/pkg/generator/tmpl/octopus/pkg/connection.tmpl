@@ -5,9 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-{{ if eq .Server.Conf "" -}}
-	"time"
-{{ end }}
 	"strings"
 
 	"github.com/mailru/activerecord/pkg/iproto/iproto"
@@ -21,22 +18,12 @@ import (
 {{- end }}
 )
 
-{{ if eq .Server.Conf "" -}}
-var boxOption, _ = octopus.NewOptions(
-	"{{ .Server.Host }}:{{ .Server.Port }}",
-	octopus.ModeMaster,
-	octopus.WithTimeout(time.Millisecond * {{ .Server.Timeout }}, time.Millisecond * {{ .Server.Timeout }}),
-)
-
-var clusterInfo = activerecord.NewClusterInfo(
-	activerecord.WithShard([]activerecord.OptionInterface{boxOption}, []activerecord.OptionInterface{}),
-){{ end }}
-
 func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceType) (*octopus.Connection, error){
 	optionCreator := func(sic activerecord.ShardInstanceConfig) (activerecord.OptionInterface, error) {
-		return octopus.NewOptions(
+		return octopus.NewConnectionOptions(
 			sic.Addr,
-			octopus.ServerModeType(sic.Mode),
+			sic.Port,
+			activerecord.ServerModeType(sic.Mode),
 			octopus.WithTimeout(sic.Timeout, sic.Timeout),
 			octopus.WithPoolSize(sic.PoolSize),
 			octopus.WithPoolLogger(activerecord.IprotoLogger{}),
@@ -45,7 +32,7 @@ func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceT
 
 	conn, err := activerecord.GetConnection(
 		ctx,
-		"arcfg", // ToDo config path
+		"{{ .ServerConfKey }}",
 		activerecord.MapGlobParam{
 			Timeout:  octopus.DefaultConnectionTimeout,
 			PoolSize: octopus.DefaultPoolSize,

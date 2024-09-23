@@ -20,7 +20,7 @@ func TestParse(t *testing.T) {
 
 	textTestPkg := `package repository
 
-//ar:serverHost:127.0.0.1;serverPort:11111;serverTimeout:500
+//ar:serverConf:testGenerateConfKey
 //ar:namespace:2
 //ar:backend:octopus
 type FieldsFoo struct {
@@ -78,8 +78,8 @@ type TriggersFoo struct {
 			},
 			wantErr: false,
 			want: &ds.RecordPackage{
-				Namespace: ds.NamespaceDeclaration{ObjectName: "2", PublicName: "Foo", PackageName: "foo"},
-				Server:    ds.ServerDeclaration{Timeout: 500, Host: "127.0.0.1", Port: "11111"},
+				Namespace:     ds.NamespaceDeclaration{ObjectName: "2", PublicName: "Foo", PackageName: "foo"},
+				ServerConfKey: "testGenerateConfKey",
 				Fields: []ds.FieldDeclaration{
 					{Name: "Field1", Format: "int", PrimaryKey: true, Mutators: []string{}, Size: 5, Serializer: []string{}},
 					{Name: "Field2", Format: "string", PrimaryKey: true, Mutators: []string{}, Size: 5, Serializer: []string{}},
@@ -162,7 +162,7 @@ func TestParseProc(t *testing.T) {
 
 	textTestPkg := `package repository
 
-//ar:serverHost:127.0.0.1;serverPort:11111;serverTimeout:500
+//ar:serverConf:testParseProcTestConfKey
 //ar:namespace:bar
 //ar:backend:octopus
 type ProcFieldsFoo struct {
@@ -208,10 +208,10 @@ type ProcFieldsFoo struct {
 			},
 			wantErr: false,
 			want: &ds.RecordPackage{
-				Namespace: ds.NamespaceDeclaration{ObjectName: "bar", PublicName: "Foo", PackageName: "foo"},
-				Server:    ds.ServerDeclaration{Timeout: 500, Host: "127.0.0.1", Port: "11111"},
-				Fields:    []ds.FieldDeclaration{},
-				FieldsMap: map[string]int{},
+				Namespace:     ds.NamespaceDeclaration{ObjectName: "bar", PublicName: "Foo", PackageName: "foo"},
+				ServerConfKey: "testParseProcTestConfKey",
+				Fields:        []ds.FieldDeclaration{},
+				FieldsMap:     map[string]int{},
 				ProcInFields: []ds.ProcFieldDeclaration{
 					{Name: "InParams1", Format: "[]string", Type: 1, Serializer: []string{}},
 					{Name: "InOutParams2", Format: "string", Type: 3, Serializer: []string{}, OrderIndex: 1},

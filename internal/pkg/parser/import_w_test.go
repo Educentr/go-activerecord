@@ -32,11 +32,6 @@ func TestParseImport(t *testing.T) {
 				},
 			},
 			want: &ds.RecordPackage{
-				Server: ds.ServerDeclaration{
-					Host:    "",
-					Port:    "",
-					Timeout: 0,
-				},
 				Namespace: ds.NamespaceDeclaration{
 					ObjectName:  "",
 					PublicName:  "",

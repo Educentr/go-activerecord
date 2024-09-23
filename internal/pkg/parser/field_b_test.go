@@ -37,7 +37,6 @@ func TestParseFields(t *testing.T) {
 			},
 			wantErr: false,
 			want: ds.RecordPackage{
-				Server:    ds.ServerDeclaration{},
 				Namespace: ds.NamespaceDeclaration{},
 				Fields: []ds.FieldDeclaration{
 					{Name: "ID", Format: "int", PrimaryKey: true, Mutators: []string{}, Serializer: []string{}},

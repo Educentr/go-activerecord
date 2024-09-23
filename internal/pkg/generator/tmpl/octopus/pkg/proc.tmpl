@@ -5,9 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-{{ if eq .Server.Conf "" -}}
-	"time"
-{{ end }}
 	"strings"
 
 	"github.com/mailru/activerecord/pkg/iproto/iproto"
@@ -27,22 +24,6 @@ import (
 {{ $procInLen := len .ProcInFieldList }}
 
 {{ if $procfields }}
-type {{ $PublicStructName }} struct {
-    params {{ $PublicStructName }}Params
-{{- range $ind, $fstruct := .ProcOutFieldList }}
-    {{ $rtype := $fstruct.Format -}}
-    {{ $serlen := len $fstruct.Serializer -}}
-    {{ if ne $serlen 0 -}}
-        {{ $sname := index $fstruct.Serializer 0 -}}
-        {{ $serializer := index $serializers $sname -}}
-        {{ $rtype = $serializer.Type -}}
-    {{ end -}}
-    field{{- $fstruct.Name }} {{ $rtype -}}
-{{ end }}
-}
-
-type {{ $PublicStructName }}List []*{{ $PublicStructName }}
-
 const (
     procName string = "{{ .Container.ObjectName }}"
     cntOutFields uint32 = {{ len .ProcOutFieldList }}

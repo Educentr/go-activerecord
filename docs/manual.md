@@ -25,7 +25,7 @@ package model
 
 import "......./model/serializer"
 
-//ar:serverHost:127.0.0.1;serverPort:11011;serverTimeout:500
+//ar:serverConf:confKey
 //ar:namespace:5
 //ar:backend:octopus
 //ar:enableSelectAll:10000
@@ -67,17 +67,10 @@ type TriggersFoo struct {
 
 Параметры можно группировать в одну строку или каждый писать на своей строке. При группировке в одной строке параметры разделяются между собой символом `;`
 
-### serverHost
+### serverConf
 
-IP адрес или имя хоста, где запущена БД
-
-### serverPort
-
-Порт для подключения к БД
-
-### serverTimeout
-
-Таймаут при работе с БД
+Ключ в конфигурации где хранятся настройки подключения к БД
+<!-- ToDo подробнее расписать настройки -->
 
 ### namespace
 
@@ -522,7 +515,7 @@ func NewThreshold(limit uint32) Limiter {
 ```golang
 package repository
 
-//ar:serverHost:127.0.0.1;serverPort:11011;serverTimeout:500
+//ar:serverConf:confKey
 //ar:namespace:6
 //ar:backend:octopus
 type FieldsFoo struct {
@@ -551,7 +544,7 @@ type (
 ```golang
 package repository
 
-//ar:serverHost:127.0.0.1;serverPort:5432;serverTimeout:500
+//ar:serverConf:confKey
 //ar:table:bar
 //ar:backend:postgres
 type FieldsFoo struct {

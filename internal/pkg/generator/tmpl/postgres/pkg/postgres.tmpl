@@ -1,0 +1,394 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+	"strings"
+
+	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/mailru/activerecord/pkg/postgres"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+{{- range $i, $imp := addImport .FieldList }}
+	"{{ $imp }}"
+{{- end }}
+)
+
+{{ $pkgName := .ARPkg }}
+{{ $serializers := .Serializers -}}
+{{ $mutators := .Mutators -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $LinkedObject := .LinkedObject }}
+{{ $flags := .Flags }}
+{{ $fields := .FieldList }}
+{{ $procfields := .ProcOutFieldList }}
+{{ $procInLen := len .ProcInFieldList }}
+{{ $mutatorLen := len .Mutators }}
+
+func selectDB (ctx context.Context, index postgres.Index, keys [][]any, limiter activerecord.SelectorLimiter) ([]*{{ $PublicStructName }}, error) {
+	logger := activerecord.Logger()
+	ctx = logger.SetLoggerValueToContext(ctx, activerecord.ValueLogPrefix{"limiter": limiter.String()})
+	metricTimer := activerecord.Metric().Timer(string(postgres.Backend), "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(string(postgres.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(postgres.Backend), "{{ $PublicStructName }}")
+
+	query, err := postgres.GenerateSelect(tableName, columnNames, index, keys, limiter.Offset(), limiter.Limit(), postgres.CursorPosition{})
+	if err != nil {
+		metricErrCnt.Inc(ctx, "select_gen", 1)
+		logger.Error(ctx, fmt.Sprintf("Error get db '%s'", err))
+
+		return nil, err
+	}
+
+	metricTimer.Timing(ctx, "select_gen")
+	metricStatCnt.Inc(ctx, "select_keys", float64(len(keys)))
+
+	logger.Debug(ctx, fmt.Sprintf("Select sql: `%s`", query.QueryString))
+
+	connection, err := getConnection(ctx, activerecord.ReplicaOrMasterInstanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "select_preparedb", 1)
+		logger.Error(ctx, fmt.Sprintf("Error get db '%s'", err))
+
+		return nil, err
+	}
+
+	rows, errCall := connection.Call(ctx, query.QueryString, query.Params)
+	if errCall != nil {
+		metricErrCnt.Inc(ctx, "select_db", 1)
+		logger.Error(ctx, "Error select from db", errCall, connection.Info())
+
+		return nil, errCall
+	}
+	defer rows.Close()
+
+	metricTimer.Timing(ctx, "select_process")
+	metricStatCnt.Inc(ctx, "selected_rows", float64(rows.CommandTag().RowsAffected()))
+
+	nps, err := NewFromDB(ctx, rows)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "select_preparedb", 1)
+		logger.Error(ctx, "Error in response: ", err)
+
+		return nil, err
+	}
+
+	metricTimer.Timing(ctx, "select_newobj")
+
+	if limiter.FulfillWarn() && len(nps) == int(limiter.Limit()) {
+		logger.Warn(ctx, "Select limit reached. Result may less than db records.")
+	}
+
+	mode, ok := connection.InstanceMode().(activerecord.ServerModeType)
+	if !ok || activerecord.ServerModeType(mode) == activerecord.ModeReplica {
+		if !ok {
+			logger.Error(ctx, "Invalid server mode type: %T", connection.InstanceMode())
+		}
+
+		for npNum := range nps {
+			nps[npNum].IsReplica = true
+			nps[npNum].Readonly = true
+		}
+	}
+
+	logger.Debug(ctx, "Success select")
+
+	metricTimer.Finish(ctx, "select")
+
+	return nps, nil
+}
+
+func (obj *{{ $PublicStructName }}) Delete(ctx context.Context) error {
+	logger := activerecord.Logger()
+	metricTimer := activerecord.Metric().Timer(string(postgres.Backend), "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(string(postgres.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(postgres.Backend), "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "delete_request", 1)
+
+	if !obj.BaseField.Exists {
+		return fmt.Errorf("can't delete not exists object")
+	}
+
+	query, err := postgres.GenerateDelete(tableName, pk, [][]any{obj.PrimaryValues()})
+	if err != nil {
+		metricErrCnt.Inc(ctx, "delete_gen", 1)
+		logger.Error(ctx, fmt.Sprintf("Error delete db '%s'", err))
+
+		return err
+	}
+
+	logger.Debug(ctx, fmt.Sprintf("Delete sql: `%s`", query.QueryString))
+
+	// ToDo getConnection move to Call and create interface for connectionAction
+	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "delete_preparedb", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Error delete db '%s'", err))
+
+		return err
+	}
+
+	rows, errCall := connection.Call(ctx, query.QueryString, query.Params)
+	if errCall != nil {
+		metricErrCnt.Inc(ctx, "delete_db", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error delete from db", errCall, connection.Info())
+
+		return errCall
+	}
+	defer rows.Close()
+
+	metricTimer.Timing(ctx, "delete_db")
+	metricStatCnt.Inc(ctx, "deleted_rows", float64(rows.CommandTag().RowsAffected()))
+
+	metricStatCnt.Inc(ctx, "delete_success", 1)
+
+	obj.BaseField.Exists = false
+	obj.BaseField.UpdateOps = []postgres.Ops{}
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Success delete")
+
+	metricTimer.Finish(ctx, "delete")
+
+	return nil
+}
+
+func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
+	logger := activerecord.Logger()
+	metricTimer := activerecord.Metric().Timer(string(postgres.Backend), "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount(string(postgres.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(postgres.Backend), "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "update_request", 1)
+
+	if !obj.BaseField.Exists {
+		metricErrCnt.Inc(ctx, "update_notexists", 1)
+		return fmt.Errorf("can't update not exists object")
+	}
+
+	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "update_preparedb", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), fmt.Sprintf("Error get db '%s'", err))
+		return err
+	}
+
+{{if eq $mutatorLen 0}}
+	if len(obj.BaseField.UpdateOps) == 0 {
+		metricStatCnt.Inc(ctx, "update_empty", 1)
+		logger.Debug(ctx, "", obj.PrimaryString(), "Empty update")
+
+		return nil
+	}
+{{else}}
+	return fmt.Errorf("mutator not implemented")
+	if len(obj.BaseField.UpdateOps) > 0 {
+{{- end }}
+
+	query, err := postgres.GenerateUpdate(tableName, pk, []postgres.UpdateParams{postgres.UpdateParams{PK: obj.PrimaryValues(), Ops:obj.BaseField.UpdateOps}})
+	if err != nil {
+		metricErrCnt.Inc(ctx, "update_gen", 1)
+		logger.Error(ctx, fmt.Sprintf("Error update db '%s'", err))
+
+		return err
+	}
+
+	logger.Debug(ctx, fmt.Sprintf("Update sql: `%s`", query.QueryString))
+
+	rows, errCall := connection.Call(ctx, query.QueryString, query.Params)
+	if errCall != nil {
+		metricErrCnt.Inc(ctx, "update_db", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error delete from db", errCall, connection.Info())
+
+		return errCall
+	}
+	defer rows.Close()
+
+	metricTimer.Timing(ctx, "update_db")
+	metricStatCnt.Inc(ctx, "updated_rows", float64(rows.CommandTag().RowsAffected()))
+
+/* ToDo update mutator fields
+	_, err = octopus.ProcessResp(respBytes, octopus.NeedRespFlag|octopus.UniqRespFlag)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "update_resp", 1)
+		logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error parse response: ", err)
+		return err
+	}
+*/
+{{if gt $mutatorLen 0}}
+	}
+{{end}}
+{{if gt $mutatorLen 0}}
+/* ToDo custom mutators
+{{ range $ind, $fstruct := .FieldList -}}
+	{{- range $i, $mut := $fstruct.Mutators -}}
+		{{ $customMutator := index $mutators $mut -}}
+		{{ $pfLen := len $customMutator.PartialFields }}
+		{{ if and (ne $pfLen 0) (ne $customMutator.Update "") $customMutator.Name }}
+	for _, op := range obj.{{$customMutator.Name}}.UpdateOps {
+		resp, errCall := connection.Call(ctx, octopus.RequestTypeCall, op.Value)
+		if errCall != nil {
+			metricErrCnt.Inc(ctx, "call_proc", 1)
+			logger.Error(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error call proc in a box", errCall, connection.Info())
+			return errCall
+		}
+
+		_, err := octopus.ProcessResp(resp, 0)
+		if err != nil {
+			return fmt.Errorf("error unpack lua response: %w", err)
+		}
+	}
+
+	obj.{{$customMutator.Name}}.UpdateOps = []octopus.Ops{}
+	obj.{{$customMutator.Name}}.PartialFields = map[string]any{}
+		{{end}}
+	{{end}}
+{{end}}
+*/
+{{end}}
+
+	obj.BaseField.UpdateOps = []postgres.Ops{}
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Success update")
+
+	metricStatCnt.Inc(ctx, "update_success", 1)
+	metricTimer.Finish(ctx, "update")
+
+	return nil
+}
+
+func (obj *{{ $PublicStructName }}) Insert(ctx context.Context) error {
+	metricStatCnt := activerecord.Metric().StatCount(string(postgres.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(postgres.Backend), "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "insert_request", 1)
+
+	if obj.BaseField.Exists {
+		metricErrCnt.Inc(ctx, "insert_exists", 1)
+		return fmt.Errorf("can't insert already exists object")
+	}
+
+	err := obj.insertReplace(ctx, postgres.NoDuplicateAction)
+
+	if err == nil {
+		metricStatCnt.Inc(ctx, "insert_success", 1)
+	}
+
+	return err
+}
+
+func (obj *{{ $PublicStructName }}) InsertOrReplace(ctx context.Context) error {
+	metricStatCnt := activerecord.Metric().StatCount(string(postgres.Backend), "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "insertorreplace_request", 1)
+
+	err := obj.insertReplace(ctx, postgres.Replace)
+
+	if err == nil {
+		metricStatCnt.Inc(ctx, "insertorreplace_success", 1)
+	}
+
+	return err
+}
+
+func (obj *{{ $PublicStructName }}) insertReplace(ctx context.Context, insertMode postgres.OnConflictAction) error {
+	var (
+		err error
+	)
+
+	logger := activerecord.Logger()
+
+	metricTimer := activerecord.Metric().Timer(string(postgres.Backend), "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount(string(postgres.Backend), "{{ $PublicStructName }}")
+
+	values := []any{}
+	returning := []string{}
+
+	{{ $scanRequired := ""}}
+	{{ range $ind, $fstruct := .FieldList }}
+		{{ if $fstruct.InitByDB }}
+			if obj.isInited{{$fstruct.Name}} {
+		{{ end }}
+		values = append(values, obj.Get{{ $fstruct.Name }}())
+		{{ if $fstruct.InitByDB }}
+		} else {
+		values = append(values, postgres.DefaultValueDB)
+		returning = append(returning, "{{ $fstruct.Name }}")
+		{{ if ne $scanRequired "" }}
+			{{ $scanRequired = printf "%s," $scanRequired}}
+		{{ end }}
+		{{ $scanRequired = printf "%s%s%s" $scanRequired  "&val" $fstruct.Name }}
+		}
+		var val{{ $fstruct.Name }} {{ $fstruct.Format }}
+		{{ end }}
+	{{ end }}
+
+	query, err := postgres.GenerateInsert(tableName, pk, columnNames, [][]any{values}, returning, insertMode)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "insert_gen", 1)
+		logger.Error(ctx, fmt.Sprintf("Error get db '%s'", err))
+
+		return err
+	}
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), query.QueryString, query.Params)
+
+	connection, err := getConnection(ctx, activerecord.ReplicaOrMasterInstanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "insert_preparedb", 1)
+		logger.Error(ctx, fmt.Sprintf("Error insert into db '%s'", err))
+
+		return err
+	}
+
+	rows, errCall := connection.Call(ctx, query.QueryString, query.Params)
+	if errCall != nil {
+		metricErrCnt.Inc(ctx, "insert_db", 1)
+		logger.Error(ctx, "Error insert into db", query.QueryString, errCall, connection.Info())
+
+		return errCall
+	}
+	
+	if rows.Next() {
+		err := rows.Scan({{ $scanRequired }})
+		if err != nil {
+			return err
+		}
+
+		{{ range $ind, $fstruct := .FieldList }}
+		{{ if $fstruct.InitByDB }}
+			if !obj.isInited{{$fstruct.Name}} {
+				obj.Set{{ $fstruct.Name }}(val{{ $fstruct.Name }})
+			}
+		{{ end }}
+	{{ end }}
+	}
+
+	rows.Close()
+
+	if rows.Err() != nil {
+		metricErrCnt.Inc(ctx, "insert_db", 1)
+		logger.Error(ctx, "Error insert into db", query.QueryString, "No rows affected", connection.Info())
+
+		return rows.Err()
+	}
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), rows.Err())	
+
+	metricTimer.Timing(ctx, "insert_process")
+
+	obj.BaseField.Exists = true
+	obj.BaseField.UpdateOps = []postgres.Ops{}
+	{{- if gt $mutatorLen 0 }}
+	obj.ClearMutatorUpdateOpts()
+	{{- end }}
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Success insert")
+
+	metricTimer.Finish(ctx, "insertreplace")
+
+	return nil
+}

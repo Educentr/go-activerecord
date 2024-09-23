@@ -1,119 +1,24 @@
 package generator
 
 import (
-	"bufio"
-	"bytes"
 	"embed"
 	"log"
-	"path"
 	"strings"
 	"text/template"
 
-	"github.com/mailru/activerecord/internal/pkg/arerror"
 	"github.com/mailru/activerecord/internal/pkg/ds"
 	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/iproto/util/text"
 	"github.com/mailru/activerecord/pkg/octopus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
 
-//go:embed tmpl/octopus/tmp/*
+//go:embed tmpl/octopus/pkg/*
 var OctopusTemplatesPath embed.FS
 
-//nolint:revive
-//go:embed tmpl/octopus/mock.tmpl
-var OctopusMockRepositoryTmpl string
-
-//nolint:revive
-//go:embed tmpl/octopus/fixture.tmpl
-var OctopusFixtureRepositoryTmpl string
-
-var funcs = template.FuncMap{"snakeCase": text.ToSnakeCase}
-
-const tmplPath = "tmpl/octopus/tmp"
-
-func GenerateOctopus(params PkgData) (map[string]*bytes.Buffer, *arerror.ErrGeneratorPhases) {
-	templates, err := OctopusTemplatesPath.ReadDir(tmplPath)
-	if err != nil {
-		return nil, &arerror.ErrGeneratorPhases{Backend: "octopus", Phase: "generate", Err: err}
-	}
-
-	ret := make(map[string]*bytes.Buffer, len(templates))
-
-	for _, template := range templates {
-		if !strings.HasSuffix(template.Name(), ".tmpl") {
-			if !template.IsDir() {
-				log.Printf("%s has no suffix tmpl. skip", template.Name())
-			}
-
-			continue
-		}
-
-		tmpl, err := OctopusTemplatesPath.ReadFile(path.Join(tmplPath, template.Name()))
-		if err != nil {
-			return nil, &arerror.ErrGeneratorPhases{Backend: "octopus", Name: template.Name(), Phase: "generate", Err: err}
-		}
-
-		fileName := template.Name()[:len(template.Name())-5]
-
-		ret[fileName] = &bytes.Buffer{}
-		writer := bufio.NewWriter(ret[fileName])
-
-		aeErr := GenerateByTmpl(writer, params, "octopus", string(tmpl))
-		if aeErr != nil {
-			return nil, aeErr
-		}
-
-		err = writer.Flush()
-		if err != nil {
-			return nil, &arerror.ErrGeneratorPhases{Backend: "octopus", Name: template.Name(), Phase: "generate", Err: err}
-		}
-	}
-
-	// octopusWriter := bytes.Buffer{}
-	// mockWriter := bytes.Buffer{}
-	// fixtureWriter := bytes.Buffer{}
-
-	// octopusFile := bufio.NewWriter(&octopusWriter)
-
-	// // TODO возможно имеет смысл разделить большой шаблон OctopusRootRepositoryTmpl для удобства поддержки
-	// err := GenerateByTmpl(octopusFile, params, "octopus", VarsTmpl+OctopusRootRepositoryTmpl)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// octopusFile.Flush()
-
-	// mockFile := bufio.NewWriter(&mockWriter)
-
-	// err = GenerateByTmpl(mockFile, params, "octopus", OctopusMockRepositoryTmpl)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// mockFile.Flush()
-
-	// fixtureFile := bufio.NewWriter(&fixtureWriter)
-
-	// err = GenerateByTmpl(fixtureFile, params, "octopus", OctopusFixtureRepositoryTmpl)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// fixtureFile.Flush()
-
-	// ret := map[string]bytes.Buffer{
-	// 	"octopus": octopusWriter,
-	// 	"mock":    mockWriter,
-	// 	"fixture": fixtureWriter,
-	// }
-
-	return ret, nil
-}
+const tmplOctopusPath = "tmpl/octopus/pkg"
 
 var OctopusTemplateFuncs = template.FuncMap{
-	"split": strings.Split,
 	"packerParam": func(format activerecord.Format) OctopusFormatParam {
 		ret, ex := OctopusFormatMapper[format]
 		if !ex {
@@ -165,8 +70,6 @@ var OctopusTemplateFuncs = template.FuncMap{
 
 		return
 	},
-	"trimPrefix": strings.TrimPrefix,
-	"hasPrefix":  strings.HasPrefix,
 }
 
 var ToLower = cases.Title(language.English)

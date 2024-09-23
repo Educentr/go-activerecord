@@ -13,7 +13,7 @@ func TestCheck(t *testing.T) {
 	rpFoo := ds.NewRecordPackage()
 	rpFoo.Backends = []activerecord.Backend{octopus.Backend}
 	rpFoo.Namespace = ds.NamespaceDeclaration{ObjectName: "0", PackageName: "foo", PublicName: "Foo"}
-	rpFoo.Server = ds.ServerDeclaration{Host: "127.0.0.1", Port: "11011"}
+	rpFoo.ServerConfKey = "testCheckerConfKey"
 
 	err := rpFoo.AddField(ds.FieldDeclaration{
 		Name:       "ID",
@@ -58,7 +58,7 @@ func TestCheck(t *testing.T) {
 	rpInvalidFormat := ds.NewRecordPackage()
 	rpInvalidFormat.Backends = []activerecord.Backend{octopus.Backend}
 	rpInvalidFormat.Namespace = ds.NamespaceDeclaration{ObjectName: "0", PackageName: "invform", PublicName: "InvalidFormat"}
-	rpInvalidFormat.Server = ds.ServerDeclaration{Host: "127.0.0.1", Port: "11011"}
+	rpInvalidFormat.ServerConfKey = "testCheckerConfKey"
 
 	err = rpInvalidFormat.AddField(ds.FieldDeclaration{
 		Name:       "ID",
@@ -77,7 +77,7 @@ func TestCheck(t *testing.T) {
 	onInvalidFormat := ds.NewRecordPackage()
 	onInvalidFormat.Backends = []activerecord.Backend{octopus.Backend}
 	onInvalidFormat.Namespace = ds.NamespaceDeclaration{ObjectName: "invalid", PackageName: "invform", PublicName: "InvalidFormat"}
-	onInvalidFormat.Server = ds.ServerDeclaration{Host: "127.0.0.1", Port: "11011", Conf: "box"}
+	rpInvalidFormat.ServerConfKey = "testCheckerConfKey"
 
 	err = onInvalidFormat.AddField(ds.FieldDeclaration{
 		Name:       "ID",

@@ -27,11 +27,7 @@ func TestGenerate(t *testing.T) {
 			args: args{
 				appInfo: testutil.TestAppInfo.String(),
 				cl: ds.RecordPackage{
-					Server: ds.ServerDeclaration{
-						Host:    "127.0.0.1",
-						Port:    "11011",
-						Timeout: 500,
-					},
+					ServerConfKey: "testGenerateConfKey",
 					Namespace: ds.NamespaceDeclaration{
 						ObjectName:  "5",
 						PublicName:  "Bar",
@@ -87,12 +83,6 @@ func TestGenerate(t *testing.T) {
 				},
 				{
 					Dir:     "bar",
-					Name:    "link.go",
-					Backend: octopus.Backend,
-					Data:    []byte{},
-				},
-				{
-					Dir:     "bar",
 					Name:    "main.go",
 					Backend: octopus.Backend,
 					Data:    []byte{},
@@ -105,12 +95,6 @@ func TestGenerate(t *testing.T) {
 				},
 				{
 					Dir:     "bar",
-					Name:    "mutators.go",
-					Backend: octopus.Backend,
-					Data:    []byte{},
-				},
-				{
-					Dir:     "bar",
 					Name:    "octopus.go",
 					Backend: octopus.Backend,
 					Data:    []byte{},
@@ -118,18 +102,6 @@ func TestGenerate(t *testing.T) {
 				{
 					Dir:     "bar",
 					Name:    "pack.go",
-					Backend: octopus.Backend,
-					Data:    []byte{},
-				},
-				{
-					Dir:     "bar",
-					Name:    "proc.go",
-					Backend: octopus.Backend,
-					Data:    []byte{},
-				},
-				{
-					Dir:     "bar",
-					Name:    "triggers.go",
 					Backend: octopus.Backend,
 					Data:    []byte{},
 				},

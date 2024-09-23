@@ -43,6 +43,8 @@ func ParseFieldsTag(field *ast.Field, newfield *ds.FieldDeclaration, newindex *d
 				}
 			case SerializerTag:
 				newfield.Serializer = strings.Split(kv[1], ",")
+			case InitByDBTag:
+				newfield.InitByDB = true
 			default:
 				return &arerror.ErrParseTypeFieldTagDecl{Name: newfield.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrParseTagUnknown}
 			}

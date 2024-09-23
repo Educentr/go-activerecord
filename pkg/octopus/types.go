@@ -1,15 +1,12 @@
 package octopus
 
 import (
-	"context"
-
 	"github.com/mailru/activerecord/pkg/activerecord"
 )
 
 type (
 	CountFlags uint32
 	RetCode    uint32
-	OpCode     uint8
 )
 
 type TupleData struct {
@@ -19,33 +16,20 @@ type TupleData struct {
 
 type Ops struct {
 	Field uint32
-	Op    OpCode
+	Op    activerecord.OpCode
 	Value []byte
 }
 
-type ModelStruct interface {
-	Insert(ctx context.Context) error
-	Replace(ctx context.Context) error
-	InsertOrReplace(ctx context.Context) error
-	Update(ctx context.Context) error
-	Delete(ctx context.Context) error
-}
-
 type BaseField struct {
-	Collection      []ModelStruct
+	activerecord.BaseField
 	UpdateOps       []Ops
 	ExtraFields     [][]byte
-	Objects         map[string][]ModelStruct
 	FieldsetAltered bool
-	Exists          bool
-	ShardNum        uint32
-	IsReplica       bool
-	Readonly        bool
 	Repaired        bool
 }
 
 type MutatorField struct {
-	OpFunc        map[OpCode]string
+	OpFunc        map[activerecord.OpCode]string
 	PartialFields map[string]any
 	UpdateOps     []Ops
 }
@@ -140,18 +124,6 @@ const (
 )
 
 const (
-	OpSet OpCode = iota
-	OpAdd
-	OpAnd
-	OpXor
-	OpOr
-	OpSplice
-	OpDelete
-	OpInsert
-	OpUpdate
-)
-
-const (
 	Uint8       activerecord.Format = "uint8"
 	Uint16      activerecord.Format = "uint16"
 	Uint32      activerecord.Format = "uint32"
@@ -187,23 +159,23 @@ var AllProcFormat = append(append(append(
 	Bool, StringArray, ByteArray,
 )
 
-func GetOpCodeName(op OpCode) string {
+func GetOpCodeName(op activerecord.OpCode) string {
 	switch op {
-	case OpSet:
+	case activerecord.OpSet:
 		return "Set"
-	case OpAdd:
+	case activerecord.OpAdd:
 		return "Add"
-	case OpAnd:
+	case activerecord.OpAnd:
 		return "And"
-	case OpXor:
+	case activerecord.OpXor:
 		return "Xor"
-	case OpOr:
+	case activerecord.OpOr:
 		return "Or"
-	case OpSplice:
+	case activerecord.OpSplice:
 		return "Splice"
-	case OpDelete:
+	case activerecord.OpDelete:
 		return "Delete"
-	case OpInsert:
+	case activerecord.OpInsert:
 		return "Insert"
 	default:
 		return "invalid opcode"

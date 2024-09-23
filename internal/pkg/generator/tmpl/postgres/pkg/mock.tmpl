@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/mailru/activerecord/pkg/postgres"
 {{- range $ind, $imp := .Imports }}
 	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
 {{- end }}
@@ -24,6 +24,7 @@ import (
 {{ $mutators := .Mutators -}}
 
 {{ if $procfields }}
+// ToDo procField in postgres
 func (obj *{{ $PublicStructName }}) MockSelectResponse() ([][]byte, error) {
 	tuple := [][]byte{}
 
@@ -53,7 +54,7 @@ func MockCallRequest(ctx context.Context{{ if ne $procInLen 0 }}, params {{ $Pub
 	}
 	{{ end }}
 
-	return octopus.PackLua(procName{{ if ne $procInLen 0 }}, args...{{ end }})
+	return []byte{} // ToDo octopus.PackLua(procName{{ if ne $procInLen 0 }}, args...{{ end }})
 }
 
 func (obj *{{ $PublicStructName }}) RepoSelector(ctx context.Context) (any, error) {
@@ -97,6 +98,7 @@ return func() (activerecord.MockerLogger, error){
 func (obj *{{ $PublicStructName }}) MockSelectResponse() ([][]byte, error) {
 	tuple := [][]byte{}
 	
+/* ToDo posgres mocker 
 	var data []byte
 
 	var err error
@@ -110,9 +112,10 @@ func (obj *{{ $PublicStructName }}) MockSelectResponse() ([][]byte, error) {
 	tuple = append(tuple, data)
 
 {{ end }}
+*/
 	return tuple, nil
 }
-{{ if $fields }}
+
 {{ $pktype := "" }}
 {{ $pklenfld := 1 }}
 {{ $pkind := index .Indexes 0 }}
@@ -168,6 +171,7 @@ func serialize{{ $sfield.Name}}(ctx context.Context, v{{ $sfield.Name}} {{ $rtyp
 {{ end -}}
 
 func (obj *{{ $PublicStructName }}) Mock{{ $ind.Selector }}sRequest(ctx context.Context, keys []{{ $ind.Type }}, {{ if not $ind.Unique }}limiter activerecord.SelectorLimiter{{ end }}) []byte {
+/* ToDo mocker in postgres
 	log := activerecord.Logger()
 	ctx = log.SetLoggerValueToContext(ctx, map[string]interface{}{"Mock{{ $ind.Selector }}sRequest": keys, "Repo": "{{$PublicStructName}}" })
 	keysPacked := [][][]byte{}
@@ -215,10 +219,11 @@ func (obj *{{ $PublicStructName }}) Mock{{ $ind.Selector }}sRequest(ctx context.
 	}
 
 	log.Debug(ctx, fmt.Sprintf("Packed Keys: '% X'", keysPacked))
+	*/
 	{{ if not $ind.Unique }}
-	return octopus.PackSelect(namespace, {{ $ind.Num }}, limiter.Offset(), limiter.Limit(), keysPacked)
+	return []byte{} // ToDo octopus.PackSelect(namespace, {{ $ind.Num }}, limiter.Offset(), limiter.Limit(), keysPacked)
 	{{ else }}
-	return octopus.PackSelect(namespace, {{ $ind.Num }}, 0, 0, keysPacked)
+	return []byte{} // ToDo octopus.PackSelect(namespace, {{ $ind.Num }}, 0, 0, keysPacked)
 	{{ end }}
 }
 
@@ -321,7 +326,6 @@ return func() (activerecord.MockerLogger, error){
 }
 
 {{ end }}
-{{ end }}
 func (obj *{{ $PublicStructName }}) RepoSelector(ctx context.Context) (any, error) {
 	data, err := SelectByPrimary(ctx, obj.Primary())
 	if err != nil {
@@ -345,7 +349,7 @@ func (obj *{{ $PublicStructName }}) MockMutator{{$customMutator.Name}}Update(ctx
 
 	for _, update := range obj.Mutators.{{ $customMutator.Name }}.UpdateOps {
 		switch update.Op {
-		case octopus.OpUpdate:
+		case activerecord.OpUpdate:
 			updateMutatorOps = append(updateMutatorOps, update.Value)
 		default:
 			continue
@@ -364,8 +368,9 @@ func (obj *{{ $PublicStructName }}) MockUpdate(ctx context.Context) []byte {
     log := activerecord.Logger()
     ctx = log.SetLoggerValueToContext(ctx, map[string]interface{}{"MockUpdate": obj.BaseField.UpdateOps, "Repo": "{{$PublicStructName}}" })
 
-    //todo repaired logic not implemented
+    // todo repaired logic not implemented
 
+/* ToDo mocker in postgres
     pk, err := obj.packPk()
     if err != nil {
         log.Fatal(ctx, err)
@@ -377,9 +382,12 @@ func (obj *{{ $PublicStructName }}) MockUpdate(ctx context.Context) []byte {
     log.Debug(ctx, fmt.Sprintf("Update packed tuple: '%X'\n", w))
 
     return w
+*/
+	return []byte{}
 }
 
 func (obj *{{ $PublicStructName }}) MockDelete(ctx context.Context) []byte {
+/* ToDo mocker in postgres
     log := activerecord.Logger()
 
     ctx = log.SetLoggerValueToContext(ctx, map[string]interface{}{"MockDelete": obj.PrimaryString(), "Repo": "{{$PublicStructName}}"})
@@ -395,24 +403,27 @@ func (obj *{{ $PublicStructName }}) MockDelete(ctx context.Context) []byte {
     log.Debug(ctx, fmt.Sprintf("Delete packed tuple: '%X'\n", w))
 
     return w
+*/
+	return []byte{}
 }
 
 func (obj *{{ $PublicStructName }}) MockInsertOrReplace(ctx context.Context) []byte {
-    return obj.mockInsertReplace(ctx, octopus.InsertModeInserOrReplace)
+    return []byte{} // ToDo obj.mockInsertReplace(ctx, octopus.InsertModeInserOrReplace)
 }
 
 func (obj *{{ $PublicStructName }}) MockInsert(ctx context.Context) []byte {
     obj.BaseField.Exists = false
 
-    return obj.mockInsertReplace(ctx, octopus.InsertModeInsert)
+    return []byte{} // ToDo obj.mockInsertReplace(ctx, octopus.InsertModeInsert)
 }
 
 func (obj *{{ $PublicStructName }}) MockReplace(ctx context.Context) []byte {
     obj.BaseField.Exists = true
 
-    return obj.mockInsertReplace(ctx, octopus.InsertModeReplace)
+    return []byte{} // ToDo obj.mockInsertReplace(ctx, octopus.InsertModeReplace)
 }
 
+/*
 func (obj *{{ $PublicStructName }}) mockInsertReplace(ctx context.Context, insertMode octopus.InsertMode) []byte {
     log := activerecord.Logger()
     ctx = log.SetLoggerValueToContext(ctx, map[string]interface{}{"MockInsertReplacePrimary": obj.PrimaryString(), "MockInsertReplaceMode": insertMode, "Repo": "{{$PublicStructName}}" })
@@ -442,4 +453,53 @@ func (obj *{{ $PublicStructName }}) mockInsertReplace(ctx context.Context, inser
 
 	return w
 }
+*/
+
 {{- end }}
+
+/* ToDo mocker in postgres
+{{ $pktype := "" }}
+{{ $pklenfld := 1 }}
+{{ $pkind := index .Indexes 0 }}
+{{ range $num, $ind := .Indexes -}}
+{{ $lenfld := len $ind.Fields -}}
+	{{ if $ind.Primary }}
+		{{ $pktype = $ind.Type }}
+		{{ $pklenfld = len $ind.Fields }}
+		{{ $pkind = $ind }}
+func (obj *{{ $PublicStructName }}) packPk() ([][]byte, error) {
+	packedPk := [][]byte{}
+
+	var (
+		data []byte
+		err error
+	)
+		{{ if ne $lenfld 1 }}
+			{{- range $_, $fieldNum := $ind.Fields }}
+				{{- $ifield := index $fields $fieldNum }}
+
+					data, err = pack{{ $ifield.Name }}([]byte{}, obj.Get{{ $ifield.Name }}())
+                	if err != nil {
+                		return [][]byte{}, err
+                	}
+
+                	packedPk = append(packedPk, data)
+			{{- end }}
+		{{ else }}
+			{{- range $_, $fieldNum := $ind.Fields }}
+				{{- $ifield := index $fields $fieldNum }}
+
+					data, err = pack{{ $ifield.Name }}([]byte{}, obj.Get{{ $ifield.Name }}())
+                	if err != nil {
+                		return [][]byte{}, err
+                	}
+
+                	packedPk = append(packedPk, data)
+			{{- end }}
+		{{ end }}
+
+		return packedPk, nil
+}
+	{{ end }}
+{{ end }}
+*/

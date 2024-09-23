@@ -28,33 +28,115 @@ type Query struct {
 	// state       QueryBuilderState
 }
 
-func NewQuery(tableName string, fieldNames []string, i Index) *Query {
-	return &Query{
-		QueryString: fmt.Sprintf(`SELECT %s FROM %s WHERE %s%s`,
+func NewSelectQuery(tableName string, fieldNames []string, i Index) *Query {
+	// ToDo quote field names
+	q := &Query{
+		QueryString: fmt.Sprintf(`SELECT %s FROM %s`,
 			strings.Join(fieldNames, ", "),
 			QuoteIdentifier(tableName),
-			i.ConditionString(),
-			i.ConditionFieldsString(),
+		),
+	}
+
+	q.AddWhereBlock(i.Conditions(), i.ConditionFields())
+
+	return q
+}
+
+func NewUpdateQuery(tableName string) *Query {
+	return &Query{
+		QueryString: fmt.Sprintf(`UPDATE %s SET `,
+			QuoteIdentifier(tableName),
 		),
 	}
 }
 
-func (q *Query) AddWhereParams(key any) int {
-	q.Params = append(q.Params, key)
+func NewDeleteQuery(tableName string, pk Index) *Query {
+	q := &Query{
+		QueryString: fmt.Sprintf(`DELETE FROM %s`,
+			QuoteIdentifier(tableName),
+		),
+	}
+
+	q.AddWhereBlock(pk.ConditionFields())
+
+	return q
+}
+
+func NewInsertQuery(tableName string, fieldNames []string) *Query {
+	q := &Query{
+		QueryString: fmt.Sprintf(`INSERT INTO %s (%s) VALUES `,
+			QuoteIdentifier(tableName),
+			strings.Join(fieldNames, ", "),
+		),
+	}
+
+	return q
+}
+
+func (q *Query) AddReturning(fieldNames []string) {
+	if len(fieldNames) == 0 {
+		return
+	}
+
+	q.QueryString += fmt.Sprintf(" RETURNING %s",
+		strings.Join(fieldNames, ", "),
+	)
+}
+
+func (q *Query) AddNoConflictDoNothing(fieldNames []string) {
+	q.QueryString += "ON CONFLICT DO NOTHING"
+}
+
+func (q *Query) AddNoConflictDoUpdate(tableName string, pk Index, fieldNames []string) {
+	pkfields := make(map[string]struct{}, len(pk.Fields))
+	updateFields := []string{}
+
+	for _, pkf := range pk.Fields.GetFieldNames() {
+		updateFields = append(updateFields, fmt.Sprintf("%s=%s.%s", pkf, tableName, pkf))
+		pkfields[pkf] = struct{}{}
+	}
+
+	for _, f := range fieldNames {
+		if _, ex := pkfields[f]; ex {
+			continue
+		}
+
+		updateFields = append(updateFields, fmt.Sprintf("%s=EXCLUDED.%s", f, f))
+	}
+
+	q.QueryString += fmt.Sprintf("ON CONFLICT (%s) DO UPDATE SET %s",
+		strings.Join(pk.Fields.GetFieldNames(), ", "),
+		strings.Join(updateFields, ", "),
+	)
+}
+
+func (q *Query) AddParams(key ...any) int {
+	q.Params = append(q.Params, key...)
 
 	return len(q.Params)
 }
 
-func (q *Query) AddWhereCondition(cond string, key []any) {
-	q.Params = append(q.Params, key...)
-	q.QueryString += cond
-}
-
 func (q *Query) AddQuery(cond string) {
-	q.QueryString += cond
+	q.QueryString += cond + " "
 }
 
-func (q *Query) AddLimitOffset(limit, offset uint16) {
+func (q *Query) AddWhereCondition(cond string, key []any) {
+	q.AddParams(key...)
+	q.AddQuery(cond)
+}
+
+func (q *Query) AddSetStatement(field string, key any) {
+	q.AddQuery(field + " = $" + fmt.Sprintf("%d", key))
+}
+
+func (q *Query) AddWhereBlock(cond ...string) {
+	q.QueryString += " WHERE "
+	for _, c := range cond {
+		q.AddQuery(c)
+	}
+}
+
+func (q *Query) AddLimitOffset(limit, offset uint32) {
 	if limit > 0 {
 		q.QueryString += fmt.Sprintf(" LIMIT %d", limit)
 	}
@@ -72,7 +154,7 @@ func GenerateSelectAll(tableName string, fieldNames []string) (string, error) {
 	return fmt.Sprintf("SELECT %s FROM %s LIMIT %d", strings.Join(fieldNames, ", "), QuoteIdentifier(tableName), MaxLimit), nil
 }
 
-func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][]any, offset, limit uint16, cursor CursorPosition) (*Query, error) {
+func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][]any, offset, limit uint32, cursor CursorPosition) (*Query, error) {
 	if err := index.validateKeys(keys); err != nil {
 		return nil, err
 	}
@@ -84,44 +166,13 @@ func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][
 	bulkSelect := len(keys) > 1
 	oneRowResult := limit == 1 || (!bulkSelect && index.Unique)
 
-	q := NewQuery(tableName, fieldNames, index)
+	q := NewSelectQuery(tableName, fieldNames, index)
 
 	// ToDo work with array fields
 	// $pg_request->{query} .= ' && $' . $i++;
 	// push @{$pg_request->{params}}, '{' . MR::Pg->encode_array_field($request->{keys}) . '}';
 
-	if bulkSelect {
-		placeholders := make([]string, 0, len(keys))
-		if index.MultiField() {
-			for _, key := range keys {
-				innerPlaceholder := make([]string, 0, len(key))
-
-				for _, kField := range key {
-					innerPlaceholder = append(innerPlaceholder, fmt.Sprintf("$%d", q.AddWhereParams(kField)))
-				}
-
-				placeholders = append(placeholders, "("+strings.Join(innerPlaceholder, ", ")+")")
-			}
-		} else {
-			for _, key := range keys {
-				placeholders = append(placeholders, fmt.Sprintf("$%d", q.AddWhereParams(key[0])))
-			}
-		}
-
-		q.QueryString += " IN (" + strings.Join(placeholders, ", ") + ")"
-	} else {
-		if index.MultiField() {
-			innerPlaceholder := make([]string, 0, len(keys[0]))
-
-			for _, kField := range keys[0] {
-				innerPlaceholder = append(innerPlaceholder, fmt.Sprintf("$%d", q.AddWhereParams(kField)))
-			}
-
-			q.QueryString += " = (" + strings.Join(innerPlaceholder, ", ") + ")"
-		} else {
-			q.QueryString += fmt.Sprintf(" = $%d", q.AddWhereParams(keys[0][0]))
-		}
-	}
+	index.GenerateWhereKeys(q, keys)
 
 	q.AddWhereCondition(index.CursorConditions(cursor, len(q.Params)-1))
 
@@ -166,6 +217,118 @@ func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][
 	// my $result = $class->$select_response($response, %resp_opts);
 	// $result = $self->select_postprocess($result, $index, $keys, %opts);
 	// return $result;
+
+	return q, nil
+}
+
+func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams) (*Query, error) {
+	// ToDo generate bulk update
+	isBulk := len(updates) > 1
+	if isBulk {
+		return nil, fmt.Errorf("bulk update not implemented")
+	}
+
+	q := NewUpdateQuery(tableName)
+
+	for num, u := range updates {
+		if len(u.PK) != len(primaryIndex.Fields) {
+			return nil, fmt.Errorf("primary key length (%+v) not equal to index fields in update %d", u.PK, num)
+		}
+
+		for _, op := range u.Ops {
+			// ToDo serializers
+			operation := op.Field + " ="
+			returning := []string{}
+
+			switch op.Op {
+			case activerecord.OpSet:
+				operation += " $" + fmt.Sprintf("%d", q.AddParams(op.Value))
+			case activerecord.OpAdd:
+				operation += op.Field + " + $" + fmt.Sprintf("%d", q.AddParams(op.Value))
+				returning = append(returning, op.Field)
+			case activerecord.OpAnd:
+				operation += op.Field + " & $" + fmt.Sprintf("%d", q.AddParams(op.Value))
+				returning = append(returning, op.Field)
+			default:
+				return nil, fmt.Errorf("unknown operation %d or not implemented", op.Op)
+			}
+
+			q.AddQuery(operation)
+
+			q.AddWhereBlock(primaryIndex.ConditionFields())
+
+			if primaryIndex.MultiField() {
+				innerPlaceholder := make([]string, 0, len(u.PK))
+
+				for _, kField := range u.PK {
+					innerPlaceholder = append(innerPlaceholder, fmt.Sprintf("$%d", q.AddParams(kField)))
+				}
+
+				q.QueryString += " = (" + strings.Join(innerPlaceholder, ", ") + ")"
+			} else {
+				q.QueryString += fmt.Sprintf(" = $%d", q.AddParams(u.PK[0]))
+			}
+
+			if len(returning) > 0 {
+				q.AddReturning(returning)
+			}
+		}
+	}
+
+	return q, nil
+}
+
+func GenerateDelete(tableName string, primaryKey Index, keys [][]any) (*Query, error) {
+	if err := primaryKey.validateKeys(keys); err != nil {
+		return nil, err
+	}
+
+	q := NewDeleteQuery(tableName, primaryKey)
+	primaryKey.GenerateWhereKeys(q, keys)
+
+	return q, nil
+}
+
+func GenerateInsert(tableName string, pk Index, fieldNames []string, values [][]any, returning []string, conflictAction OnConflictAction) (*Query, error) {
+	bulk := len(values) > 1
+
+	if bulk && conflictAction == IgnoreDuplicate {
+		return nil, fmt.Errorf("can't do bulk insert with 'on_conflict_do_nothing' option")
+	}
+
+	q := NewInsertQuery(tableName, fieldNames)
+
+	valQ := []string{}
+
+	for _, v := range values {
+		if len(v) != len(fieldNames) {
+			return nil, fmt.Errorf("fields count not equal to values count")
+		}
+
+		innerPlaceholder := make([]string, 0, len(v))
+		for _, val := range v {
+			if _, ok := val.(DefaultKeyword); ok {
+				innerPlaceholder = append(innerPlaceholder, "DEFAULT")
+			} else {
+				innerPlaceholder = append(innerPlaceholder, fmt.Sprintf("$%d", q.AddParams(val)))
+			}
+		}
+
+		valQ = append(valQ, "("+strings.Join(innerPlaceholder, ", ")+")")
+	}
+	q.AddQuery(strings.Join(valQ, ", "))
+
+	switch conflictAction {
+	case IgnoreDuplicate:
+		q.AddNoConflictDoNothing(fieldNames)
+	case UpdateDuplicate:
+		q.AddNoConflictDoUpdate(tableName, pk, fieldNames)
+	case NoDuplicateAction:
+	default:
+		return nil, fmt.Errorf("unknown conflict action")
+	}
+
+	q.AddReturning(returning)
 
 	return q, nil
 }

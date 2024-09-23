@@ -256,6 +256,10 @@ func (a *ArGen) generate() error {
 	dir, pkg := filepath.Split(a.dstFixture)
 
 	for name, cl := range a.packagesParsed {
+		if cl.Backends[0] != "octopus" {
+			log.Printf("skip fixture generator for backend: %s", cl.Backends[0])
+			continue
+		}
 		// Подготовка информации по ссылкам на другие пакеты
 		err := a.prepareFixtureGenerate(cl, name)
 		if err != nil {

@@ -2,6 +2,8 @@ package activerecord
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"sync"
 )
@@ -21,6 +23,47 @@ func newConnectionPool() *connectionPool {
 		lock:      sync.Mutex{},
 		container: make(map[string]ConnectionInterface),
 	}
+}
+
+// GetConnectionID - получение ConnecitionID. После первого получения, больше нельзя его модифицировать. Можно только новый Options создать
+func (o *BaseConnectionOptions) GetConnectionID() string {
+	o.Calculated = true
+	hashInBytes := o.ConnectionHash.Sum(nil)[:]
+
+	return hex.EncodeToString(hashInBytes)
+}
+
+// InstanceMode - метод для получения режима работы инстанса RO или RW
+func (o *BaseConnectionOptions) InstanceMode() ServerModeType {
+	return ServerModeType(o.Mode)
+}
+
+// UpdateHash - функция расчета ConnectionID, необходима для шаринга конектов между моделями.
+func (o *BaseConnectionOptions) UpdateHash(data ...interface{}) error {
+	if o.Calculated {
+		return fmt.Errorf("can't update hash after calculate")
+	}
+
+	for _, d := range data {
+		var err error
+
+		switch v := d.(type) {
+		case string:
+			err = binary.Write(o.ConnectionHash, binary.LittleEndian, []byte(v))
+		case int:
+			err = binary.Write(o.ConnectionHash, binary.LittleEndian, int64(v))
+		case nil:
+			err = fmt.Errorf("nil data to uprateHash[%+v]", data)
+		default:
+			err = binary.Write(o.ConnectionHash, binary.LittleEndian, v)
+		}
+
+		if err != nil {
+			return fmt.Errorf("can't calculate connectionID [%+v]: %w", data, err)
+		}
+	}
+
+	return nil
 }
 
 // TODO при долгом неиспользовании какого то пула надо закрывать его. Это для случаев когда в конфиге поменялась конфигурация

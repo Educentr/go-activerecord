@@ -103,3 +103,7 @@ func (c *octopusChecker) checkProcFields(cl *ds.RecordPackage) error {
 
 	return nil
 }
+
+func (c *octopusChecker) checkNamespace(cl *ds.RecordPackage) error {
+	return nil
+}
