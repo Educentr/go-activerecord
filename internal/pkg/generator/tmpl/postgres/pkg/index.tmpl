@@ -8,8 +8,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/postgres"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/postgres"
 {{- range $ind, $imp := .Imports }}
 	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
 {{- end }}

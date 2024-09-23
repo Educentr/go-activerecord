@@ -6,7 +6,6 @@
 
 см. так же:
 
-- [docs/intro.md](https://github.com/mailru/activerecord/blob/main/docs/intro.md)
-- [docs/manual.md](https://github.com/mailru/activerecord/blob/main/docs/manual.md)
-- [docs/cookbook.md](https://github.com/mailru/activerecord/blob/main/docs/cookbook.md)
-
+- [docs/intro.md](https://github.com/Educentr/go-activerecord/blob/main/docs/intro.md)
+- [docs/manual.md](https://github.com/Educentr/go-activerecord/blob/main/docs/manual.md)
+- [docs/cookbook.md](https://github.com/Educentr/go-activerecord/blob/main/docs/cookbook.md)

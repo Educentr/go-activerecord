@@ -9,8 +9,8 @@ import (
 
     "gopkg.in/yaml.v3"
 
-	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/octopus"
 {{- range $ind, $imp := .Imports }}
 	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
 {{- end }}

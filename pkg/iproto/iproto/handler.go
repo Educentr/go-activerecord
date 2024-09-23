@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/mailru/activerecord/pkg/iproto/util/pool"
+	"github.com/Educentr/go-activerecord/pkg/iproto/util/pool"
 	"golang.org/x/net/context"
 )
 

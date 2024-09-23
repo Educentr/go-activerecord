@@ -7,8 +7,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/postgres"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/postgres"
 {{- range $ind, $imp := .Imports }}
 	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
 {{- end }}
@@ -188,7 +188,7 @@ func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
 	if len(obj.BaseField.UpdateOps) > 0 {
 {{- end }}
 
-	query, err := postgres.GenerateUpdate(tableName, pk, []postgres.UpdateParams{postgres.UpdateParams{PK: obj.PrimaryValues(), Ops:obj.BaseField.UpdateOps}})
+	query, err := postgres.GenerateUpdate(tableName, pk, []postgres.UpdateParams{ {PK: obj.PrimaryValues(), Ops:obj.BaseField.UpdateOps} })
 	if err != nil {
 		metricErrCnt.Inc(ctx, "update_gen", 1)
 		logger.Error(ctx, fmt.Sprintf("Error update db '%s'", err))

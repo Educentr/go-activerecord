@@ -6,7 +6,7 @@ import (
 	"io"
 	"testing"
 
-	pbufio "github.com/mailru/activerecord/pkg/iproto/util/bufio"
+	pbufio "github.com/Educentr/go-activerecord/pkg/iproto/util/bufio"
 )
 
 type loopBytesReader struct {

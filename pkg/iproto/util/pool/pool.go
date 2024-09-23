@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	ptime "github.com/mailru/activerecord/pkg/iproto/util/time"
+	ptime "github.com/Educentr/go-activerecord/pkg/iproto/util/time"
 	"golang.org/x/net/context"
 )
 

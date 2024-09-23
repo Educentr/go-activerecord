@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mailru/activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
 )
 
 var tmplErrRx = regexp.MustCompile(TemplateName + `:(\d+):`)

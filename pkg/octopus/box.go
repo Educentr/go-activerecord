@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/iproto/iproto"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/iproto/iproto"
 )
 
 func ProcessResp(respBytes []byte, cntFlag CountFlags) ([]TupleData, error) {

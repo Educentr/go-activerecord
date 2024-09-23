@@ -6,9 +6,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/mailru/activerecord/internal/pkg/ds"
-	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/octopus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )

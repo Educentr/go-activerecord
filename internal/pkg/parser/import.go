@@ -4,8 +4,8 @@ import (
 	"go/ast"
 	"strings"
 
-	"github.com/mailru/activerecord/internal/pkg/arerror"
-	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 )
 
 func ParseImport(dst *ds.ImportPackage, importSpec *ast.ImportSpec) error {

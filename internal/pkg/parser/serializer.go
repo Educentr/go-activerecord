@@ -3,8 +3,8 @@ package parser
 import (
 	"go/ast"
 
-	"github.com/mailru/activerecord/internal/pkg/arerror"
-	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 )
 
 func ParseTypeSerializer(dst *ds.RecordPackage, serializerName string, t interface{}) (string, error) {
@@ -72,7 +72,7 @@ func ParseTypeSerializer(dst *ds.RecordPackage, serializerName string, t interfa
 }
 
 func ParseSerializer(dst *ds.RecordPackage, fields []*ast.Field) error {
-	defaultSerializerPkg := "github.com/mailru/activerecord/pkg/serializer"
+	defaultSerializerPkg := "github.com/Educentr/go-activerecord/pkg/serializer"
 	for _, field := range fields {
 		if field.Names == nil || len(field.Names) != 1 {
 			return &arerror.ErrParseSerializerDecl{Err: arerror.ErrNameDeclaration}

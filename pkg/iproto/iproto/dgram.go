@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/net/context"
 
-	pbufio "github.com/mailru/activerecord/pkg/iproto/util/bufio"
+	pbufio "github.com/Educentr/go-activerecord/pkg/iproto/util/bufio"
 )
 
 const (

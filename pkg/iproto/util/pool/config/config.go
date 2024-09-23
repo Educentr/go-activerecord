@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/mailru/activerecord/pkg/iproto/util/pool"
+	"github.com/Educentr/go-activerecord/pkg/iproto/util/pool"
 )
 
 // Config describes an object that is capable to create configuration variables

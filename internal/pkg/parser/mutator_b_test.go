@@ -9,16 +9,16 @@ import (
 	"gotest.tools/assert"
 	"gotest.tools/assert/cmp"
 
-	"github.com/mailru/activerecord/internal/pkg/ds"
-	"github.com/mailru/activerecord/internal/pkg/parser"
-	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/parser"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 func NewRecordPackage(t *testing.T) (*ds.RecordPackage, error) {
 	dst := ds.NewRecordPackage()
-	dst.Namespace.ModuleName = "github.com/mailru/activerecord/internal/pkg/parser"
+	dst.Namespace.ModuleName = "github.com/Educentr/go-activerecord/internal/pkg/parser"
 
-	if _, err := dst.AddImport("github.com/mailru/activerecord/internal/pkg/parser/testdata/foo"); err != nil {
+	if _, err := dst.AddImport("github.com/Educentr/go-activerecord/internal/pkg/parser/testdata/foo"); err != nil {
 		return nil, fmt.Errorf("can't create test package: %w", err)
 	}
 
@@ -42,7 +42,7 @@ func TestParseMutator(t *testing.T) {
 					{
 						Names: []*ast.Ident{{Name: "FooMutatorField"}},
 						Tag: &ast.BasicLit{
-							Value: "`ar:\"update:updateFunc,param1,param2;replace:replaceFunc;pkg:github.com/mailru/activerecord/internal/pkg/conv\"`",
+							Value: "`ar:\"update:updateFunc,param1,param2;replace:replaceFunc;pkg:github.com/Educentr/go-activerecord/internal/pkg/conv\"`",
 						},
 						Type: &ast.StarExpr{
 							X: &ast.SelectorExpr{
@@ -62,7 +62,7 @@ func TestParseMutator(t *testing.T) {
 			},
 			want: &ds.RecordPackage{
 				Namespace: ds.NamespaceDeclaration{
-					ModuleName: "github.com/mailru/activerecord/internal/pkg/parser",
+					ModuleName: "github.com/Educentr/go-activerecord/internal/pkg/parser",
 				},
 				Fields:          []ds.FieldDeclaration{},
 				FieldsMap:       map[string]int{},
@@ -75,7 +75,7 @@ func TestParseMutator(t *testing.T) {
 				MutatorMap: map[string]ds.MutatorDeclaration{
 					"FooMutatorField": {
 						Name:       "FooMutatorField",
-						Pkg:        "github.com/mailru/activerecord/internal/pkg/conv",
+						Pkg:        "github.com/Educentr/go-activerecord/internal/pkg/conv",
 						Type:       "*foo.Foo",
 						ImportName: "mutatorFooMutatorField",
 						Update:     "updateFunc,param1,param2",
@@ -96,14 +96,14 @@ func TestParseMutator(t *testing.T) {
 				},
 				ImportPackage: ds.ImportPackage{
 					Imports: []ds.ImportDeclaration{
-						{Path: "github.com/mailru/activerecord/internal/pkg/parser/testdata/foo"},
-						{Path: "github.com/mailru/activerecord/internal/pkg/conv", ImportName: "mutatorFooMutatorField"},
-						{Path: "github.com/mailru/activerecord/internal/pkg/parser/testdata/ds"},
+						{Path: "github.com/Educentr/go-activerecord/internal/pkg/parser/testdata/foo"},
+						{Path: "github.com/Educentr/go-activerecord/internal/pkg/conv", ImportName: "mutatorFooMutatorField"},
+						{Path: "github.com/Educentr/go-activerecord/internal/pkg/parser/testdata/ds"},
 					},
 					ImportMap: map[string]int{
-						"github.com/mailru/activerecord/internal/pkg/conv":                1,
-						"github.com/mailru/activerecord/internal/pkg/parser/testdata/foo": 0,
-						"github.com/mailru/activerecord/internal/pkg/parser/testdata/ds":  2,
+						"github.com/Educentr/go-activerecord/internal/pkg/conv":                1,
+						"github.com/Educentr/go-activerecord/internal/pkg/parser/testdata/foo": 0,
+						"github.com/Educentr/go-activerecord/internal/pkg/parser/testdata/ds":  2,
 					},
 					ImportPkgMap: map[string]int{
 						"mutatorFooMutatorField": 1,
@@ -132,10 +132,10 @@ func TestParseMutator(t *testing.T) {
 							ImportPkgMap map[string]int
 						}{
 							Imports: []ds.ImportDeclaration{
-								{Path: "github.com/mailru/activerecord/internal/pkg/parser/testdata/ds"},
+								{Path: "github.com/Educentr/go-activerecord/internal/pkg/parser/testdata/ds"},
 							},
 							ImportMap: map[string]int{
-								"github.com/mailru/activerecord/internal/pkg/parser/testdata/ds": 0,
+								"github.com/Educentr/go-activerecord/internal/pkg/parser/testdata/ds": 0,
 							},
 							ImportPkgMap: map[string]int{
 								"ds": 0,
@@ -168,7 +168,7 @@ func TestParseMutator(t *testing.T) {
 				fields: []*ast.Field{
 					{
 						Names: []*ast.Ident{{Name: "Foo"}},
-						Tag:   &ast.BasicLit{Value: "`ar:\"pkg:github.com/mailru/activerecord/notexistsfolder\"`"},
+						Tag:   &ast.BasicLit{Value: "`ar:\"pkg:github.com/Educentr/go-activerecord/notexistsfolder\"`"},
 						Type: &ast.StarExpr{
 							X: &ast.SelectorExpr{
 								X:   &ast.Ident{Name: "notimportedpackage"},

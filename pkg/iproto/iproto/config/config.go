@@ -3,8 +3,8 @@ package config
 import (
 	"time"
 
-	"github.com/mailru/activerecord/pkg/iproto/iproto"
-	"github.com/mailru/activerecord/pkg/iproto/util/pool"
+	"github.com/Educentr/go-activerecord/pkg/iproto/iproto"
+	"github.com/Educentr/go-activerecord/pkg/iproto/util/pool"
 
 	"golang.org/x/time/rate"
 )

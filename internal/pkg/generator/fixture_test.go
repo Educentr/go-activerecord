@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mailru/activerecord/internal/pkg/arerror"
-	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 )
 
 func TestGenerateFixture(t *testing.T) {
@@ -193,7 +193,7 @@ func TestGenerateFixture(t *testing.T) {
 					Serializers: map[string]ds.SerializerDeclaration{
 						"s2i": {
 							Name:        "Output",
-							Pkg:         "github.com/mailru/activerecord/pkg/serializer",
+							Pkg:         "github.com/Educentr/go-activerecord/pkg/serializer",
 							Type:        "int",
 							ImportName:  "serializerOutput",
 							Marshaler:   "OutputMarshal",

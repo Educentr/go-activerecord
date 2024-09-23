@@ -11,10 +11,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/mailru/activerecord/internal/app"
-	"github.com/mailru/activerecord/internal/pkg/ds"
-	"github.com/mailru/activerecord/internal/pkg/testutil"
-	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/Educentr/go-activerecord/internal/app"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/testutil"
+	"github.com/Educentr/go-activerecord/pkg/octopus"
 )
 
 func TestInit(t *testing.T) {
@@ -39,7 +39,7 @@ func TestInit(t *testing.T) {
 				ctx:     context.Background(),
 				appInfo: testutil.TestAppInfo,
 				dirFlag: testutil.NonExistsSrcDir | testutil.NonExistsDstDir,
-				modName: "github.com/mailru/activerecord",
+				modName: "github.com/Educentr/go-activerecord",
 			},
 			wantNil: true,
 			wantErr: true,
@@ -206,7 +206,7 @@ func TestArGen_Run(t *testing.T) {
 				appInfo: testutil.TestAppInfo,
 				srcDir:  emptySrc,
 				dstDir:  emptyDst,
-				modName: "github.com/mailru/activerecord",
+				modName: "github.com/Educentr/go-activerecord",
 			},
 			wantErr: false,
 		},
@@ -274,10 +274,10 @@ func TestArGen_Run(t *testing.T) {
 go 1.19
 
 require (
-	github.com/mailru/activerecord v1.5.4
+	github.com/Educentr/go-activerecord v1.5.4
 )
 
-replace github.com/mailru/activerecord => ` + srcPath
+replace github.com/Educentr/go-activerecord => ` + srcPath
 
 				modFile := filepath.Join(tt.initArgs.root, "/go.mod")
 				if err := os.WriteFile(modFile, []byte(gomod), 0600); err != nil {
@@ -312,7 +312,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
 	"` + testModuleName + `/model/repository/argen/` + repositoryName + `"
 )
 

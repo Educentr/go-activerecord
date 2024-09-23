@@ -3,7 +3,7 @@ package arerror
 import (
 	"errors"
 
-	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 var ErrGeneratorBackendUnknown = errors.New("backend unknown")

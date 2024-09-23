@@ -8,9 +8,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/mailru/activerecord/internal/pkg/arerror"
-	"github.com/mailru/activerecord/internal/pkg/ds"
-	"github.com/mailru/activerecord/pkg/iproto/util/text"
+	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/pkg/iproto/util/text"
 )
 
 type FixturePkgData struct {

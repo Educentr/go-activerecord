@@ -17,11 +17,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/mailru/activerecord/internal/pkg/arerror"
-	"github.com/mailru/activerecord/internal/pkg/checker"
-	"github.com/mailru/activerecord/internal/pkg/ds"
-	"github.com/mailru/activerecord/internal/pkg/generator"
-	"github.com/mailru/activerecord/internal/pkg/parser"
+	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/checker"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/generator"
+	"github.com/Educentr/go-activerecord/internal/pkg/parser"
 )
 
 // Структура приложения

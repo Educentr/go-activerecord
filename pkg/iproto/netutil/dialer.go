@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mailru/activerecord/pkg/iproto/syncutil"
-	egotime "github.com/mailru/activerecord/pkg/iproto/util/time"
+	"github.com/Educentr/go-activerecord/pkg/iproto/syncutil"
+	egotime "github.com/Educentr/go-activerecord/pkg/iproto/util/time"
 	"golang.org/x/net/context"
 )
 

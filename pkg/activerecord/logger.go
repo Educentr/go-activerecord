@@ -6,7 +6,7 @@ import (
 	"log"
 
 	// ToDo не очень правильная зависимость, с такими успехами придётся тащить все логгеры для всех бекендов, непонятно зачем
-	"github.com/mailru/activerecord/pkg/iproto/iproto"
+	"github.com/Educentr/go-activerecord/pkg/iproto/iproto"
 )
 
 type ctxKey uint8

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 func Test_prepareConnection(t *testing.T) {

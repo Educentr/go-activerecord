@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	wio "github.com/mailru/activerecord/pkg/iproto/util/io"
+	wio "github.com/Educentr/go-activerecord/pkg/iproto/util/io"
 )
 
 // WritePacket writes p to w.

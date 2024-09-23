@@ -4,8 +4,8 @@ import (
 	"errors"
 	"log"
 
-	"github.com/mailru/activerecord/internal/pkg/arerror"
-	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 )
 
 // Checker структура описывающая checker

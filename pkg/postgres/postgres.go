@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 //type WhereCondition

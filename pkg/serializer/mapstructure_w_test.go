@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mailru/activerecord/pkg/serializer/errs"
+	"github.com/Educentr/go-activerecord/pkg/serializer/errs"
 )
 
 type Services struct {

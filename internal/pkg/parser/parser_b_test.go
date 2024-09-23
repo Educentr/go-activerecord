@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mailru/activerecord/internal/pkg/ds"
-	"github.com/mailru/activerecord/internal/pkg/parser"
-	"github.com/mailru/activerecord/internal/pkg/testutil"
-	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/parser"
+	"github.com/Educentr/go-activerecord/internal/pkg/testutil"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/octopus"
 	"gotest.tools/assert"
 	"gotest.tools/assert/cmp"
 )

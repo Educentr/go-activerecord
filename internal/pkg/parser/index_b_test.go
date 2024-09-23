@@ -4,8 +4,8 @@ import (
 	"go/ast"
 	"testing"
 
-	"github.com/mailru/activerecord/internal/pkg/ds"
-	"github.com/mailru/activerecord/internal/pkg/parser"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/parser"
 	"gotest.tools/assert"
 	"gotest.tools/assert/cmp"
 )

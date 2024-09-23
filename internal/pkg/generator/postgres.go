@@ -5,8 +5,8 @@ import (
 	"log"
 	"text/template"
 
-	"github.com/mailru/activerecord/internal/pkg/ds"
-	"github.com/mailru/activerecord/pkg/postgres"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/pkg/postgres"
 )
 
 //go:embed tmpl/postgres/pkg/*

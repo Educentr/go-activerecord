@@ -1,6 +1,6 @@
 package foo
 
-import "github.com/mailru/activerecord/internal/pkg/parser/testdata/ds"
+import "github.com/Educentr/go-activerecord/internal/pkg/parser/testdata/ds"
 
 type Beer struct{}
 

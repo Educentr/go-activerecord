@@ -5,8 +5,8 @@ import (
 	"hash/crc32"
 	"time"
 
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/mailru/activerecord/pkg/activerecord"
 )
 
 // Константы определяющие дефолтное поведение конектора к postgres-у

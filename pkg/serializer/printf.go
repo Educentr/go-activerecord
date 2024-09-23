@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/mailru/activerecord/pkg/serializer/errs"
+	"github.com/Educentr/go-activerecord/pkg/serializer/errs"
 )
 
 func PrintfUnmarshal(opt string, data string, v *float64) error {

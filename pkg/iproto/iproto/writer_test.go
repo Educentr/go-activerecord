@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 	"testing"
 
-	pbufio "github.com/mailru/activerecord/pkg/iproto/util/bufio"
+	pbufio "github.com/Educentr/go-activerecord/pkg/iproto/util/bufio"
 )
 
 func TestPutPacket(t *testing.T) {

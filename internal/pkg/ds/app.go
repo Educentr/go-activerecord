@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mailru/activerecord/internal/pkg/arerror"
-	"github.com/mailru/activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 // Описание приложения. Информация необходимая для разметки артефактов

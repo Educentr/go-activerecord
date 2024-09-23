@@ -13,9 +13,9 @@ import (
 
 	"github.com/gobwas/pool/pbytes"
 
-	pbufio "github.com/mailru/activerecord/pkg/iproto/util/bufio"
-	wio "github.com/mailru/activerecord/pkg/iproto/util/io"
-	egotime "github.com/mailru/activerecord/pkg/iproto/util/time"
+	pbufio "github.com/Educentr/go-activerecord/pkg/iproto/util/bufio"
+	wio "github.com/Educentr/go-activerecord/pkg/iproto/util/io"
+	egotime "github.com/Educentr/go-activerecord/pkg/iproto/util/time"
 
 	"golang.org/x/net/context"
 )

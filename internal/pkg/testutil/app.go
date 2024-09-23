@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 )
 
 var TestAppInfo = *ds.NewAppInfo().

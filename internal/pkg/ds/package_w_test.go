@@ -28,13 +28,13 @@ func Test_getImportName(t *testing.T) {
 		},
 		{
 			name:    "gitlab package",
-			args:    args{path: "github.com/mailru/activerecord/internal/pkg/arerror"},
+			args:    args{path: "github.com/Educentr/go-activerecord/internal/pkg/arerror"},
 			want:    "arerror",
 			wantErr: false,
 		},
 		{
 			name:    "import with quote",
-			args:    args{path: `error "github.com/mailru/activerecord/internal/pkg/arerror"`},
+			args:    args{path: `error "github.com/Educentr/go-activerecord/internal/pkg/arerror"`},
 			want:    "arerror",
 			wantErr: false,
 		},

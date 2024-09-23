@@ -9,10 +9,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mailru/activerecord/internal/pkg/ds"
-	"github.com/mailru/activerecord/internal/pkg/testutil"
-	"github.com/mailru/activerecord/pkg/activerecord"
-	"github.com/mailru/activerecord/pkg/octopus"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/testutil"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/octopus"
 	"gotest.tools/assert"
 	"gotest.tools/assert/cmp"
 )
@@ -35,7 +35,7 @@ func TestArGen_addRecordPackage(t *testing.T) {
 		return
 	}
 
-	argen, err := Init(context.Background(), &testutil.TestAppInfo, src, dst, "", "github.com/mailru/activerecord")
+	argen, err := Init(context.Background(), &testutil.TestAppInfo, src, dst, "", "github.com/Educentr/go-activerecord")
 	if err != nil {
 		t.Errorf("ArGen.Init() error = %v", err)
 		return
@@ -218,7 +218,7 @@ func TestArGen_prepareDir(t *testing.T) {
 				appInfo: testutil.TestAppInfo,
 				srcDir:  srcNotEmpty,
 				dstDir:  dstNotExist,
-				modName: "github.com/mailru/activerecord",
+				modName: "github.com/Educentr/go-activerecord",
 			},
 			want: want{
 				srcEntry:   srcEntry,
@@ -234,7 +234,7 @@ func TestArGen_prepareDir(t *testing.T) {
 				appInfo: testutil.TestAppInfo,
 				srcDir:  "/non/exists/src/path",
 				dstDir:  "/non/exists/dst/path",
-				modName: "github.com/mailru/activerecord",
+				modName: "github.com/Educentr/go-activerecord",
 			},
 			want:    want{},
 			wantErr: true,
@@ -245,7 +245,7 @@ func TestArGen_prepareDir(t *testing.T) {
 				appInfo: testutil.TestAppInfo,
 				srcDir:  "/usr",
 				dstDir:  "/var",
-				modName: "github.com/mailru/activerecord",
+				modName: "github.com/Educentr/go-activerecord",
 			},
 			want:    want{},
 			wantErr: true,
@@ -319,7 +319,7 @@ func TestArGen_getExists(t *testing.T) {
 				appInfo: testutil.TestAppInfo,
 				srcDir:  srcEmpty,
 				dstDir:  dstNotEmpty,
-				modName: "github.com/mailru/activerecord",
+				modName: "github.com/Educentr/go-activerecord",
 			},
 			want: want{
 				dstEntry:   []fs.DirEntry{},

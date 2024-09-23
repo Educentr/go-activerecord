@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mailru/activerecord/pkg/iproto/syncutil"
+	"github.com/Educentr/go-activerecord/pkg/iproto/syncutil"
 
 	"golang.org/x/net/context"
 )

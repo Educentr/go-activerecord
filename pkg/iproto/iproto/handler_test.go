@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mailru/activerecord/pkg/iproto/iproto"
-	"github.com/mailru/activerecord/pkg/iproto/iproto/internal/testutil"
-	"github.com/mailru/activerecord/pkg/iproto/util/pool"
+	"github.com/Educentr/go-activerecord/pkg/iproto/iproto"
+	"github.com/Educentr/go-activerecord/pkg/iproto/iproto/internal/testutil"
+	"github.com/Educentr/go-activerecord/pkg/iproto/util/pool"
 	"golang.org/x/net/context"
 )
 

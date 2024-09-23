@@ -4,7 +4,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/mailru/activerecord/pkg/iproto/util/text"
+	"github.com/Educentr/go-activerecord/pkg/iproto/util/text"
 )
 
 var BaseTemplateFuncs = template.FuncMap{

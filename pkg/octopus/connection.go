@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mailru/activerecord/pkg/iproto/iproto"
+	"github.com/Educentr/go-activerecord/pkg/iproto/iproto"
 )
 
 var (

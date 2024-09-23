@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mailru/activerecord/internal/pkg/arerror"
-	"github.com/mailru/activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 )
 
 func ParseIndexPartTag(field *ast.Field, ind *ds.IndexDeclaration, indexMap map[string]int, fields []ds.FieldDeclaration, indexes []ds.IndexDeclaration) error {

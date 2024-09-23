@@ -7,10 +7,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mailru/activerecord/pkg/iproto/context/ctxlog"
-	"github.com/mailru/activerecord/pkg/iproto/netutil"
-	"github.com/mailru/activerecord/pkg/iproto/syncutil"
-	egoTime "github.com/mailru/activerecord/pkg/iproto/util/time"
+	"github.com/Educentr/go-activerecord/pkg/iproto/context/ctxlog"
+	"github.com/Educentr/go-activerecord/pkg/iproto/netutil"
+	"github.com/Educentr/go-activerecord/pkg/iproto/syncutil"
+	egoTime "github.com/Educentr/go-activerecord/pkg/iproto/util/time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/time/rate"
