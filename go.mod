@@ -1,8 +1,6 @@
 module github.com/Educentr/go-activerecord
 
-go 1.21.5
-
-toolchain go1.22.10
+go 1.22.10
 
 require (
 	github.com/gobwas/pool v0.2.1
