@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -272,7 +271,7 @@ func TestArGen_Run(t *testing.T) {
 				return
 			}
 
-			if tt.runArgs != nil && len(tt.runArgs) > 0 {
+			if len(tt.runArgs) > 0 {
 				gomod := `module ` + testModuleName + `
 
 go 1.19
@@ -285,13 +284,13 @@ replace github.com/Educentr/go-activerecord => ` + srcPath
 
 				modFile := filepath.Join(tt.initArgs.root, "/go.mod")
 				if err := os.WriteFile(modFile, []byte(gomod), 0600); err != nil {
-					t.Fatalf(fmt.Sprintf("can't write test script: %s", err))
+					t.Fatalf("can't write test script: %s", err)
 					return
 				}
 
 				oms, err := octopus.InitMockServer(octopus.WithHost("127.0.0.1", "11111"))
 				if err != nil {
-					t.Fatalf(fmt.Sprintf("can't init octopus server: %s", err))
+					t.Fatalf("can't init octopus server: %s", err)
 					return
 				}
 
