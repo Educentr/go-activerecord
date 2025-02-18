@@ -37,11 +37,6 @@ type MutatorField struct {
 type RequetsTypeType uint8
 
 const (
-	Backend          activerecord.Backend = "octopus"
-	BackendTarantool activerecord.Backend = "tarantool15"
-)
-
-const (
 	RequestTypeInsert RequetsTypeType = 13
 	RequestTypeSelect RequetsTypeType = 17
 	RequestTypeUpdate RequetsTypeType = 19
@@ -121,42 +116,6 @@ const (
 	RcLuaError             = RetCode(0x3302)
 	RcTupleExists          = RetCode(0x3702)
 	RcDuplicateKey         = RetCode(0x3802)
-)
-
-const (
-	Uint8       activerecord.Format = "uint8"
-	Uint16      activerecord.Format = "uint16"
-	Uint32      activerecord.Format = "uint32"
-	Uint64      activerecord.Format = "uint64"
-	Uint        activerecord.Format = "uint"
-	Int8        activerecord.Format = "int8"
-	Int16       activerecord.Format = "int16"
-	Int32       activerecord.Format = "int32"
-	Int64       activerecord.Format = "int64"
-	Int         activerecord.Format = "int"
-	String      activerecord.Format = "string"
-	Bool        activerecord.Format = "bool"
-	Float32     activerecord.Format = "float32"
-	Float64     activerecord.Format = "float64"
-	StringArray activerecord.Format = "[]string"
-	ByteArray   activerecord.Format = "[]byte"
-)
-
-var UnsignedFormat = []activerecord.Format{Uint8, Uint16, Uint32, Uint64, Uint}
-var NumericFormat = append(UnsignedFormat, Int8, Int16, Int32, Int64, Int)
-var FloatFormat = []activerecord.Format{Float32, Float64}
-var DataFormat = []activerecord.Format{String}
-var AllFormat = append(append(append(
-	NumericFormat,
-	FloatFormat...),
-	DataFormat...),
-	Bool,
-)
-var AllProcFormat = append(append(append(
-	NumericFormat,
-	FloatFormat...),
-	DataFormat...),
-	Bool, StringArray, ByteArray,
 )
 
 func GetOpCodeName(op activerecord.OpCode) string {

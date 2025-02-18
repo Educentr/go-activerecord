@@ -2,8 +2,6 @@ package arerror
 
 import (
 	"errors"
-
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 var (
@@ -14,7 +12,8 @@ var (
 	ErrCheckFieldSerializerNotFound        = errors.New("serializer not found")
 	ErrCheckFieldSerializerNotSupported    = errors.New("serializer not supported")
 	ErrCheckFieldInvalidFormat             = errors.New("invalid format")
-	ErrTableNameNotCanonical               = errors.New("table name not canonical")
+	ErrCheckFieldInvalidProcFormat         = errors.New("invalid proc format")
+	ErrTableNameNotCanonical               = errors.New("table name not canonical. The general consensus is to use lowercase letters separated by underscores for readability and avoid reserved words to prevent confusion or errors")
 	ErrCheckFieldMutatorConflictPK         = errors.New("conflict mutators with primary_key")
 	ErrCheckFieldMutatorConflictSerializer = errors.New("conflict mutators with serializer")
 	ErrCheckFieldMutatorConflictObject     = errors.New("conflict mutators with object link")
@@ -27,12 +26,15 @@ var (
 	ErrCheckFieldsManyDecl                 = errors.New("few declarations of fields not supported")
 	ErrCheckFieldsProcNotImpl              = errors.New("proc fields not implemented")
 	ErrCheckFieldsOrderDecl                = errors.New("incorrect order of fields")
+	ErrCheckIndexConditionNotSupported     = errors.New("index condition not supported")
+	ErrCheckIndexConditionHasNotValue      = errors.New("index condition without value")
+	ErrCheckInternalError                  = errors.New("internal error")
 )
 
 // Описание ошибки декларации пакета
 type ErrCheckPackageDecl struct {
 	Pkg     string
-	Backend activerecord.Backend
+	Backend string
 	Err     error
 }
 

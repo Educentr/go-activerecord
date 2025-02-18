@@ -112,6 +112,31 @@ func ParseIndexTag(field *ast.Field, ind *ds.IndexDeclaration, fieldsMap map[str
 			ind.Unique = true
 		case SelectorTag:
 			ind.Selector = kv[1]
+		case ConditionalTag:
+			for _, cond := range strings.Split(kv[1], ";") {
+				start_cond := strings.Index(cond, "[")
+				if start_cond == -1 {
+					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrParseTagValueInvalid}
+				}
+
+				end_cond := strings.Index(cond[start_cond+1:], "]")
+				if end_cond == -1 {
+					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrParseTagValueInvalid}
+				}
+
+				if len(cond) == start_cond+end_cond+2 {
+					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrParseTagValueInvalid}
+				}
+
+				fieldName := cond[:start_cond]
+				if fldNum, ex := fieldsMap[fieldName]; !ex {
+					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrFieldNotExist}
+				} else if _, ex := ind.Conditions[fldNum]; ex {
+					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrDuplicate}
+				} else {
+					ind.Conditions[fldNum] = ds.IndexCondition{ConditionType: cond[start_cond+1 : start_cond+end_cond+1], Value: strings.Split(cond[start_cond+end_cond+2:], ",")}
+				}
+			}
 		case FieldsTag:
 			for _, fieldName := range strings.Split(kv[1], ",") {
 				if fldNum, ex := fieldsMap[fieldName]; !ex {
@@ -134,7 +159,12 @@ func ParseIndexTag(field *ast.Field, ind *ds.IndexDeclaration, fieldsMap map[str
 				}
 			}
 		default:
-			return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrParseTagUnknown}
+			val := "NO VALUE"
+			if len(kv) > 1 {
+				val = kv[1]
+			}
+
+			return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: val, Err: arerror.ErrParseTagUnknown}
 		}
 	}
 
@@ -152,11 +182,12 @@ func ParseIndexes(dst *ds.RecordPackage, fields []*ast.Field) error {
 		}
 
 		ind := ds.IndexDeclaration{
-			Name:      field.Names[0].Name,
-			Fields:    []int{},
-			FieldsMap: map[string]ds.IndexField{},
-			Selector:  "SelectBy" + field.Names[0].Name}
-
+			Name:       field.Names[0].Name,
+			Fields:     []int{},
+			FieldsMap:  map[string]ds.IndexField{},
+			Selector:   "SelectBy" + field.Names[0].Name,
+			Conditions: map[int]ds.IndexCondition{},
+		}
 		if err := checkBoolType(field.Type); err != nil {
 			return &arerror.ErrParseTypeIndexDecl{IndexType: "index", Name: ind.Name, Err: arerror.ErrTypeNotBool}
 		}

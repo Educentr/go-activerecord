@@ -29,13 +29,16 @@ func TestGetClusterInfoFromCfg(t *testing.T) {
 		{
 			name: "cluster hosts from root path (no master or replica keys)",
 			mocks: func(t *testing.T, mockConfig *MockConfig) {
-				mockConfig.EXPECT().GetIntIfExists(mock.Anything, mock.Anything).Return(0, false)
-				mockConfig.EXPECT().GetDuration(mock.Anything, mock.Anything, mock.Anything).Return(0)
-				mockConfig.EXPECT().GetInt(mock.Anything, mock.Anything, mock.Anything).Return(0)
-				mockConfig.EXPECT().GetDurationIfExists(mock.Anything, mock.Anything).Return(0, false)
-				mockConfig.EXPECT().GetStringIfExists(mock.Anything, "testconfig/master").Return("", false)
-				mockConfig.EXPECT().GetStringIfExists(mock.Anything, "testconfig").Return("host1,host2", true)
-				mockConfig.EXPECT().GetStringIfExists(mock.Anything, "testconfig/replica").Return("", false)
+				mockConfig.EXPECT().GetIntIfExists(mock.Anything).Return(0, false, nil)
+				mockConfig.EXPECT().GetDuration(mock.Anything, mock.Anything).Return(0, nil)
+				mockConfig.EXPECT().GetInt(mock.Anything, mock.Anything).Return(0, nil)
+				mockConfig.EXPECT().GetDurationIfExists(mock.Anything).Return(0, false, nil)
+				mockConfig.EXPECT().GetString("testconfig/User", "").Return("", nil)
+				mockConfig.EXPECT().GetString("testconfig/Password", "").Return("", nil)
+				mockConfig.EXPECT().GetString("testconfig/DB", "").Return("", nil)
+				mockConfig.EXPECT().GetStringIfExists("testconfig/master").Return("", false, nil)
+				mockConfig.EXPECT().GetStringIfExists("testconfig").Return("host1:0,host2:0", true, nil)
+				mockConfig.EXPECT().GetStringIfExists("testconfig/replica").Return("", false, nil)
 			},
 			args: args{
 				ctx:   ctx,
@@ -74,12 +77,15 @@ func TestGetClusterInfoFromCfg(t *testing.T) {
 		{
 			name: "cluster hosts from master and replica keys path",
 			mocks: func(t *testing.T, mockConfig *MockConfig) {
-				mockConfig.EXPECT().GetIntIfExists(mock.Anything, mock.Anything).Return(0, false)
-				mockConfig.EXPECT().GetDuration(mock.Anything, mock.Anything, mock.Anything).Return(0)
-				mockConfig.EXPECT().GetInt(mock.Anything, mock.Anything, mock.Anything).Return(0)
-				mockConfig.EXPECT().GetDurationIfExists(mock.Anything, mock.Anything).Return(0, false)
-				mockConfig.EXPECT().GetStringIfExists(mock.Anything, "testconfig/master").Return("host2", true)
-				mockConfig.EXPECT().GetStringIfExists(mock.Anything, "testconfig/replica").Return("host1", true)
+				mockConfig.EXPECT().GetIntIfExists(mock.Anything).Return(0, false, nil)
+				mockConfig.EXPECT().GetDuration(mock.Anything, mock.Anything).Return(0, nil)
+				mockConfig.EXPECT().GetInt(mock.Anything, mock.Anything).Return(0, nil)
+				mockConfig.EXPECT().GetDurationIfExists(mock.Anything).Return(0, false, nil)
+				mockConfig.EXPECT().GetString("testconfig/User", "").Return("", nil)
+				mockConfig.EXPECT().GetString("testconfig/Password", "").Return("", nil)
+				mockConfig.EXPECT().GetString("testconfig/DB", "").Return("", nil)
+				mockConfig.EXPECT().GetStringIfExists("testconfig/master").Return("host2:0", true, nil)
+				mockConfig.EXPECT().GetStringIfExists("testconfig/replica").Return("host1:0", true, nil)
 			},
 			args: args{
 				ctx:   ctx,
@@ -119,13 +125,16 @@ func TestGetClusterInfoFromCfg(t *testing.T) {
 		{
 			name: "cluster hosts from root path and replica keys path",
 			mocks: func(t *testing.T, mockConfig *MockConfig) {
-				mockConfig.EXPECT().GetIntIfExists(mock.Anything, mock.Anything).Return(0, false)
-				mockConfig.EXPECT().GetDuration(mock.Anything, mock.Anything, mock.Anything).Return(0)
-				mockConfig.EXPECT().GetInt(mock.Anything, mock.Anything, mock.Anything).Return(0)
-				mockConfig.EXPECT().GetDurationIfExists(mock.Anything, mock.Anything).Return(0, false)
-				mockConfig.EXPECT().GetStringIfExists(mock.Anything, "testconfig/master").Return("", false)
-				mockConfig.EXPECT().GetStringIfExists(mock.Anything, "testconfig").Return("host1", true)
-				mockConfig.EXPECT().GetStringIfExists(mock.Anything, "testconfig/replica").Return("host2", true)
+				mockConfig.EXPECT().GetIntIfExists(mock.Anything).Return(0, false, nil)
+				mockConfig.EXPECT().GetDuration(mock.Anything, mock.Anything).Return(0, nil)
+				mockConfig.EXPECT().GetInt(mock.Anything, mock.Anything).Return(0, nil)
+				mockConfig.EXPECT().GetDurationIfExists(mock.Anything).Return(0, false, nil)
+				mockConfig.EXPECT().GetString("testconfig/User", "").Return("", nil)
+				mockConfig.EXPECT().GetString("testconfig/Password", "").Return("", nil)
+				mockConfig.EXPECT().GetString("testconfig/DB", "").Return("", nil)
+				mockConfig.EXPECT().GetStringIfExists("testconfig/master").Return("", false, nil)
+				mockConfig.EXPECT().GetStringIfExists("testconfig").Return("host1:0", true, nil)
+				mockConfig.EXPECT().GetStringIfExists("testconfig/replica").Return("host2:0", true, nil)
 			},
 			args: args{
 				ctx:   ctx,
@@ -168,7 +177,7 @@ func TestGetClusterInfoFromCfg(t *testing.T) {
 			mockConfig := NewMockConfig(t)
 
 			ReinitActiveRecord(
-				WithConfig(mockConfig),
+				WithConfig(func(ctx context.Context) ConfigInterface { return mockConfig }),
 			)
 
 			if tt.mocks != nil {

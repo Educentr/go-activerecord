@@ -6,9 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
-	"github.com/Educentr/go-activerecord/pkg/octopus"
 )
 
 func Test_parseDoc(t *testing.T) {
@@ -43,7 +42,7 @@ func Test_parseDoc(t *testing.T) {
 					PublicName:  "",
 					PackageName: "",
 				},
-				Backends:              []activerecord.Backend{octopus.Backend},
+				Backends:              []ds.Backend{octopus.BackendGenerator{}.Name()},
 				Fields:                []ds.FieldDeclaration{},
 				FieldsMap:             map[string]int{},
 				ProcFieldsMap:         map[string]int{},
@@ -109,7 +108,7 @@ func Test_parseGen(t *testing.T) {
 		genD *ast.GenDecl
 	}
 	w := ds.NewRecordPackage()
-	w.Backends = []activerecord.Backend{octopus.Backend}
+	w.Backends = []ds.Backend{octopus.BackendGenerator{}.Name()}
 	w.ServerConfKey = "confKey"
 	w.Namespace = ds.NamespaceDeclaration{
 		ObjectName:  "5",
@@ -118,7 +117,7 @@ func Test_parseGen(t *testing.T) {
 	}
 	wLinked := ds.NewRecordPackage()
 	wLinked.ServerConfKey = "confKey"
-	wLinked.Backends = []activerecord.Backend{octopus.Backend}
+	wLinked.Backends = []ds.Backend{octopus.BackendGenerator{}.Name()}
 	wLinked.Namespace = ds.NamespaceDeclaration{
 		ObjectName:  "5",
 		PublicName:  "Foo",
@@ -127,7 +126,7 @@ func Test_parseGen(t *testing.T) {
 	wLinked.FieldsMap["ID"] = len(wLinked.Fields)
 	wLinked.Fields = append(wLinked.Fields, ds.FieldDeclaration{
 		Name:       "ID",
-		Format:     octopus.Int,
+		Format:     "int",
 		PrimaryKey: true,
 		Mutators:   []string{},
 		Size:       0,
@@ -137,7 +136,7 @@ func Test_parseGen(t *testing.T) {
 	wLinked.FieldsMap["BarID"] = len(wLinked.Fields)
 	wLinked.Fields = append(wLinked.Fields, ds.FieldDeclaration{
 		Name:       "BarID",
-		Format:     octopus.Int,
+		Format:     "int",
 		PrimaryKey: false,
 		Mutators:   []string{},
 		Size:       0,
@@ -365,7 +364,7 @@ func Test_parseAst(t *testing.T) {
 				Indexes:               []ds.IndexDeclaration{},
 				IndexMap:              map[string]int{},
 				SelectorMap:           map[string]int{},
-				Backends:              []activerecord.Backend{octopus.Backend},
+				Backends:              []ds.Backend{octopus.BackendGenerator{}.Name()},
 				SerializerMap:         map[string]ds.SerializerDeclaration{},
 				ImportPackage:         ds.NewImportPackage(),
 				TriggerMap:            map[string]ds.TriggerDeclaration{},

@@ -5,13 +5,17 @@ import (
 	"testing"
 
 	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/backend"
+	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 )
 
 func TestGenerateFixture(t *testing.T) {
 	type args struct {
-		params FixturePkgData
+		params octopus.FixturePkgData
 	}
+
+	backend.RegisterBackend()
 
 	packageName := "gift"
 
@@ -25,7 +29,7 @@ func TestGenerateFixture(t *testing.T) {
 			name: "simplePkg",
 			want: nil,
 			args: args{
-				params: FixturePkgData{
+				params: octopus.FixturePkgData{
 					FixturePkg: "simplefixture",
 					ARPkg:      packageName,
 					ARPkgTitle: "Gift",
@@ -114,7 +118,7 @@ func TestGenerateFixture(t *testing.T) {
 			name: "simpleProcPkg",
 			want: nil,
 			args: args{
-				params: FixturePkgData{
+				params: octopus.FixturePkgData{
 					FixturePkg:      "procfixture",
 					ARPkg:           packageName,
 					ARPkgTitle:      "Gift",
@@ -154,7 +158,7 @@ func TestGenerateFixture(t *testing.T) {
 			name: "procPkg",
 			want: nil,
 			args: args{
-				params: FixturePkgData{
+				params: octopus.FixturePkgData{
 					FixturePkg: "procfixture",
 					ARPkg:      packageName,
 					ARPkgTitle: "Gift",

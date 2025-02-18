@@ -11,9 +11,11 @@ type DefaultConfig struct {
 	created time.Time
 }
 
-func NewDefaultConfig() *DefaultConfig {
-	return &DefaultConfig{
-		cfg: make(map[string]interface{}),
+func NewDefaultConfig() func(ctx context.Context) ConfigInterface {
+	return func(ctx context.Context) ConfigInterface {
+		return &DefaultConfig{
+			cfg: make(map[string]interface{}),
+		}
 	}
 }
 
@@ -28,106 +30,126 @@ func (dc *DefaultConfig) GetLastUpdateTime() time.Time {
 	return dc.created
 }
 
-func (dc *DefaultConfig) GetBool(ctx context.Context, confPath string, dfl ...bool) bool {
-	if ret, ok := dc.GetBoolIfExists(ctx, confPath); ok {
-		return ret
+func (dc *DefaultConfig) GetBool(confPath string, dfl ...bool) (bool, error) {
+	ret, ex, err := dc.GetBoolIfExists(confPath)
+	if err != nil {
+		return false, err
+	}
+
+	if ex {
+		return ret, nil
 	}
 
 	if len(dfl) != 0 {
-		return dfl[0]
+		return dfl[0], nil
 	}
 
-	return false
+	return false, nil
 }
 
-func (dc *DefaultConfig) GetBoolIfExists(ctx context.Context, confPath string) (value bool, ok bool) {
+func (dc *DefaultConfig) GetBoolIfExists(confPath string) (value bool, ok bool, err error) {
 	if param, ex := dc.cfg[confPath]; ex {
 		if ret, ok := param.(bool); ok {
-			return ret, true
+			return ret, true, nil
 		}
 
-		Logger().Warn(ctx, fmt.Sprintf("param %s has type %T, want bool", confPath, param))
+		return false, false, fmt.Errorf("param %s has type %T, want bool", confPath, param)
 	}
 
-	return false, false
+	return false, false, nil
 }
 
-func (dc *DefaultConfig) GetInt(ctx context.Context, confPath string, dfl ...int) int {
-	if ret, ok := dc.GetIntIfExists(ctx, confPath); ok {
-		return ret
+func (dc *DefaultConfig) GetInt(confPath string, dfl ...int64) (int64, error) {
+	ret, ok, err := dc.GetIntIfExists(confPath)
+	if err != nil {
+		return 0, err
+	}
+
+	if ok {
+		return ret, nil
 	}
 
 	if len(dfl) != 0 {
-		return dfl[0]
+		return dfl[0], nil
 	}
 
-	return 0
+	return 0, nil
 }
 
-func (dc *DefaultConfig) GetIntIfExists(ctx context.Context, confPath string) (int, bool) {
+func (dc *DefaultConfig) GetIntIfExists(confPath string) (int64, bool, error) {
 	if param, ex := dc.cfg[confPath]; ex {
-		if ret, ok := param.(int); ok {
-			return ret, true
+		if ret, ok := param.(int64); ok {
+			return ret, true, nil
 		}
 
-		Logger().Warn(ctx, fmt.Sprintf("param %s has type %T, want int", confPath, param))
+		return 0, false, fmt.Errorf("param %s has type %T, want int", confPath, param)
 	}
 
-	return 0, false
+	return 0, false, nil
 }
 
-func (dc *DefaultConfig) GetDuration(ctx context.Context, confPath string, dfl ...time.Duration) time.Duration {
-	if ret, ok := dc.GetDurationIfExists(ctx, confPath); ok {
-		return ret
+func (dc *DefaultConfig) GetDuration(confPath string, dfl ...time.Duration) (time.Duration, error) {
+	ret, ok, err := dc.GetDurationIfExists(confPath)
+	if err != nil {
+		return 0, nil
+	}
+
+	if ok {
+		return ret, nil
 	}
 
 	if len(dfl) != 0 {
-		return dfl[0]
+		return dfl[0], nil
 	}
 
-	return 0
+	return 0, nil
 }
 
-func (dc *DefaultConfig) GetDurationIfExists(ctx context.Context, confPath string) (time.Duration, bool) {
+func (dc *DefaultConfig) GetDurationIfExists(confPath string) (time.Duration, bool, error) {
 	if param, ex := dc.cfg[confPath]; ex {
 		if ret, ok := param.(time.Duration); ok {
-			return ret, true
+			return ret, true, nil
 		}
 
-		Logger().Warn(ctx, fmt.Sprintf("param %s has type %T, want time.Duration", confPath, param))
+		return 0, false, fmt.Errorf("param %s has type %T, want time.Duration", confPath, param)
 	}
 
-	return 0, false
+	return 0, false, nil
 }
 
-func (dc *DefaultConfig) GetString(ctx context.Context, confPath string, dfl ...string) string {
-	if ret, ok := dc.GetStringIfExists(ctx, confPath); ok {
-		return ret
+func (dc *DefaultConfig) GetString(confPath string, dfl ...string) (string, error) {
+	ret, ok, err := dc.GetStringIfExists(confPath)
+	if err != nil {
+		return "", err
+	}
+
+	if ok {
+		return ret, nil
 	}
 
 	if len(dfl) != 0 {
-		return dfl[0]
+		return dfl[0], nil
 	}
 
-	return ""
+	return "", nil
 }
 
-func (dc *DefaultConfig) GetStringIfExists(ctx context.Context, confPath string) (string, bool) {
+func (dc *DefaultConfig) GetStringIfExists(confPath string) (string, bool, error) {
 	if param, ex := dc.cfg[confPath]; ex {
 		if ret, ok := param.(string); ok {
-			return ret, true
+			return ret, true, nil
 		}
 
-		Logger().Warn(ctx, fmt.Sprintf("param %s has type %T, want string", confPath, param))
+		return "", false, fmt.Errorf("param %s has type %T, want string", confPath, param)
 	}
 
-	return "", false
+	return "", false, nil
 }
 
-func (dc *DefaultConfig) GetStrings(ctx context.Context, confPath string, dfl []string) []string {
-	return []string{}
+func (dc *DefaultConfig) GetStrings(confPath string, dfl []string) ([]string, error) {
+	return []string{}, fmt.Errorf("not implemented")
 }
 
-func (dc *DefaultConfig) GetStruct(ctx context.Context, confPath string, valuePtr interface{}) (bool, error) {
-	return false, nil
+func (dc *DefaultConfig) GetStruct(confPath string, valuePtr interface{}) (bool, error) {
+	return false, fmt.Errorf("not implemented")
 }

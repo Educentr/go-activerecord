@@ -18,6 +18,7 @@ import (
 	"sync"
 
 	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/backend"
 	"github.com/Educentr/go-activerecord/internal/pkg/checker"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 	"github.com/Educentr/go-activerecord/internal/pkg/generator"
@@ -71,6 +72,8 @@ func Init(ctx context.Context, appInfo *ds.AppInfo, srcDir, dstDir, fixtureDir, 
 		modName:        modName,
 		fileToRemove:   map[string]bool{},
 	}
+
+	backend.RegisterBackend()
 
 	// Подготавливаем информацию из src и dst директорий
 	err := argen.prepareDir()
@@ -186,7 +189,7 @@ func (a *ArGen) saveGenerateResult(name, dst string, genRes []generator.Generate
 		log.Printf("Write package `%s` (%s) into file `%s`", name, dstFileName, dstFileName)
 
 		if err := writeToFile(dirPkg, dstFileName, gen.Data); err != nil {
-			return &arerror.ErrGeneratorFile{Name: name, Backend: gen.Backend, Filename: dstFileName, Err: err}
+			return &arerror.ErrGeneratorFile{Name: name, Backend: string(gen.Backend), Filename: dstFileName, Err: err}
 		}
 
 		// Удаляем из "лишних" фалов то, что перегенерировали
@@ -234,6 +237,10 @@ func (a *ArGen) generate() error {
 		metadata.Namespaces = append(metadata.Namespaces, cl)
 	}
 
+	if a.skipGenerateFixture() {
+		return nil
+	}
+
 	genRes, genErr := generator.GenerateMeta(metadata)
 	if genErr != nil {
 		return fmt.Errorf("generate meta error: %s", genErr)
@@ -241,10 +248,6 @@ func (a *ArGen) generate() error {
 
 	if err := a.saveGenerateResult("meta", a.dst, genRes); err != nil {
 		return fmt.Errorf("error save meta result: %w", err)
-	}
-
-	if a.skipGenerateFixture() {
-		return nil
 	}
 
 	// Генерация пакета со сторами фикстур для тестов

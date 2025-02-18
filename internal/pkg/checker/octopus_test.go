@@ -4,14 +4,14 @@ import (
 	"testing"
 
 	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
-	"github.com/Educentr/go-activerecord/pkg/octopus"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckFields(t *testing.T) {
-	checker := CreateOctopusChecker().(*octopusChecker)
+	checker := octopus.BackendGenerator{}
+	checker.Init()
 
 	tests := []struct {
 		name    string
@@ -22,9 +22,9 @@ func TestCheckFields(t *testing.T) {
 			name: "Fields and ProcOutFields both present",
 			record: &ds.RecordPackage{
 				Namespace: ds.NamespaceDeclaration{PackageName: "testpkg"},
-				Fields:    []ds.FieldDeclaration{{Format: activerecord.Format("int")}},
+				Fields:    []ds.FieldDeclaration{{Format: "int"}},
 				ProcOutFields: ds.ProcFieldDeclarations{
-					1: ds.ProcFieldDeclaration{Format: activerecord.Format("int")},
+					1: ds.ProcFieldDeclaration{Format: "int"},
 				},
 			},
 			wantErr: &arerror.ErrCheckPackageDecl{Pkg: "testpkg", Err: arerror.ErrCheckFieldsManyDecl},
@@ -33,7 +33,7 @@ func TestCheckFields(t *testing.T) {
 			name: "Invalid field format",
 			record: &ds.RecordPackage{
 				Namespace: ds.NamespaceDeclaration{PackageName: "testpkg"},
-				Fields:    []ds.FieldDeclaration{{Format: activerecord.Format("float")}},
+				Fields:    []ds.FieldDeclaration{{Format: ds.Format("float")}},
 			},
 			wantErr: &arerror.ErrCheckPackageFieldDecl{Pkg: "testpkg", Field: "", Err: arerror.ErrCheckFieldInvalidFormat},
 		},
@@ -56,7 +56,7 @@ func TestCheckFields(t *testing.T) {
 			name: "Valid fields",
 			record: &ds.RecordPackage{
 				Namespace: ds.NamespaceDeclaration{PackageName: "testpkg"},
-				Fields:    []ds.FieldDeclaration{{Format: octopus.String}},
+				Fields:    []ds.FieldDeclaration{{Format: "string"}},
 			},
 			wantErr: nil,
 		},
@@ -65,7 +65,7 @@ func TestCheckFields(t *testing.T) {
 			record: &ds.RecordPackage{
 				Namespace: ds.NamespaceDeclaration{PackageName: "testpkg"},
 				ProcOutFields: ds.ProcFieldDeclarations{
-					0: ds.ProcFieldDeclaration{Format: activerecord.Format("int"), Name: "Foo", Type: ds.OUT},
+					0: ds.ProcFieldDeclaration{Format: "int", Name: "Foo", Type: ds.OUT},
 				},
 				ProcInFields: []ds.ProcFieldDeclaration{
 					{
@@ -75,14 +75,14 @@ func TestCheckFields(t *testing.T) {
 					},
 				},
 			},
-			wantErr: &arerror.ErrCheckPackageFieldDecl{Pkg: "testpkg", Field: "Foo", Err: arerror.ErrCheckFieldInvalidFormat},
+			wantErr: &arerror.ErrCheckPackageFieldDecl{Pkg: "testpkg", Field: "Foo", Err: arerror.ErrCheckFieldInvalidProcFormat},
 		},
 		{
 			name: "invalid output format",
 			record: &ds.RecordPackage{
 				Namespace: ds.NamespaceDeclaration{PackageName: "testpkg"},
 				ProcOutFields: ds.ProcFieldDeclarations{
-					0: ds.ProcFieldDeclaration{Format: activerecord.Format("[]int"), Name: "Foo", Type: ds.OUT},
+					0: ds.ProcFieldDeclaration{Format: ds.Format("[]int"), Name: "Foo", Type: ds.OUT},
 				},
 			},
 			wantErr: &arerror.ErrCheckPackageFieldDecl{Pkg: "testpkg", Field: "Foo", Err: arerror.ErrCheckFieldInvalidFormat},
@@ -92,7 +92,7 @@ func TestCheckFields(t *testing.T) {
 			record: &ds.RecordPackage{
 				Namespace: ds.NamespaceDeclaration{PackageName: "testpkg"},
 				ProcOutFields: ds.ProcFieldDeclarations{
-					0: ds.ProcFieldDeclaration{Format: activerecord.Format("int"), Name: "Foo"},
+					0: ds.ProcFieldDeclaration{Format: "int", Name: "Foo"},
 				},
 			},
 			wantErr: &arerror.ErrCheckPackageFieldDecl{Pkg: "testpkg", Field: "Foo", Err: arerror.ErrCheckFieldTypeNotFound},
@@ -102,8 +102,8 @@ func TestCheckFields(t *testing.T) {
 			record: &ds.RecordPackage{
 				Namespace: ds.NamespaceDeclaration{PackageName: "testpkg"},
 				ProcOutFields: ds.ProcFieldDeclarations{
-					0: ds.ProcFieldDeclaration{Format: activerecord.Format("int"), Name: "Foo"},
-					2: ds.ProcFieldDeclaration{Format: activerecord.Format("int"), Name: "Bar"},
+					0: ds.ProcFieldDeclaration{Format: "int", Name: "Foo"},
+					2: ds.ProcFieldDeclaration{Format: "int", Name: "Bar"},
 				},
 			},
 			wantErr: &arerror.ErrCheckPackageDecl{Pkg: "testpkg", Err: arerror.ErrCheckFieldsOrderDecl},
@@ -113,8 +113,8 @@ func TestCheckFields(t *testing.T) {
 			record: &ds.RecordPackage{
 				Namespace: ds.NamespaceDeclaration{PackageName: "testpkg"},
 				ProcOutFields: ds.ProcFieldDeclarations{
-					0: ds.ProcFieldDeclaration{Format: activerecord.Format("int"), Name: "Foo", Type: ds.OUT},
-					1: ds.ProcFieldDeclaration{Format: activerecord.Format("int"), Name: "Foo", Type: ds.OUT, Serializer: []string{"fser"}},
+					0: ds.ProcFieldDeclaration{Format: "int", Name: "Foo", Type: ds.OUT},
+					1: ds.ProcFieldDeclaration{Format: "int", Name: "Foo", Type: ds.OUT, Serializer: []string{"fser"}},
 				},
 			},
 			wantErr: &arerror.ErrCheckPackageFieldDecl{Pkg: "testpkg", Field: "Foo", Err: arerror.ErrCheckFieldSerializerNotFound},
@@ -123,7 +123,7 @@ func TestCheckFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checker.checkFields(tt.record)
+			err := checker.CheckFields(tt.record)
 			assert.Equal(t, tt.wantErr, err)
 		})
 	}

@@ -17,6 +17,7 @@ import (
 	wio "github.com/Educentr/go-activerecord/pkg/iproto/util/io"
 	egotime "github.com/Educentr/go-activerecord/pkg/iproto/util/time"
 
+	// ToDo разобраться зачем и по возможности заменить на context
 	"golang.org/x/net/context"
 )
 

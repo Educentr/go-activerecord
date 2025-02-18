@@ -1,0 +1,58 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+	"strings"
+
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/octopus"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+)
+
+func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceType) (*octopus.Connection, error){
+	optionCreator := func(sic activerecord.ShardInstanceConfig) (activerecord.OptionInterface, error) {
+		return octopus.NewConnectionOptions(
+			sic.Addr,
+			sic.Port,
+			activerecord.ServerModeType(sic.Mode),
+			octopus.WithTimeout(sic.Timeout, sic.Timeout),
+			octopus.WithPoolSize(sic.PoolSize),
+			octopus.WithPoolLogger(octopus.IprotoLogger{}),
+		)
+	}
+
+	conn, err := activerecord.GetConnection(
+		ctx,
+		"{{ .ServerConfKey }}",
+		activerecord.MapGlobParam{
+			Timeout:  octopus.DefaultConnectionTimeout,
+			PoolSize: octopus.DefaultPoolSize,
+		},
+		optionCreator,
+		instanceType,
+		0, // ToDo shard number
+		func(options interface{}) (activerecord.ConnectionInterface, error) {
+			octopusOpt, ok := options.(*octopus.ConnectionOptions)
+			if !ok {
+				return nil, fmt.Errorf("invalid type of options %T, want Options", options)
+			}
+
+			return octopus.GetConnection(ctx, octopusOpt)
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error from connectionCacher: %w", err)
+	}
+
+	box, ok := conn.(*octopus.Connection)
+	if !ok {
+		return nil, fmt.Errorf("invalid connection type %T, want *octopus.Connection", conn)
+	}
+
+	return box, nil
+}

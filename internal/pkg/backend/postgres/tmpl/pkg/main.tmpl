@@ -1,0 +1,199 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+	"strings"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/pkg/postgres"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+)
+
+{{ $pkgName := .ARPkg }}
+{{ $serializers := .Serializers -}}
+{{ $mutators := .Mutators -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $LinkedObject := .LinkedObject }}
+{{ $flags := .Flags }}
+{{ $fields := .FieldList }}
+{{ $procfields := .ProcOutFieldList }}
+{{ $procInLen := len .ProcInFieldList }}
+{{ $mutatorLen := len .Mutators }}
+
+func New(ctx context.Context) *{{ $PublicStructName }} {
+	newObj := {{ $PublicStructName }}{}
+	{{- if $fields }}
+	newObj.BaseField.UpdateOps = []postgres.Operation{}
+	newObj.BaseField.Objects = map[string][]activerecord.ModelStruct{}
+    {{ end }}
+    {{- if ne $mutatorLen 0 -}}
+    {{- range $i, $mut := $mutators }}
+    newObj.{{$mut.Name}}.PartialFields = map[string]any{}
+	newObj.{{$mut.Name}}.OpFunc = map[activerecord.OpCode]string{}
+    {{ if ne $mut.Update "" -}}
+    newObj.{{$mut.Name}}.OpFunc[postgres.OpUpdate] = "{{$mut.Update}}"
+    {{ end }}
+    {{ if ne $mut.Replace "" -}}
+    newObj.{{$mut.Name}}.OpFunc[postgres.OpInsert] = "{{$mut.Replace}}"
+    {{ end }}
+    {{- end }}
+    {{ end }}
+	return &newObj
+}
+
+{{ $list := .FieldList }}
+type {{ $PublicStructName }} struct {
+{{ if $procfields }}
+    params {{ $PublicStructName }}Params
+	{{ $list = .ProcOutFieldList }}
+{{ else if $fields }}
+	postgres.BaseField
+	{{- if ne $mutatorLen 0 }}
+	Mutators
+	{{- end -}}
+{{ end }}
+
+{{- range $ind, $fstruct := $list }}
+    {{ $rtype := $fstruct.Format -}}
+	{{ $packerparam := packerParam $rtype -}}
+	{{ if ne $packerparam.OrigType "" -}}
+		{{ $rtype = $packerparam.OrigType -}}
+	{{ end -}}
+    {{ $serlen := len $fstruct.Serializer -}}
+    {{ if ne $serlen 0 -}}
+        {{ $sname := index $fstruct.Serializer 0 -}}
+        {{ $serializer := index $serializers $sname -}}
+        {{ $rtype = $serializer.Type -}}
+    {{ end -}}
+    field{{- $fstruct.Name }} {{ $rtype -}}
+	{{ if $fstruct.InitByDB }}
+	isInited{{- $fstruct.Name }} bool
+	{{ end }}
+{{ end }}
+}
+
+type {{ $PublicStructName }}List []*{{ $PublicStructName }}
+
+{{ if $fields }}
+    const (
+        tableName string = "{{ .Container.ObjectName }}"
+    {{- range $fieldname, $flag := .Flags -}}
+        {{ range $i, $flagname := $flag.Flags }}
+        {{ $fieldname }}{{ $flagname }}Flag = 1 << {{ $i -}}
+        {{ end -}}
+    {{ end }}
+    )
+
+func RowToStruct(ctx context.Context, rows pgx.Rows) (*{{ $PublicStructName }}, error) {
+	np := New(ctx)
+
+	var (
+	{{ range $ind, $fstruct := .FieldList -}}
+		{{ $rtype := $fstruct.Format -}}
+		{{ $packerparam := packerParam $fstruct.Format -}}
+		{{ if ne $packerparam.OrigType "" -}}
+			{{ $rtype = $packerparam.OrigType -}}
+		{{ end -}}
+		val{{ $fstruct.Name }} {{ $rtype }}
+	{{ end }}
+	)
+
+	err := rows.Scan(
+	{{ range $ind, $fstruct := .FieldList -}}
+		&val{{ $fstruct.Name }},
+	{{ end }}
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	{{ range $ind, $fstruct := .FieldList -}}
+		{{ $sname := $fstruct.Serializer.Name -}}
+		{{ if ne $sname "" -}}
+			{{ $serializer := index $serializers $sname -}}
+			{{ $rtype := $serializer.Type -}}
+			{{ $serparams := $fstruct.Serializer.Params }}
+			{{ $underlyingType := trimPrefix (printf "%s" $rtype) "*"}}
+
+	bvar := {{ $fstruct.Name }}
+	var svar = new({{ $underlyingType }})
+
+	err = {{ $serializer.ImportName }}.{{ $serializer.Unmarshaler }}({{ $serparams }}bvar, svar)
+	if err != nil {
+		errRet = fmt.Errorf("error unmarshal field {{ $fstruct.Name }}: %w", err)
+		return
+	}
+
+	np.Set{{ $fstruct.Name }}(svar)
+
+		{{ else }}
+	np.Set{{ $fstruct.Name }}(val{{ $fstruct.Name }})
+		{{ end }}
+	{{ end }}
+	
+	np.BaseField.Exists = true
+	np.BaseField.UpdateOps = []postgres.Operation{}
+	{{if gt $mutatorLen 0}}
+	np.ClearMutatorUpdateOpts()
+	{{end}}
+
+	return np, nil
+}
+
+func NewFromDB(ctx context.Context, rows pgx.Rows) ([]*{{ $PublicStructName }}, error) {
+	logger := activerecord.Logger()
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", fmt.Sprintf("Cnt rows %d", rows.CommandTag().RowsAffected()))
+
+	ret := make([]*{{ $PublicStructName }}, 0, rows.CommandTag().RowsAffected())
+
+	for rows.Next() {
+		np, err := RowToStruct(ctx, rows)
+		if err != nil {
+			return nil, err
+		}
+
+		ret = append(ret, np)
+	}
+
+	return ret, nil
+}
+
+/* ToDo Equal
+func (obj *{{ $PublicStructName }}) Equal (anotherObjI any) bool {
+	anotherObj, ok := anotherObjI.(*{{ $PublicStructName }})
+	if !ok {
+		return false
+	}
+
+	var dataObj []byte
+	var dataAnotherObj []byte
+	var err error
+
+	{{- range $ind, $fstruct := .FieldList }} 
+	dataObj, err = pack{{ $fstruct.Name }}([]byte{}, obj.Get{{ $fstruct.Name }}())
+	if err != nil {
+		return false
+	}
+
+	dataAnotherObj, err = pack{{ $fstruct.Name }}([]byte{}, anotherObj.Get{{ $fstruct.Name }}())
+	if err != nil {
+		return false
+	}
+
+	if string(dataObj) != string(dataAnotherObj) {
+		return false
+	}
+	{{ end }}
+
+	return true
+}
+
+{{ end -}}
+*/

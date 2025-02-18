@@ -41,8 +41,75 @@ func TestGenerateSelect(t *testing.T) {
 				cursor: postgres.CursorPosition{},
 			},
 			want: &postgres.Query{
-				QueryString: `SELECT id, name, email FROM "users" WHERE id = $1`,
-				Params:      []any{1},
+				QueryString:     `SELECT id, name, email FROM "users" WHERE id = $1`,
+				ConditionExists: true,
+				Params:          []any{1},
+			},
+			wantErr: false,
+		},
+		{
+			name: "simple with index condition",
+			args: args{
+				tableName:  "users",
+				fieldNames: []string{"id", "name", "email"},
+				index: postgres.Index{
+					Unique:    true,
+					Fields:    postgres.OrderedFields{postgres.OrderField{Field: "id", Order: postgres.ASC}},
+					Condition: []postgres.Condition{{Field: "name", Values: []any{"John"}}},
+				},
+				keys:   [][]any{{1}},
+				offset: 0,
+				limit:  0,
+				cursor: postgres.CursorPosition{},
+			},
+			want: &postgres.Query{
+				QueryString:     `SELECT id, name, email FROM "users" WHERE name = $1 AND id = $2`,
+				ConditionExists: true,
+				Params:          []any{"John", 1},
+			},
+			wantErr: false,
+		},
+		{
+			name: "simple with multi field index condition",
+			args: args{
+				tableName:  "users",
+				fieldNames: []string{"id", "name", "email", "status"},
+				index: postgres.Index{
+					Unique:    true,
+					Fields:    postgres.OrderedFields{postgres.OrderField{Field: "id", Order: postgres.ASC}},
+					Condition: []postgres.Condition{{Field: "name", Values: []any{"John"}}, {Field: "status", Values: []any{"active"}}},
+				},
+				keys:   [][]any{{1}},
+				offset: 0,
+				limit:  0,
+				cursor: postgres.CursorPosition{},
+			},
+			want: &postgres.Query{
+				QueryString:     `SELECT id, name, email, status FROM "users" WHERE name = $1 AND status = $2 AND id = $3`,
+				ConditionExists: true,
+				Params:          []any{"John", "active", 1},
+			},
+			wantErr: false,
+		},
+		{
+			name: "simple with multi field bulk index condition",
+			args: args{
+				tableName:  "users",
+				fieldNames: []string{"id", "name", "email", "status"},
+				index: postgres.Index{
+					Unique:    true,
+					Fields:    postgres.OrderedFields{postgres.OrderField{Field: "id", Order: postgres.ASC}},
+					Condition: []postgres.Condition{{Field: "name", Values: []any{"John"}}, {Field: "status", Values: []any{"active", "ready"}}},
+				},
+				keys:   [][]any{{1}},
+				offset: 0,
+				limit:  0,
+				cursor: postgres.CursorPosition{},
+			},
+			want: &postgres.Query{
+				QueryString:     `SELECT id, name, email, status FROM "users" WHERE name = $1 AND status IN ($2, $3) AND id = $4`,
+				ConditionExists: true,
+				Params:          []any{"John", "active", "ready", 1},
 			},
 			wantErr: false,
 		},
@@ -61,11 +128,35 @@ func TestGenerateSelect(t *testing.T) {
 				cursor: postgres.CursorPosition{},
 			},
 			want: &postgres.Query{
-				QueryString: `SELECT id, name, email FROM "users" WHERE id IN ($1, $2, $3) ORDER BY id ASC LIMIT 10`,
-				Params:      []any{1, 2, 3},
+				QueryString:     `SELECT id, name, email FROM "users" WHERE id IN ($1, $2, $3) ORDER BY id ASC LIMIT 10`,
+				ConditionExists: true,
+				Params:          []any{1, 2, 3},
 			},
 			wantErr: false,
 		},
+		{
+			name: "bulk with index condition",
+			args: args{
+				tableName:  "users",
+				fieldNames: []string{"id", "name", "email"},
+				index: postgres.Index{
+					Unique:    true,
+					Fields:    postgres.OrderedFields{postgres.OrderField{Field: "id", Order: postgres.ASC}},
+					Condition: []postgres.Condition{{Field: "name", Values: []any{"John"}}},
+				},
+				keys:   [][]any{{1}, {2}, {3}},
+				offset: 0,
+				limit:  10,
+				cursor: postgres.CursorPosition{},
+			},
+			want: &postgres.Query{
+				QueryString:     `SELECT id, name, email FROM "users" WHERE name = $1 AND id IN ($2, $3, $4) ORDER BY id ASC LIMIT 10`,
+				ConditionExists: true,
+				Params:          []any{"John", 1, 2, 3},
+			},
+			wantErr: false,
+		},
+		// ToDo test for multi field index and bulk query
 		{
 			name: "bulk_multi_field",
 			args: args{
@@ -81,8 +172,9 @@ func TestGenerateSelect(t *testing.T) {
 				cursor: postgres.CursorPosition{},
 			},
 			want: &postgres.Query{
-				QueryString: `SELECT id, parent, name, email FROM "users" WHERE (id, parent) IN (($1, $2), ($3, $4), ($5, $6)) ORDER BY id ASC, parent DESC LIMIT 5 OFFSET 2`,
-				Params:      []any{1, 1, 2, 1, 3, 4},
+				QueryString:     `SELECT id, parent, name, email FROM "users" WHERE (id, parent) IN (($1, $2), ($3, $4), ($5, $6)) ORDER BY id ASC, parent DESC LIMIT 5 OFFSET 2`,
+				ConditionExists: true,
+				Params:          []any{1, 1, 2, 1, 3, 4},
 			},
 			wantErr: false,
 		},
@@ -125,7 +217,7 @@ func TestGenerateUpdate(t *testing.T) {
 			updates: []postgres.UpdateParams{
 				{
 					PK: []any{1},
-					Ops: []postgres.Ops{
+					Ops: []postgres.Operation{
 						{
 							Field: "name",
 							Op:    activerecord.OpSet,
@@ -134,7 +226,7 @@ func TestGenerateUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedQuery: `UPDATE "users" SET name = $1  WHERE id  = $2`,
+			expectedQuery: `UPDATE "users" SET name = $1 WHERE id = $2`,
 			expectedError: nil,
 		},
 		{
@@ -152,7 +244,7 @@ func TestGenerateUpdate(t *testing.T) {
 			updates: []postgres.UpdateParams{
 				{
 					PK: []any{1},
-					Ops: []postgres.Ops{
+					Ops: []postgres.Operation{
 						{
 							Field: "age",
 							Op:    activerecord.OpAdd,
@@ -161,7 +253,7 @@ func TestGenerateUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedQuery: `UPDATE "users" SET age =age + $1  WHERE id  = $2`,
+			expectedQuery: `UPDATE "users" SET age = age + $1 WHERE id = $2 RETURNING age`,
 			expectedError: nil,
 		},
 		{
@@ -179,7 +271,7 @@ func TestGenerateUpdate(t *testing.T) {
 			updates: []postgres.UpdateParams{
 				{
 					PK: []any{1},
-					Ops: []postgres.Ops{
+					Ops: []postgres.Operation{
 						{
 							Field: "flags",
 							Op:    activerecord.OpAnd,
@@ -188,7 +280,34 @@ func TestGenerateUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedQuery: `UPDATE "users" SET flags =flags & $1  WHERE id  = $2`,
+			expectedQuery: `UPDATE "users" SET flags = flags & $1 WHERE id = $2 RETURNING flags`,
+			expectedError: nil,
+		},
+		{
+			name:      "Update with DBSerializer",
+			tableName: "users",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{1},
+					Ops: []postgres.Operation{
+						{
+							Field: "Date",
+							Op:    activerecord.OpSet,
+							Value: 1,
+						},
+					},
+				},
+			},
+			expectedQuery: `UPDATE "users" SET Date = $1 WHERE id = $2`,
 			expectedError: nil,
 		},
 		{
@@ -206,7 +325,7 @@ func TestGenerateUpdate(t *testing.T) {
 			updates: []postgres.UpdateParams{
 				{
 					PK: []any{1},
-					Ops: []postgres.Ops{
+					Ops: []postgres.Operation{
 						{
 							Field: "name",
 							Op:    activerecord.OpSet,
@@ -216,7 +335,7 @@ func TestGenerateUpdate(t *testing.T) {
 				},
 				{
 					PK: []any{2},
-					Ops: []postgres.Ops{
+					Ops: []postgres.Operation{
 						{
 							Field: "name",
 							Op:    activerecord.OpSet,
@@ -247,7 +366,7 @@ func TestGenerateUpdate(t *testing.T) {
 			updates: []postgres.UpdateParams{
 				{
 					PK: []any{1},
-					Ops: []postgres.Ops{
+					Ops: []postgres.Operation{
 						{
 							Field: "name",
 							Op:    activerecord.OpSet,
@@ -312,7 +431,7 @@ func TestGenerateInsert(t *testing.T) {
 			fieldNames:     []string{"id", "name"},
 			values:         [][]any{{1, "John"}, {2, "Doe"}},
 			returning:      []string{"id"},
-			conflictAction: postgres.UpdateDuplicate,
+			conflictAction: postgres.Replace,
 			expectedQuery:  `INSERT INTO "users" (id, name) VALUES ($1, $2), ($3, $4) ON CONFLICT (id) DO UPDATE SET id=users.id, name=EXCLUDED.name RETURNING id`,
 			expectedParams: []any{1, "John", 2, "Doe"},
 			expectedErr:    nil,
@@ -381,7 +500,7 @@ func TestGenerateDeleteWithRealIndex(t *testing.T) {
 				Fields: postgres.OrderedFields{postgres.OrderField{Field: "id", Order: postgres.ASC}},
 			},
 			keys:        [][]any{{1}},
-			expectedSQL: `DELETE FROM "users" WHERE id  = $1`,
+			expectedSQL: `DELETE FROM "users" WHERE id = $1`,
 			expectError: false,
 		},
 		{
@@ -395,7 +514,7 @@ func TestGenerateDeleteWithRealIndex(t *testing.T) {
 				},
 			},
 			keys:        [][]any{{1, 2}},
-			expectedSQL: `DELETE FROM "users" WHERE (id, bla)  = ($1, $2)`,
+			expectedSQL: `DELETE FROM "users" WHERE (id, bla) = ($1, $2)`,
 			expectError: false,
 		},
 		{
@@ -406,7 +525,7 @@ func TestGenerateDeleteWithRealIndex(t *testing.T) {
 				Fields: postgres.OrderedFields{postgres.OrderField{Field: "id", Order: postgres.ASC}},
 			},
 			keys:        [][]any{{1}, {2}},
-			expectedSQL: `DELETE FROM "users" WHERE id  IN ($1, $2)`,
+			expectedSQL: `DELETE FROM "users" WHERE id IN ($1, $2)`,
 			expectError: false,
 		},
 		{
@@ -420,7 +539,7 @@ func TestGenerateDeleteWithRealIndex(t *testing.T) {
 				},
 			},
 			keys:        [][]any{{1, 2}, {3, 4}},
-			expectedSQL: `DELETE FROM "users" WHERE (id, bla)  IN (($1, $2), ($3, $4))`,
+			expectedSQL: `DELETE FROM "users" WHERE (id, bla) IN (($1, $2), ($3, $4))`,
 			expectError: false,
 		},
 		{

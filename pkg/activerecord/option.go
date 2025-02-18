@@ -1,5 +1,11 @@
 package activerecord
 
+import (
+	"context"
+
+	"github.com/Educentr/go-activerecord/pkg/logger"
+)
+
 type Option interface {
 	apply(*ActiveRecord)
 }
@@ -10,13 +16,13 @@ func (o optionFunc) apply(c *ActiveRecord) {
 	o(c)
 }
 
-func WithLogger(logger LoggerInterface) Option {
+func WithLogger(logger logger.LoggerInterface) Option {
 	return optionFunc(func(a *ActiveRecord) {
 		a.logger = logger
 	})
 }
 
-func WithConfig(config ConfigInterface) Option {
+func WithConfig(config func(ctx context.Context) ConfigInterface) Option {
 	return optionFunc(func(a *ActiveRecord) {
 		a.config = config
 	})

@@ -11,7 +11,6 @@ import (
 
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 	"github.com/Educentr/go-activerecord/internal/pkg/parser"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 func NewRecordPackage(t *testing.T) (*ds.RecordPackage, error) {
@@ -70,7 +69,7 @@ func TestParseMutator(t *testing.T) {
 				Indexes:         []ds.IndexDeclaration{},
 				IndexMap:        map[string]int{},
 				SelectorMap:     map[string]int{},
-				Backends:        []activerecord.Backend{},
+				Backends:        []ds.Backend{},
 				SerializerMap:   map[string]ds.SerializerDeclaration{},
 				MutatorMap: map[string]ds.MutatorDeclaration{
 					"FooMutatorField": {

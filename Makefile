@@ -83,6 +83,10 @@ full-lint: install-lint
 cover:
 	go test -timeout=$(TEST_TIMEOUT) -v -coverprofile=coverage.out ./...  && go tool cover -html=coverage.out
 
+.PHONY: generate
+generate:
+	go generate ./...
+
 # Запустить unit тесты
 .PHONY: test
 test:
@@ -92,6 +96,10 @@ test:
 .PHONY: install
 install:
 	go install -ldflags=$(LD_FLAGS) ./...
+
+.PHONY: install-tool
+install-tool:
+	go install github.com/vektra/mockery/v2@v2.46.0
 
 # Сборка сервиса
 .PHONY: build

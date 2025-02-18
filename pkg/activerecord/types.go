@@ -6,11 +6,8 @@ import (
 )
 
 type (
-	Format  string
-	Backend string
-	OpCode  uint8
+	OpCode uint8
 )
-
 type ModelStruct interface {
 	Insert(ctx context.Context) error
 	Replace(ctx context.Context) error

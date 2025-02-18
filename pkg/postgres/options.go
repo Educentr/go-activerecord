@@ -1,11 +1,14 @@
 package postgres
 
 import (
+	"context"
 	"fmt"
 	"hash/crc32"
 	"time"
 
 	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	pgxuuid "github.com/jackc/pgx-gofrs-uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -41,8 +44,15 @@ func NewConnectionOptions(server string, port uint16, mode activerecord.ServerMo
 
 	pgxConf.ConnConfig.Host = server
 	pgxConf.ConnConfig.Port = port
+	// ToDo add info to connectionHash
 	pgxConf.ConnConfig.ConnectTimeout = DefaultConnectionTimeout
 	pgxConf.MaxConns = DefaultPoolSize
+
+	// ToDo maybe needs only if UUID type uses in repository
+	pgxConf.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		pgxuuid.Register(conn.TypeMap())
+		return nil
+	}
 
 	postgresOpts := &ConnectionOptions{
 		poolCfg: *pgxConf,

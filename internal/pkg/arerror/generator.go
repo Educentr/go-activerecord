@@ -2,8 +2,6 @@ package arerror
 
 import (
 	"errors"
-
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 var ErrGeneratorBackendUnknown = errors.New("backend unknown")
@@ -26,7 +24,7 @@ func (e *ErrGeneratorPkg) Error() string {
 type ErrGeneratorFile struct {
 	Name     string
 	Filename string
-	Backend  activerecord.Backend
+	Backend  string
 	Err      error
 }
 

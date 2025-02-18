@@ -320,10 +320,10 @@ func main() {
 	ctx := context.Background()
 	log.Printf("Start")
 	activerecord.InitActiveRecord(
-		activerecord.WithConfig(activerecord.NewDefaultConfigFromMap(map[string]interface{}{
-			"arcfg/master":   "127.0.0.1:11111",
-			"arcfg/replica":  "127.0.0.1:11111",
-		})),
+		activerecord.WithConfig(func (ctx context.Context) activerecord.ConfigInterface {return activerecord.NewDefaultConfigFromMap(map[string]interface{}{
+			"testArGenConfKey/master":   "127.0.0.1:11111",
+			"testArGenConfKey/replica":  "127.0.0.1:11111",
+				})}),
 )
 	` + gr.testGoMain + `
 	//activerecord.ConnectionCacher().CloseConnection(ctx)
@@ -332,7 +332,7 @@ func main() {
 `
 					runFile := filepath.Join(tt.initArgs.root, "/main.go")
 					if err = os.WriteFile(runFile, []byte(main), 0600); err != nil {
-						t.Fatalf(fmt.Sprintf("can't write test script: %s", err))
+						t.Fatalf("can't write test script: %s", err)
 						return
 					}
 

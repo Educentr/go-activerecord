@@ -9,7 +9,6 @@ import (
 
 	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 type StructNameType string
@@ -38,6 +37,7 @@ const (
 	InitByDBTag        TagNameType = "init_by_db"
 	FieldsTag          TagNameType = "fields"
 	OrderDescTag       TagNameType = "orderdesc"
+	ConditionalTag     TagNameType = "condition"
 	ProcInputParamTag  TagNameType = "input"
 	ProcOutputParamTag TagNameType = "output"
 )
@@ -236,7 +236,7 @@ func parseDoc(dst *ds.RecordPackage, nodeName string, doc *ast.CommentGroup) err
 				case "backend":
 					be := strings.Split(kv[1], ",")
 					for _, b := range be {
-						dst.Backends = append(dst.Backends, activerecord.Backend(b))
+						dst.Backends = append(dst.Backends, ds.Backend(b))
 					}
 				default:
 					retErr := arerror.ErrParseDocDecl{Name: kv[0], Err: arerror.ErrUnknown}

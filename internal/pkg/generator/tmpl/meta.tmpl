@@ -7,7 +7,7 @@ import (
 
 type SpaceMeta struct {
     PackageName string
-    Unpacker func(ctx context.Context, tuple octopus.TupleData) (any, error)
+    Unpacker func(ctx context.Context, tuple any) (any, error)
     FixtureUnpacker func(ctx context.Context, source []byte) ([]any, error)
     Fields []FieldMeta
     PK IndexMeta
@@ -37,14 +37,32 @@ var NamespacePackages = NSPackage {
     {{ $serializers := $ns.SerializerMap -}}
     "{{ $ns.Namespace.ObjectName }}": {
         PackageName: "{{ $ns.Namespace.PackageName }}",
-        Unpacker: func(ctx context.Context, tuple octopus.TupleData) (any, error) { 
+        Unpacker: func(ctx context.Context, tupleRaw any) (any, error) { 
 			{{ if eq "octopus" ( index $ns.Backends 0 ) }}
+			tuple, ok := tupleRaw.(octopus.TupleData)
+			if !ok {
+				return nil, fmt.Errorf("can't cast tuple to octopus.TupleData")
+			}
+
             obj, err := {{ $ns.Namespace.PackageName }}.TupleToStruct(ctx, tuple)
             if err != nil {
                 return nil, fmt.Errorf("can't decode tuple: %s", err)
             }
 
             return {{ $ns.Namespace.PackageName }}.MarshalFixtures([]*{{ $ns.Namespace.PackageName }}.{{ $ns.Namespace.PublicName }}{obj})
+			{{ else if eq "postgres" ( index $ns.Backends 0 ) }}
+			tuple, ok := tupleRaw.(pgx.Rows)
+			if !ok {
+				return nil, fmt.Errorf("can't cast tuple to pgx.Rows")
+			}
+
+            obj, err := {{ $ns.Namespace.PackageName }}.RowsToStruct(ctx, tuple)
+            if err != nil {
+                return nil, fmt.Errorf("can't decode tuple: %s", err)
+            }
+
+            return {{ $ns.Namespace.PackageName }}.MarshalFixtures([]*{{ $ns.Namespace.PackageName }}.{{ $ns.Namespace.PublicName }}{obj})
+
 			{{ else }}
 			return nil, fmt.Errorf("not implemented")
 			{{ end }}
@@ -228,15 +246,16 @@ func (n NSPackage) formatDeleteMockFixture(ns uint32, spacemeta SpaceMeta, prima
 	return fmt.Sprintf("Space: %d (%s), primaryKey: %s (%+v)", ns, spacemeta.PackageName, spacemeta.PK.Name, unpackedKeys)
 }
 
-func (n NSPackage) GetInsertDebugInfo(ns uint32, needRetVal bool, insertMode octopus.InsertMode, tuple octopus.TupleData, fixture ...octopus.InsertMockFixture) string {
+func (n NSPackage) GetInsertDebugInfo(ns uint32, needRetVal bool, insertMode octopus.InsertMode, tuple any, fixture ...octopus.InsertMockFixture) string {
 	strMode := octopus.GetInsertModeName(insertMode)
+	fmtStr := ""
 
 	spacemeta, ex := n.meta(ns)
 	if !ex {
 		return fmt.Sprintf("unknown space %d, insertMode: %s, tuple: %+v", ns, strMode, tuple)
 	}
 
-	fmtStr := "\n" + n.formatInsertMockFixture(ns, spacemeta, needRetVal, insertMode, tuple) + "\n"
+	fmtStr = "\n" + n.formatInsertMockFixture(ns, spacemeta, needRetVal, insertMode, tuple) + "\n"
 	fmtStr = fmt.Sprintf("%s\n--------------Installed 'Insert' fixtures %s --------------\n", fmtStr, spacemeta.PackageName)
 	for _, f := range fixture {
 		fmtStr = fmtStr + "\n" + n.formatInsertMockFixture(ns, spacemeta, f.NeedRetVal, f.InsertMode, f.Tuple) + "\n"
@@ -247,7 +266,7 @@ func (n NSPackage) GetInsertDebugInfo(ns uint32, needRetVal bool, insertMode oct
 	return fmtStr
 }
 
-func (n NSPackage) formatInsertMockFixture(ns uint32, spacemeta SpaceMeta, _ bool, insertMode octopus.InsertMode, tuple octopus.TupleData) string {
+func (n NSPackage) formatInsertMockFixture(ns uint32, spacemeta SpaceMeta, _ bool, insertMode octopus.InsertMode, tuple any) string {
 	strMode := octopus.GetInsertModeName(insertMode)
 
 	strObj, err := spacemeta.Unpacker(context.TODO(), tuple)

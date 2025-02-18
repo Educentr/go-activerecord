@@ -5,11 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 	"github.com/Educentr/go-activerecord/internal/pkg/parser"
 	"github.com/Educentr/go-activerecord/internal/pkg/testutil"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
-	"github.com/Educentr/go-activerecord/pkg/octopus"
 	"gotest.tools/assert"
 	"gotest.tools/assert/cmp"
 )
@@ -96,8 +95,9 @@ type TriggersFoo struct {
 							"Field1": {IndField: 0, Order: 0},
 							"Field2": {IndField: 1, Order: 0},
 						},
-						Primary: true,
-						Unique:  true,
+						Primary:    true,
+						Unique:     true,
+						Conditions: map[int]ds.IndexCondition{},
 					},
 					{
 						Name:     "Field1Part",
@@ -114,7 +114,7 @@ type TriggersFoo struct {
 				},
 				IndexMap:      map[string]int{"Field1Field2": 0, "Field1Part": 1},
 				SelectorMap:   map[string]int{"SelectByField1": 1, "SelectByField1Field2": 0},
-				Backends:      []activerecord.Backend{octopus.Backend},
+				Backends:      []ds.Backend{octopus.BackendGenerator{}.Name()},
 				SerializerMap: map[string]ds.SerializerDeclaration{},
 				ImportPackage: ds.ImportPackage{
 					Imports: []ds.ImportDeclaration{
@@ -225,7 +225,7 @@ type ProcFieldsFoo struct {
 				Indexes:               []ds.IndexDeclaration{},
 				IndexMap:              map[string]int{},
 				SelectorMap:           map[string]int{},
-				Backends:              []activerecord.Backend{octopus.Backend},
+				Backends:              []ds.Backend{octopus.BackendGenerator{}.Name()},
 				SerializerMap:         map[string]ds.SerializerDeclaration{},
 				ImportPackage:         ds.NewImportPackage(),
 				TriggerMap:            map[string]ds.TriggerDeclaration{},

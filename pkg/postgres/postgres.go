@@ -9,9 +9,16 @@ import (
 
 //type WhereCondition
 
+// ToDo merge with octopus InsertModeInserOrReplace, e.t.c.
 const (
-	Backend activerecord.Backend = "postgres"
+	Replace OnConflictAction = iota
+	IgnoreDuplicate
+	NoDuplicateAction
 )
+
+type DefaultKeyword bool
+
+const DefaultValueDB DefaultKeyword = true
 
 type QueryBuilderState uint8
 
@@ -23,8 +30,9 @@ const (
 )
 
 type Query struct {
-	QueryString string
-	Params      []any
+	QueryString     string
+	ConditionExists bool // Признак того, что уже есть условие в запросе
+	Params          []any
 	// state       QueryBuilderState
 }
 
@@ -35,9 +43,19 @@ func NewSelectQuery(tableName string, fieldNames []string, i Index) *Query {
 			strings.Join(fieldNames, ", "),
 			QuoteIdentifier(tableName),
 		),
+		Params: []any{},
 	}
 
-	q.AddWhereBlock(i.Conditions(), i.ConditionFields())
+	q.AddWhereBlock()
+
+	if len(i.Condition) > 0 {
+		for _, c := range i.Condition {
+			q.AddWhereQuery(c.Field)
+			q.GenerateWhereKeys(false, c.GetValues())
+		}
+	}
+
+	q.ConditionFields(i.Fields.GetFieldNames())
 
 	return q
 }
@@ -47,6 +65,7 @@ func NewUpdateQuery(tableName string) *Query {
 		QueryString: fmt.Sprintf(`UPDATE %s SET `,
 			QuoteIdentifier(tableName),
 		),
+		Params: []any{},
 	}
 }
 
@@ -55,9 +74,11 @@ func NewDeleteQuery(tableName string, pk Index) *Query {
 		QueryString: fmt.Sprintf(`DELETE FROM %s`,
 			QuoteIdentifier(tableName),
 		),
+		Params: []any{},
 	}
 
-	q.AddWhereBlock(pk.ConditionFields())
+	q.AddWhereBlock()
+	q.ConditionFields(pk.Fields.GetFieldNames())
 
 	return q
 }
@@ -83,8 +104,43 @@ func (q *Query) AddReturning(fieldNames []string) {
 	)
 }
 
+func (q *Query) GenerateWhereKeys(multiField bool, keys [][]any) {
+	if len(keys) > 1 {
+		placeholders := make([]string, 0, len(keys))
+		if multiField {
+			for _, key := range keys {
+				innerPlaceholder := make([]string, 0, len(key))
+
+				for _, kField := range key {
+					innerPlaceholder = append(innerPlaceholder, fmt.Sprintf("$%d", q.AddParams(kField)))
+				}
+
+				placeholders = append(placeholders, "("+strings.Join(innerPlaceholder, ", ")+")")
+			}
+		} else {
+			for _, key := range keys {
+				placeholders = append(placeholders, fmt.Sprintf("$%d", q.AddParams(key[0])))
+			}
+		}
+
+		q.QueryString += " IN (" + strings.Join(placeholders, ", ") + ")"
+	} else {
+		if multiField {
+			innerPlaceholder := make([]string, 0, len(keys[0]))
+
+			for _, kField := range keys[0] {
+				innerPlaceholder = append(innerPlaceholder, fmt.Sprintf("$%d", q.AddParams(kField)))
+			}
+
+			q.QueryString += " = (" + strings.Join(innerPlaceholder, ", ") + ")"
+		} else {
+			q.QueryString += fmt.Sprintf(" = $%d", q.AddParams(keys[0][0]))
+		}
+	}
+}
+
 func (q *Query) AddNoConflictDoNothing(fieldNames []string) {
-	q.QueryString += "ON CONFLICT DO NOTHING"
+	q.QueryString += " ON CONFLICT DO NOTHING"
 }
 
 func (q *Query) AddNoConflictDoUpdate(tableName string, pk Index, fieldNames []string) {
@@ -104,7 +160,7 @@ func (q *Query) AddNoConflictDoUpdate(tableName string, pk Index, fieldNames []s
 		updateFields = append(updateFields, fmt.Sprintf("%s=EXCLUDED.%s", f, f))
 	}
 
-	q.QueryString += fmt.Sprintf("ON CONFLICT (%s) DO UPDATE SET %s",
+	q.QueryString += fmt.Sprintf(" ON CONFLICT (%s) DO UPDATE SET %s",
 		strings.Join(pk.Fields.GetFieldNames(), ", "),
 		strings.Join(updateFields, ", "),
 	)
@@ -116,13 +172,35 @@ func (q *Query) AddParams(key ...any) int {
 	return len(q.Params)
 }
 
+func (q *Query) AddWhereQuery(cond string) {
+	if q.ConditionExists {
+		q.QueryString += " AND "
+	}
+
+	q.ConditionExists = true
+
+	q.AddQuery(cond)
+}
+
 func (q *Query) AddQuery(cond string) {
-	q.QueryString += cond + " "
+	if cond == "" {
+		panic("empty condition")
+	}
+
+	q.QueryString += cond
 }
 
 func (q *Query) AddWhereCondition(cond string, key []any) {
+	if (len(key) == 0) != (cond == "") {
+		panic("empty condition or key")
+	}
+
+	if cond == "" {
+		return
+	}
+
 	q.AddParams(key...)
-	q.AddQuery(cond)
+	q.AddWhereQuery(cond)
 }
 
 func (q *Query) AddSetStatement(field string, key any) {
@@ -132,7 +210,7 @@ func (q *Query) AddSetStatement(field string, key any) {
 func (q *Query) AddWhereBlock(cond ...string) {
 	q.QueryString += " WHERE "
 	for _, c := range cond {
-		q.AddQuery(c)
+		q.AddWhereQuery(c)
 	}
 }
 
@@ -172,7 +250,7 @@ func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][
 	// $pg_request->{query} .= ' && $' . $i++;
 	// push @{$pg_request->{params}}, '{' . MR::Pg->encode_array_field($request->{keys}) . '}';
 
-	index.GenerateWhereKeys(q, keys)
+	q.GenerateWhereKeys(index.MultiField(), keys)
 
 	q.AddWhereCondition(index.CursorConditions(cursor, len(q.Params)-1))
 
@@ -204,10 +282,6 @@ func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][
 	// 		$pg_request->{query} .=  ' WHERE '. (join ' AND ', @condition_where);
 	// 	}
 
-	// 	if($opts{order}) {
-	// 		my $order = _prepare_order($opts{order}, $fields_list);
-	// 		$pg_request->{query} .= ' ORDER BY '. join(', ', map { $field_sql_deserialized_name{$_->{field}}.' '.$_->{order} } @$order);
-	// 	}
 	// }
 	// confess 'Wrong order for response count' if $opts{order} && !$opts{condition} && $request->{limit} && $request->{limit} == $response_count;
 
@@ -236,26 +310,30 @@ func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams
 		}
 
 		for _, op := range u.Ops {
-			// ToDo serializers
-			operation := op.Field + " ="
+			// ToDo sql serializers
+			operation := op.Field + " = "
 			returning := []string{}
+
+			sql := "$%d"
+			ret := op.Field
 
 			switch op.Op {
 			case activerecord.OpSet:
-				operation += " $" + fmt.Sprintf("%d", q.AddParams(op.Value))
+				operation += fmt.Sprintf(sql, q.AddParams(op.Value))
 			case activerecord.OpAdd:
-				operation += op.Field + " + $" + fmt.Sprintf("%d", q.AddParams(op.Value))
-				returning = append(returning, op.Field)
+				operation += op.Field + " + " + fmt.Sprintf(sql, q.AddParams(op.Value))
+				returning = append(returning, ret)
 			case activerecord.OpAnd:
-				operation += op.Field + " & $" + fmt.Sprintf("%d", q.AddParams(op.Value))
-				returning = append(returning, op.Field)
+				operation += op.Field + " & " + fmt.Sprintf(sql, q.AddParams(op.Value))
+				returning = append(returning, ret)
 			default:
 				return nil, fmt.Errorf("unknown operation %d or not implemented", op.Op)
 			}
 
 			q.AddQuery(operation)
 
-			q.AddWhereBlock(primaryIndex.ConditionFields())
+			q.AddWhereBlock()
+			q.ConditionFields(primaryIndex.Fields.GetFieldNames())
 
 			if primaryIndex.MultiField() {
 				innerPlaceholder := make([]string, 0, len(u.PK))
@@ -284,7 +362,8 @@ func GenerateDelete(tableName string, primaryKey Index, keys [][]any) (*Query, e
 	}
 
 	q := NewDeleteQuery(tableName, primaryKey)
-	primaryKey.GenerateWhereKeys(q, keys)
+
+	q.GenerateWhereKeys(primaryKey.MultiField(), keys)
 
 	return q, nil
 }
@@ -321,7 +400,7 @@ func GenerateInsert(tableName string, pk Index, fieldNames []string, values [][]
 	switch conflictAction {
 	case IgnoreDuplicate:
 		q.AddNoConflictDoNothing(fieldNames)
-	case UpdateDuplicate:
+	case Replace:
 		q.AddNoConflictDoUpdate(tableName, pk, fieldNames)
 	case NoDuplicateAction:
 	default:
@@ -331,4 +410,13 @@ func GenerateInsert(tableName string, pk Index, fieldNames []string, values [][]
 	q.AddReturning(returning)
 
 	return q, nil
+}
+
+func (q *Query) ConditionFields(fields []string) {
+	if len(fields) > 1 {
+		q.AddWhereQuery("(" + strings.Join(fields, ", ") + ")")
+		return
+	}
+
+	q.AddWhereQuery(fields[0])
 }

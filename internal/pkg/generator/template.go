@@ -4,12 +4,12 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Educentr/go-activerecord/pkg/iproto/util/text"
+	"github.com/Educentr/go-activerecord/internal/pkg/textutil"
 )
 
 var BaseTemplateFuncs = template.FuncMap{
 	"split":      strings.Split,
 	"trimPrefix": strings.TrimPrefix,
 	"hasPrefix":  strings.HasPrefix,
-	"snakeCase":  text.ToSnakeCase,
+	"snakeCase":  textutil.ToSnakeCase,
 }

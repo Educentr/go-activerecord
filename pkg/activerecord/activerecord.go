@@ -7,6 +7,9 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/Educentr/go-activerecord/pkg/logger"
+	"github.com/Educentr/go-activerecord/pkg/logger/arsimplelog"
 )
 
 var ErrNoData = errors.New("no data")
@@ -57,31 +60,16 @@ func (l Limiter) String() string {
 
 //go:generate mockery --name ConfigInterface --filename mock_config.go --structname MockConfig --with-expecter=true  --inpackage
 type ConfigInterface interface {
-	GetBool(ctx context.Context, confPath string, dfl ...bool) bool
-	GetBoolIfExists(ctx context.Context, confPath string) (value bool, ok bool)
-	GetInt(ctx context.Context, confPath string, dfl ...int) int
-	GetIntIfExists(ctx context.Context, confPath string) (int, bool)
-	GetDuration(ctx context.Context, confPath string, dfl ...time.Duration) time.Duration
-	GetDurationIfExists(ctx context.Context, confPath string) (time.Duration, bool)
-	GetString(ctx context.Context, confPath string, dfl ...string) string
-	GetStringIfExists(ctx context.Context, confPath string) (string, bool)
-	GetStrings(ctx context.Context, confPath string, dfl []string) []string
-	GetStruct(ctx context.Context, confPath string, valuePtr interface{}) (bool, error)
-	GetLastUpdateTime() time.Time
-}
-
-type LoggerInterface interface {
-	SetLoggerValueToContext(ctx context.Context, addVal ValueLogPrefix) context.Context
-
-	SetLogLevel(level uint32)
-	Fatal(ctx context.Context, args ...interface{})
-	Error(ctx context.Context, args ...interface{})
-	Warn(ctx context.Context, args ...interface{})
-	Info(ctx context.Context, args ...interface{})
-	Debug(ctx context.Context, args ...interface{})
-	Trace(ctx context.Context, args ...interface{})
-
-	CollectQueries(ctx context.Context, f func() (MockerLogger, error))
+	GetBool(confPath string, dfl ...bool) (bool, error)
+	GetBoolIfExists(confPath string) (value bool, ok bool, err error)
+	GetInt(confPath string, dfl ...int64) (int64, error)
+	GetIntIfExists(confPath string) (int64, bool, error)
+	GetDuration(confPath string, dfl ...time.Duration) (time.Duration, error)
+	GetDurationIfExists(confPath string) (time.Duration, bool, error)
+	GetString(confPath string, dfl ...string) (string, error)
+	GetStringIfExists(confPath string) (string, bool, error)
+	GetStrings(confPath string, dfl []string) ([]string, error)
+	GetStruct(confPath string, valuePtr interface{}) (bool, error)
 }
 
 type ConnectionCacherInterface interface {
@@ -125,8 +113,8 @@ type MetricInterface interface {
 
 type ActiveRecord struct {
 	instanceCreator  string
-	config           ConfigInterface
-	logger           LoggerInterface
+	config           func(ctx context.Context) ConfigInterface
+	logger           logger.LoggerInterface
 	metric           MetricInterface
 	connectionCacher ConnectionCacherInterface
 	configCacher     ConfigCacherInterface
@@ -159,7 +147,7 @@ func InitActiveRecord(opts ...Option) {
 
 	instance = &ActiveRecord{
 		instanceCreator:  caller,
-		logger:           NewLogger(),
+		logger:           arsimplelog.NewLogger(),
 		config:           NewDefaultConfig(),
 		metric:           NewDefaultNoopMetric(),
 		connectionCacher: newConnectionPool(),
@@ -179,7 +167,7 @@ func GetInstance() *ActiveRecord {
 	return instance
 }
 
-func Logger() LoggerInterface {
+func Logger() logger.LoggerInterface {
 	return GetInstance().logger
 }
 
@@ -187,8 +175,8 @@ func Metric() MetricInterface {
 	return GetInstance().metric
 }
 
-func Config() ConfigInterface {
-	return GetInstance().config
+func Config(ctx context.Context) ConfigInterface {
+	return GetInstance().config(ctx)
 }
 
 func ConnectionCacher() ConnectionCacherInterface {

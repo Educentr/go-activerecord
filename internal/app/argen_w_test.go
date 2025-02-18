@@ -9,10 +9,9 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 	"github.com/Educentr/go-activerecord/internal/pkg/testutil"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
-	"github.com/Educentr/go-activerecord/pkg/octopus"
 	"gotest.tools/assert"
 	"gotest.tools/assert/cmp"
 )
@@ -112,7 +111,7 @@ func TestArGen_addRecordPackage(t *testing.T) {
 		return
 	}
 
-	got.Backends = []activerecord.Backend{"testbackend"}
+	got.Backends = []ds.Backend{"testbackend"}
 	emptyRP.Backends = append(emptyRP.Backends, "testbackend")
 
 	if !reflect.DeepEqual(argen.packagesParsed["yarp"], emptyRP) {
@@ -356,12 +355,12 @@ func TestArGen_preparePackage(t *testing.T) {
 	}
 
 	rpFoo := ds.NewRecordPackage()
-	rpFoo.Backends = []activerecord.Backend{octopus.Backend}
+	rpFoo.Backends = []ds.Backend{octopus.BackendGenerator{}.Name()}
 	rpFoo.Namespace = ds.NamespaceDeclaration{ObjectName: "0", PackageName: "foo", PublicName: "Foo"}
 
 	err := rpFoo.AddField(ds.FieldDeclaration{
 		Name:       "ID",
-		Format:     octopus.Int,
+		Format:     "int",
 		PrimaryKey: true,
 		Mutators:   []string{},
 		Size:       0,
@@ -375,7 +374,7 @@ func TestArGen_preparePackage(t *testing.T) {
 
 	err = rpFoo.AddField(ds.FieldDeclaration{
 		Name:       "BarID",
-		Format:     octopus.Int,
+		Format:     "int",
 		PrimaryKey: false,
 		Mutators:   []string{},
 		Size:       0,
@@ -400,12 +399,12 @@ func TestArGen_preparePackage(t *testing.T) {
 	}
 
 	rpBar := ds.NewRecordPackage()
-	rpBar.Backends = []activerecord.Backend{octopus.Backend}
+	rpBar.Backends = []ds.Backend{octopus.BackendGenerator{}.Name()}
 	rpBar.Namespace = ds.NamespaceDeclaration{ObjectName: "1", PackageName: "bar", PublicName: "Bar"}
 
 	err = rpBar.AddField(ds.FieldDeclaration{
 		Name:       "ID",
-		Format:     octopus.Int,
+		Format:     "int",
 		PrimaryKey: false,
 		Mutators:   []string{},
 		Size:       0,
@@ -691,8 +690,9 @@ type TriggersFoo struct {
 								"Field1": {IndField: 0, Order: 0},
 								"Field2": {IndField: 1, Order: 0},
 							},
-							Primary: true,
-							Unique:  true,
+							Primary:    true,
+							Unique:     true,
+							Conditions: map[int]ds.IndexCondition{},
 						},
 						{Name: "Field1Part",
 							Num:      0,
@@ -708,7 +708,7 @@ type TriggersFoo struct {
 					},
 					IndexMap:      map[string]int{"Field1Field2": 0, "Field1Part": 1},
 					SelectorMap:   map[string]int{"SelectByField1": 1, "SelectByField1Field2": 0},
-					Backends:      []activerecord.Backend{octopus.Backend},
+					Backends:      []ds.Backend{octopus.BackendGenerator{}.Name()},
 					SerializerMap: map[string]ds.SerializerDeclaration{},
 					ImportPackage: ds.ImportPackage{Imports: []ds.ImportDeclaration{
 						{

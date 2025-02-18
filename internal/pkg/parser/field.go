@@ -8,7 +8,6 @@ import (
 
 	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 // Функция парсинга тегов полей модели
@@ -46,7 +45,12 @@ func ParseFieldsTag(field *ast.Field, newfield *ds.FieldDeclaration, newindex *d
 			case InitByDBTag:
 				newfield.InitByDB = true
 			default:
-				return &arerror.ErrParseTypeFieldTagDecl{Name: newfield.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrParseTagUnknown}
+				val := "__EMPTY__"
+				if len(kv) == 2 {
+					val = kv[1]
+				}
+
+				return &arerror.ErrParseTypeFieldTagDecl{Name: newfield.Name, TagName: kv[0], TagValue: val, Err: arerror.ErrParseTagUnknown}
 			}
 		}
 	}
@@ -73,9 +77,9 @@ func ParseFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 
 		switch t := field.Type.(type) {
 		case *ast.Ident:
-			newfield.Format = activerecord.Format(t.String())
+			newfield.Format = ds.Format(t.String())
 		case *ast.ArrayType:
-			//Todo точно ли массив надо, а не срез?
+			// Todo точно ли массив надо, а не срез?
 			if t.Elt.(*ast.Ident).Name != "byte" {
 				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseFieldArrayOfNotByte}
 			}
@@ -84,9 +88,12 @@ func ParseFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseFieldArrayNotSlice}
 			}
 
+			// ToDo Not implemented
 			return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseFieldBinary}
+		case *ast.SelectorExpr:
+			newfield.Format = ds.Format(t.X.(*ast.Ident).Name + "." + t.Sel.Name)
 		default:
-			return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: fmt.Sprintf("%T", t), Err: arerror.ErrUnknown}
+			return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: fmt.Sprintf("%T: %+v", t, t), Err: arerror.ErrUnknown}
 		}
 
 		if err := ParseFieldsTag(field, &newfield, &newindex); err != nil {
@@ -104,6 +111,29 @@ func ParseFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 			errIndex := dst.AddIndex(newindex)
 			if errIndex != nil {
 				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: string(newfield.Format), Err: errIndex}
+			}
+		}
+
+		// ToDo перенести в атрибут самого филд тайпа FormatType, сделать там функу, дл каждого типа, которая определяет нужен дополнительный import или нет
+		// тогда сможем избавиться от хардкода типов в этом месте
+		if newfield.Format == "float32" || newfield.Format == "float64" {
+			_, err := dst.AddImport("math")
+			if err != nil {
+				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: string(newfield.Format), Err: err}
+			}
+		}
+
+		if len(newfield.Mutators) > 0 && newfield.Format != "uint32" && newfield.Format != "uint64" && newfield.Format != "uint" {
+			_, err := dst.AddImport("math")
+			if err != nil {
+				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: string(newfield.Format), Err: err}
+			}
+		}
+
+		if newfield.PrimaryKey && newfield.Format != "string" {
+			_, err := dst.AddImport("strconv")
+			if err != nil {
+				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: string(newfield.Format), Err: err}
 			}
 		}
 	}
@@ -175,7 +205,7 @@ func ParseProcFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 
 		switch t := field.Type.(type) {
 		case *ast.Ident:
-			newField.Format = activerecord.Format(t.String())
+			newField.Format = ds.Format(t.String())
 		case *ast.ArrayType:
 			if t.Elt.(*ast.Ident).Name != "byte" && t.Elt.(*ast.Ident).Name != "string" {
 				return &arerror.ErrParseTypeFieldDecl{Name: newField.Name, FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseProcFieldArraySlice}
@@ -183,7 +213,7 @@ func ParseProcFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 
 			// если входной параметр slice
 			if newField.Type == ds.IN && t.Len == nil {
-				newField.Format = activerecord.Format(fmt.Sprintf("[]%s", t.Elt.(*ast.Ident).Name))
+				newField.Format = ds.Format(fmt.Sprintf("[]%s", t.Elt.(*ast.Ident).Name))
 				break
 			}
 

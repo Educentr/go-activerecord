@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/internal/pkg/backend"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
 )
 
@@ -29,6 +30,7 @@ func checkBackend(cl *ds.RecordPackage) error {
 		return &arerror.ErrCheckPackageDecl{Pkg: cl.Namespace.PackageName, Err: arerror.ErrCheckBackendEmpty}
 	}
 
+	// ToDo Сделать возможность генерации одновременно больше чем для одного бекенда для упрощения миграции данных
 	if len(cl.Backends) > 1 {
 		return &arerror.ErrCheckPackageDecl{Pkg: cl.Namespace.PackageName, Err: arerror.ErrCheckPkgBackendToMatch}
 	}
@@ -42,6 +44,8 @@ func checkLinkedObject(cl *ds.RecordPackage, linkedObjects map[string]string) er
 		if _, ok := linkedObjects[fobj.ObjectName]; !ok {
 			return &arerror.ErrCheckPackageLinkedDecl{Pkg: cl.Namespace.PackageName, Object: fobj.ObjectName, Err: arerror.ErrCheckObjectNotFound}
 		}
+
+		// ToDo сделать проверку, что есть индекс по которому будет селектиться связанный объект. Сейчас есть в поле `key` указать несуществующий индекс то сгенерируется некомпилируемый код
 	}
 
 	return nil
@@ -160,26 +164,32 @@ func Check(files map[string]*ds.RecordPackage, linkedObjects map[string]string) 
 			return err
 		}
 
-		backendChecker, err := getBackendSpecificChecker(cl.Backends[0])
+		// ToDo почему берётся только нулевой бекенд? Надо учесть, когда будет делаться больше чем один бекенд
+		backendChecker, err := backend.GetBackendByName(cl.Backends[0])
 		if err != nil {
-			if errors.Is(err, ErrBackendNotImplemented) {
-				return &arerror.ErrCheckPackageDecl{Pkg: cl.Namespace.PackageName, Backend: cl.Backends[0], Err: arerror.ErrGeneratorBackendNotImplemented}
+			if errors.Is(err, backend.ErrBackendNotImplemented) {
+				// ToDo почему берётся нулевой бекенд? Надо учесть, когда будет делаться больше чем один бекенд
+				return &arerror.ErrCheckPackageDecl{Pkg: cl.Namespace.PackageName, Backend: string(cl.Backends[0]), Err: arerror.ErrGeneratorBackendNotImplemented}
 			}
 		}
 
-		if err := backendChecker.check(cl); err != nil {
+		if err := backendChecker.Check(cl); err != nil {
 			return err
 		}
 
-		if err := backendChecker.checkFields(cl); err != nil {
+		if err := backendChecker.CheckFields(cl); err != nil {
 			return err
 		}
 
-		if err := backendChecker.checkNamespace(cl); err != nil {
+		if err := backendChecker.CheckNamespace(cl); err != nil {
 			return err
 		}
 
 		if err := checkFields(cl); err != nil {
+			return err
+		}
+
+		if err := backendChecker.CheckIndexes(cl); err != nil {
 			return err
 		}
 	}

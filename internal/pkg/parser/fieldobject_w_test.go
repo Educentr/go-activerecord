@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/pkg/octopus"
 )
 
 func TestParseFieldsObject(t *testing.T) {
@@ -14,7 +13,7 @@ func TestParseFieldsObject(t *testing.T) {
 
 	err := rp.AddField(ds.FieldDeclaration{
 		Name:       "BarID",
-		Format:     octopus.Int,
+		Format:     "int",
 		PrimaryKey: false,
 		Mutators:   []string{},
 		Size:       0,
@@ -30,7 +29,7 @@ func TestParseFieldsObject(t *testing.T) {
 	wantRp.FieldsMap["BarID"] = len(wantRp.Fields)
 	wantRp.Fields = append(wantRp.Fields, ds.FieldDeclaration{
 		Name:       "BarID",
-		Format:     octopus.Int,
+		Format:     "int",
 		PrimaryKey: false,
 		Mutators:   []string{},
 		Size:       0,

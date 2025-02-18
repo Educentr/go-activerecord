@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 func TestParseImport(t *testing.T) {
@@ -37,7 +36,7 @@ func TestParseImport(t *testing.T) {
 					PublicName:  "",
 					PackageName: "",
 				},
-				Backends:        []activerecord.Backend{},
+				Backends:        []ds.Backend{},
 				ProcFieldsMap:   map[string]int{},
 				ProcOutFields:   map[int]ds.ProcFieldDeclaration{},
 				Fields:          []ds.FieldDeclaration{},

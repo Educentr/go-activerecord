@@ -271,30 +271,42 @@ func NewClusterInfo(opts ...clusterOption) *Cluster {
 // На вход передаётся путь в конфиге, значения по умолчанию, и ссылка на функцию, которая
 // создаёт структуру опций и считает контрольную сумму, для того, что бы следить за их изменением в онлайне.
 func GetClusterInfoFromCfg(ctx context.Context, path string, globs MapGlobParam, optionCreator func(ShardInstanceConfig) (OptionInterface, error)) (*Cluster, error) {
-	cfg := Config()
+	cfg := Config(ctx)
 
-	shardCnt, exMaxShardOK := cfg.GetIntIfExists(ctx, path+"/max-shard")
-	if !exMaxShardOK {
+	shardCnt, exMaxShardEx, err := cfg.GetIntIfExists(path + "/max-shard")
+	if err != nil {
+		return nil, fmt.Errorf("can't get max-shard: %w", err)
+	}
+
+	if !exMaxShardEx {
 		shardCnt = 1
 	}
 
-	cluster := NewCluster(shardCnt)
+	cluster := NewCluster(int(shardCnt))
 
-	globalTimeout, exGlobalTimeout := cfg.GetDurationIfExists(ctx, path+"/Timeout")
+	globalTimeout, exGlobalTimeout, err := cfg.GetDurationIfExists(path + "/Timeout")
+	if err != nil {
+		return nil, fmt.Errorf("can't get global timeout: %w", err)
+	}
+
 	if exGlobalTimeout {
 		globs.Timeout = globalTimeout
 	}
 
-	globalPoolSize, exGlobalPoolSize := cfg.GetIntIfExists(ctx, path+"/PoolSize")
+	globalPoolSize, exGlobalPoolSize, err := cfg.GetIntIfExists(path + "/PoolSize")
+	if err != nil {
+		return nil, fmt.Errorf("can't get global pool size: %w", err)
+	}
+
 	if !exGlobalPoolSize {
 		globalPoolSize = 1
 	}
 
-	globs.PoolSize = globalPoolSize
+	globs.PoolSize = int(globalPoolSize)
 
-	if exMaxShardOK {
+	if exMaxShardEx {
 		// Если используется много шардов
-		for f := 0; f < shardCnt; f++ {
+		for f := 0; f < int(shardCnt); f++ {
 			shard, err := getShardInfoFromCfg(ctx, path+"/"+strconv.Itoa(f), globs, optionCreator)
 			if err != nil {
 				return nil, fmt.Errorf("can't get shard %d info: %w", f, err)
@@ -317,25 +329,52 @@ func GetClusterInfoFromCfg(ctx context.Context, path string, globs MapGlobParam,
 
 // Чтение информации по конкретному шарду из конфига
 func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobParam, optionCreator func(ShardInstanceConfig) (OptionInterface, error)) (Shard, error) {
-	cfg := Config()
+	cfg := Config(ctx)
 	ret := Shard{
 		Masters:  []ShardInstance{},
 		Replicas: []ShardInstance{},
 	}
 
-	shardTimeout := cfg.GetDuration(ctx, path+"/Timeout", globParam.Timeout)
-	shardPoolSize := cfg.GetInt(ctx, path+"/PoolSize", globParam.PoolSize)
+	shardTimeout, err := cfg.GetDuration(path+"/Timeout", globParam.Timeout)
+	if err != nil {
+		return Shard{}, fmt.Errorf("can't get timeout: %w", err)
+	}
+
+	shardPoolSize, err := cfg.GetInt(path+"/PoolSize", int64(globParam.PoolSize))
+	if err != nil {
+		return Shard{}, fmt.Errorf("can't get pool size: %w", err)
+	}
 
 	// ToDo сделать возможность указать параметры на уровне кластера, если используются идентичные данные в каждом шарде
-	shardUserName := cfg.GetString(ctx, path+"/User", "")
-	shardPassword := cfg.GetString(ctx, path+"/Password", "")
-	shardDBName := cfg.GetString(ctx, path+"/DB", "")
+	shardUserName, err := cfg.GetString(path+"/User", "")
+	if err != nil {
+		return Shard{}, fmt.Errorf("can't get user: %w", err)
+	}
+
+	shardPassword, err := cfg.GetString(path+"/Password", "")
+	if err != nil {
+		return Shard{}, fmt.Errorf("can't get password: %w", err)
+	}
+
+	shardDBName, err := cfg.GetString(path+"/DB", "")
+	if err != nil {
+		return Shard{}, fmt.Errorf("can't get db: %w", err)
+	}
+
+	// ToDo different DB different rules
+	// if shardDBName == "" {
+	// 	return Shard{}, fmt.Errorf("shard db name should be specified in %s", path+"/DB")
+	// }
 
 	// информация по местерам
-	master, exMaster := cfg.GetStringIfExists(ctx, path+"/master")
+	master, exMaster, err := cfg.GetStringIfExists(path + "/master")
+	if err != nil {
+		return Shard{}, fmt.Errorf("can't get master: %w", err)
+	}
+
 	if !exMaster {
-		master, exMaster = cfg.GetStringIfExists(ctx, path)
-		if !exMaster {
+		master, exMaster, err = cfg.GetStringIfExists(path)
+		if !exMaster || err != nil {
 			return Shard{}, fmt.Errorf("master should be specified in '%s' or in '%s/master' and replica in '%s/replica'", path, path, path)
 		}
 	}
@@ -347,6 +386,10 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 			}
 
 			hostport := strings.SplitN(inst, ":", 2) //ToDo check
+			if len(hostport) != 2 {
+				return Shard{}, fmt.Errorf("invalid master instance options: port is empty")
+			}
+
 			port, err := strconv.Atoi(hostport[1])
 			if err != nil {
 				return Shard{}, fmt.Errorf("invalid port: %s", hostport[1])
@@ -377,7 +420,11 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 	}
 
 	// Информация по репликам
-	replica, exReplica := cfg.GetStringIfExists(ctx, path+"/replica")
+	replica, exReplica, err := cfg.GetStringIfExists(path + "/replica")
+	if err != nil {
+		return Shard{}, fmt.Errorf("can't get replica: %w", err)
+	}
+
 	if exReplica {
 		for _, inst := range strings.Split(replica, ",") {
 			if inst == "" {
@@ -422,30 +469,33 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 // Используется для шаринга конфигов между можелями если они используют одну и ту же
 // конфигурацию для подключений
 type DefaultConfigCacher struct {
-	lock       sync.RWMutex
-	container  map[string]*Cluster
-	updateTime time.Time
+	lock             sync.RWMutex
+	container        map[string]*Cluster
+	updateTime       time.Time
+	configUpdateTime time.Time
 }
 
 // Конструктор для создания нового кешера конфигов
 func NewConfigCacher() *DefaultConfigCacher {
 	return &DefaultConfigCacher{
-		lock:       sync.RWMutex{},
-		container:  make(map[string]*Cluster),
-		updateTime: time.Now(),
+		lock:             sync.RWMutex{},
+		container:        make(map[string]*Cluster),
+		updateTime:       time.Now(),
+		configUpdateTime: time.Now(),
 	}
 }
 
-// Получение конфигурации. Если есть в кеше и он еще валидный, то конфигурация берётся из кешаб
+// Получение конфигурации. Если есть в кеше и он еще валидный, то конфигурация берётся из кеша
 // если в кеше нет, то достаём из конфига и кешируем.
 func (cc *DefaultConfigCacher) Get(ctx context.Context, path string, globs MapGlobParam, optionCreator func(ShardInstanceConfig) (OptionInterface, error)) (*Cluster, error) {
 	cc.lock.RLock()
 	conf, ex := cc.container[path]
-	confUpdateTime := cc.updateTime
+	confCacherUpdateTime := cc.updateTime
+	confUpdateTime := cc.configUpdateTime
 	cc.lock.RUnlock()
 
 	// Если конфигурация не найдена в кеше или конфигурация была обновлена, то перегружаем конфигурацию
-	if !ex || confUpdateTime.Sub(Config().GetLastUpdateTime()) < 0 {
+	if !ex || confCacherUpdateTime != confUpdateTime {
 		cc.lock.Lock()
 		newConf, err := GetClusterInfoFromCfg(ctx, path, globs, optionCreator)
 		if err != nil {
@@ -458,7 +508,7 @@ func (cc *DefaultConfigCacher) Get(ctx context.Context, path string, globs MapGl
 		if !newConf.Equal(conf) {
 			conf = newConf
 			cc.container[path] = conf
-			cc.updateTime = time.Now()
+			cc.updateTime = cc.configUpdateTime
 		}
 
 		cc.lock.Unlock()

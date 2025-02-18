@@ -4,20 +4,22 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Educentr/go-activerecord/internal/pkg/backend"
+	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
-	"github.com/Educentr/go-activerecord/pkg/octopus"
 )
 
 func TestCheck(t *testing.T) {
+	backend.RegisterBackend()
+
 	rpFoo := ds.NewRecordPackage()
-	rpFoo.Backends = []activerecord.Backend{octopus.Backend}
+	rpFoo.Backends = []ds.Backend{octopus.BackendGenerator{}.Name()}
 	rpFoo.Namespace = ds.NamespaceDeclaration{ObjectName: "0", PackageName: "foo", PublicName: "Foo"}
 	rpFoo.ServerConfKey = "testCheckerConfKey"
 
 	err := rpFoo.AddField(ds.FieldDeclaration{
 		Name:       "ID",
-		Format:     octopus.Int,
+		Format:     "int",
 		PrimaryKey: true,
 		Mutators:   []string{},
 		Size:       0,
@@ -31,7 +33,7 @@ func TestCheck(t *testing.T) {
 
 	err = rpFoo.AddField(ds.FieldDeclaration{
 		Name:       "BarID",
-		Format:     octopus.Int,
+		Format:     "int",
 		PrimaryKey: false,
 		Mutators:   []string{},
 		Size:       0,
@@ -56,7 +58,7 @@ func TestCheck(t *testing.T) {
 	}
 
 	rpInvalidFormat := ds.NewRecordPackage()
-	rpInvalidFormat.Backends = []activerecord.Backend{octopus.Backend}
+	rpInvalidFormat.Backends = []ds.Backend{octopus.BackendGenerator{}.Name()}
 	rpInvalidFormat.Namespace = ds.NamespaceDeclaration{ObjectName: "0", PackageName: "invform", PublicName: "InvalidFormat"}
 	rpInvalidFormat.ServerConfKey = "testCheckerConfKey"
 
@@ -75,7 +77,7 @@ func TestCheck(t *testing.T) {
 	}
 
 	onInvalidFormat := ds.NewRecordPackage()
-	onInvalidFormat.Backends = []activerecord.Backend{octopus.Backend}
+	onInvalidFormat.Backends = []ds.Backend{octopus.BackendGenerator{}.Name()}
 	onInvalidFormat.Namespace = ds.NamespaceDeclaration{ObjectName: "invalid", PackageName: "invform", PublicName: "InvalidFormat"}
 	rpInvalidFormat.ServerConfKey = "testCheckerConfKey"
 
@@ -127,7 +129,7 @@ func TestCheck(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "wrong octopus namespace objectname format",
+			name: "wrong octopus namespace objectName format",
 			args: args{
 				files:         map[string]*ds.RecordPackage{"invalid": onInvalidFormat},
 				linkedObjects: map[string]string{},

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
 // Описание приложения. Информация необходимая для разметки артефактов
@@ -80,7 +79,7 @@ type RecordPackage struct {
 	Indexes               []IndexDeclaration                   // Список индексов, важна последовательность для некоторых хранилищ
 	IndexMap              map[string]int                       // Обратный индекс от имён для индексов
 	SelectorMap           map[string]int                       // Список селекторов, используется для контроля дублей
-	Backends              []activerecord.Backend               // Список бекендов для которых надо сгенерировать пакеты (сейчас допустим один и только один)
+	Backends              []Backend                            // Список бекендов для которых надо сгенерировать пакеты (сейчас допустим один и только один)
 	SerializerMap         map[string]SerializerDeclaration     // Список сериализаторов используемых в этой сущности
 	MutatorMap            map[string]MutatorDeclaration        // Список мутаторов используемых в этой сущности
 	TriggerMap            map[string]TriggerDeclaration        // Список триггеров используемых в сущности
@@ -115,7 +114,7 @@ func NewRecordPackage() *RecordPackage {
 		Indexes:               []IndexDeclaration{},
 		IndexMap:              map[string]int{},
 		SelectorMap:           map[string]int{},
-		Backends:              []activerecord.Backend{},
+		Backends:              []Backend{},
 		SerializerMap:         map[string]SerializerDeclaration{},
 		MutatorMap:            map[string]MutatorDeclaration{},
 		TriggerMap:            map[string]TriggerDeclaration{},
@@ -141,17 +140,23 @@ type IndexField struct {
 	Order    IndexOrder
 }
 
+type IndexCondition struct {
+	ConditionType string   // Тип условия "=", ">", "<", ">=", "<=", "!=", "IN"
+	Value         []string // Значение условия
+}
+
 // Тип для описания индекса
 type IndexDeclaration struct {
-	Name      string                // Имя индекса
-	Num       uint8                 // Номер индекса в описании спейса
-	Selector  string                // Название функции селектора
-	Fields    []int                 // Список номеров полей участвующих в индексе (последовательность имеет значение)
-	FieldsMap map[string]IndexField // Обратный индекс по именам полей (используется для выявления дублей)
-	Primary   bool                  // Признак того, что индекс является первичным ключом
-	Unique    bool                  // Признак того, что индекс является уникальным
-	Type      string                // Тип индекса, для индексов по одному полю простой тип, для составных индексов собственный тип
-	Partial   bool                  // Признак того, что индекс частичный
+	Name       string                 // Имя индекса
+	Num        uint8                  // Номер индекса в описании спейса
+	Selector   string                 // Название функции селектора
+	Fields     []int                  // Список номеров полей участвующих в индексе (последовательность имеет значение)
+	FieldsMap  map[string]IndexField  // Обратный индекс по именам полей (используется для выявления дублей)
+	Primary    bool                   // Признак того, что индекс является первичным ключом
+	Unique     bool                   // Признак того, что индекс является уникальным
+	Type       string                 // Тип индекса, для индексов по одному полю простой тип, для составных индексов собственный тип
+	Partial    bool                   // Признак того, что индекс частичный
+	Conditions map[int]IndexCondition // Номер поля и условие для частичного индекса
 }
 
 // Serializer Сериализаторы для поля
@@ -159,14 +164,14 @@ type Serializer []string
 
 // FieldDeclaration Тип описывающий поле в сущности
 type FieldDeclaration struct {
-	Name       string              // Название поля
-	Format     activerecord.Format // формат поля
-	PrimaryKey bool                // участвует ли поле в первичном ключе (при изменении таких полей необходимо делать delete + insert вместо update)
-	Mutators   []string            // список мутаторов (атомарных действий на уровне БД)
-	Size       int64               // Размер поля, используется только для строковых значений
-	Serializer Serializer          // Сериализаторы для поля
-	ObjectLink string              // является ли поле ссылкой на другую сущность
-	InitByDB   bool                // Может ли база проинициализоровать поле при вставке
+	Name       string     // Название поля
+	Format     Format     // формат поля
+	PrimaryKey bool       // участвует ли поле в первичном ключе (при изменении таких полей необходимо делать delete + insert вместо update)
+	Mutators   []string   // список мутаторов (атомарных действий на уровне БД)
+	Size       int64      // Размер поля, используется только для строковых значений
+	Serializer Serializer // Сериализаторы для поля
+	ObjectLink string     // является ли поле ссылкой на другую сущность
+	InitByDB   bool       // Может ли база проинициализоровать поле при вставке
 }
 
 // Name возвращает имя сериализатора, если он установлен, иначе пустую строку
@@ -217,12 +222,12 @@ const (
 
 // ProcFieldDeclaration Тип описывающий поле процедуры
 type ProcFieldDeclaration struct {
-	Name       string              // Название поля
-	Format     activerecord.Format // формат поля
-	Type       ProcParameterType   // тип параметра (IN, OUT, INOUT)
-	Size       int64               // Размер поля, используется только для строковых значений
-	Serializer Serializer          // Сериализатора для поля
-	OrderIndex int                 // Порядковый номер параметра в сигнатуре вызова процедуры
+	Name       string            // Название поля
+	Format     Format            // формат поля
+	Type       ProcParameterType // тип параметра (IN, OUT, INOUT)
+	Size       int64             // Размер поля, используется только для строковых значений
+	Serializer Serializer        // Сериализатора для поля
+	OrderIndex int               // Порядковый номер параметра в сигнатуре вызова процедуры
 }
 
 // ProcFieldDeclarations Индекс порядкового значения полей процедуры
@@ -268,6 +273,7 @@ func (pfd ProcFieldDeclarations) Validate() bool {
 	return maxIdx < len(pfd)
 }
 
+// ToDo Сделать отдельный тип для описания мутаторов
 // Константы описывающие мутаторы для поля
 const (
 	IncMutator      string = "inc"       // инкремент (только для числовых типов)
@@ -360,4 +366,24 @@ type PartialFieldDeclaration struct {
 type LinkedPackageDeclaration struct {
 	Types  map[string]struct{} // Имена типов связанных структур
 	Import ImportPackage       // Описание импорта пакета связанных структур
+}
+
+type (
+	Format  string
+	Backend string
+)
+
+// ToDo Переименовать методы во что то более интуитивно понятное
+type FormatParam interface {
+	PackConvFunc(string) string
+	UnpackFunc() string
+	PackFunc() string // ToDo rename to DBSerializer
+	DefaultValue() string
+	UnpackType() string // ToDo rename to DBDeserializer
+	Len(uint32) uint
+	MinValue() string
+	MaxValue() string
+	ToString() []string
+	MutatorTypeConv() string
+	StringDeserializer() []string
 }

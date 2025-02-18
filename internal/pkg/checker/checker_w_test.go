@@ -3,17 +3,16 @@ package checker
 import (
 	"testing"
 
+	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
+	"github.com/Educentr/go-activerecord/internal/pkg/backend/postgres"
 	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
-	"github.com/Educentr/go-activerecord/pkg/octopus"
-	"github.com/Educentr/go-activerecord/pkg/postgres"
 )
 
 func Test_checkBackend(t *testing.T) {
 	rcOctopus := ds.NewRecordPackage()
-	rcOctopus.Backends = []activerecord.Backend{octopus.Backend}
+	rcOctopus.Backends = []ds.Backend{octopus.BackendGenerator{}.Name()}
 	rcMany := ds.NewRecordPackage()
-	rcMany.Backends = []activerecord.Backend{octopus.Backend, postgres.Backend}
+	rcMany.Backends = []ds.Backend{octopus.BackendGenerator{}.Name(), postgres.BackendGenerator{}.Name()}
 
 	type args struct {
 		cl *ds.RecordPackage

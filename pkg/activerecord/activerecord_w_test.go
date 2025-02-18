@@ -2,6 +2,8 @@ package activerecord
 
 import (
 	"testing"
+
+	"github.com/Educentr/go-activerecord/pkg/logger/arsimplelog"
 )
 
 func TestInitActiveRecord(t *testing.T) {
@@ -22,7 +24,7 @@ func TestInitActiveRecord(t *testing.T) {
 			name: "with logger",
 			args: args{
 				opts: []Option{
-					WithLogger(NewLogger()),
+					WithLogger(arsimplelog.NewLogger()),
 				},
 			},
 		},
