@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"reflect"
 )
 
@@ -170,6 +171,10 @@ func packOne(w []byte, v interface{}, mode PackMode) ([]byte, error) {
 	case int:
 		return PackUint32(w, uint32(v), mode), nil
 	case uint:
+		if v > math.MaxUint32 {
+			return nil, fmt.Errorf("iproto: packed value %d overflows uint32", v)
+		}
+
 		return PackUint32(w, uint32(v), mode), nil
 	case uint64:
 		return PackUint64(w, v, mode), nil
@@ -224,6 +229,10 @@ func UnpackUint16(r *bytes.Reader, v *uint16, mode PackMode) (err error) {
 	if mode == ModeBER {
 		var v0 uint64
 		v0, err = unpackBER(r, 16)
+		if v0 > math.MaxUint16 {
+			return fmt.Errorf("iproto: unpacked value %d overflows uint16", v0)
+		}
+
 		*v = uint16(v0)
 
 		return
@@ -242,6 +251,10 @@ func UnpackUint32(r *bytes.Reader, v *uint32, mode PackMode) (err error) {
 	if mode == ModeBER {
 		var v0 uint64
 		v0, err = unpackBER(r, 32)
+		if v0 > math.MaxUint32 {
+			return fmt.Errorf("iproto: unpacked value %d overflows uint32", v0)
+		}
+
 		*v = uint32(v0)
 
 		return
@@ -378,6 +391,10 @@ func unpackOne(r *bytes.Reader, v interface{}, mode PackMode) error {
 	case *int8:
 		var v0 uint8
 		err := UnpackUint8(r, &v0, mode)
+		if v0 > math.MaxInt8 {
+			return fmt.Errorf("iproto: unpacked value %d overflows int", v0)
+		}
+
 		*v = int8(v0)
 
 		return err
@@ -386,6 +403,10 @@ func unpackOne(r *bytes.Reader, v interface{}, mode PackMode) error {
 	case *int16:
 		var v0 uint16
 		err := UnpackUint16(r, &v0, mode)
+		if v0 > math.MaxInt16 {
+			return fmt.Errorf("iproto: unpacked value %d overflows int", v0)
+		}
+
 		*v = int16(v0)
 
 		return err
@@ -394,12 +415,20 @@ func unpackOne(r *bytes.Reader, v interface{}, mode PackMode) error {
 	case *int32:
 		var v0 uint32
 		err := UnpackUint32(r, &v0, mode)
+		if v0 > math.MaxInt32 {
+			return fmt.Errorf("iproto: unpacked value %d overflows int", v0)
+		}
+
 		*v = int32(v0)
 
 		return err
 	case *int:
 		var v0 uint32
 		err := UnpackUint32(r, &v0, mode)
+		if v0 > math.MaxInt32 {
+			return fmt.Errorf("iproto: unpacked value %d overflows int", v0)
+		}
+
 		*v = int(int32(v0))
 
 		return err
@@ -414,6 +443,10 @@ func unpackOne(r *bytes.Reader, v interface{}, mode PackMode) error {
 	case *int64:
 		var v0 uint64
 		err := UnpackUint64(r, &v0, mode)
+		if v0 > math.MaxInt64 {
+			return fmt.Errorf("iproto: unpacked value %d overflows int64", v0)
+		}
+
 		*v = int64(v0)
 
 		return err

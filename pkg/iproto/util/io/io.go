@@ -34,7 +34,10 @@ func WrapReader(r io.Reader) *Reader {
 // Read implements io.Reader interface.
 func (r *Reader) Read(p []byte) (int, error) {
 	n, err := r.r.Read(p)
-	r.bytes += uint32(n)
+	if n > 0 {
+		r.bytes += uint32(n)
+	}
+
 	r.calls++
 
 	return n, err

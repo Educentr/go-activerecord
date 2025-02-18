@@ -21,6 +21,9 @@ linters-settings:
   gocritic:
     enabled-checks:
       - nilValReturn
+  gosec:
+    excludes:
+      - G115
 
 linters:
   disable-all: true

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"runtime"
 	"sync"
@@ -779,6 +780,11 @@ func (c *Channel) writer() {
 
 		if err := buf.Flush(); err != nil {
 			c.fatalf("flush buffer error: %v", err)
+			return
+		}
+
+		if buf.sent > math.MaxUint32 {
+			c.fatalf("sent bytes overflow: %d", buf.sent)
 			return
 		}
 

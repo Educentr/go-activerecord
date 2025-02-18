@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"reflect"
 	"strconv"
@@ -451,7 +452,7 @@ func (oms *MockServer) GetServerHost() string {
 
 func (oms *MockServer) GetServerPort() uint16 {
 	port, err := strconv.ParseUint(oms.port, 10, 16)
-	if err != nil {
+	if err != nil || port >= math.MaxUint16 {
 		panic("invalid port defenition")
 	}
 

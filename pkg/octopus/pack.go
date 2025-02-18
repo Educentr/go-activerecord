@@ -248,10 +248,10 @@ func UnpackRequestFlagsVal(r *bytes.Reader) (bool, InsertMode, error) {
 	}
 
 	if flags&1 == 1 {
-		return true, InsertMode(flags ^ 1), nil
+		return true, InsertMode(flags ^ 1), nil //nolint:gosec
 	}
 
-	return false, InsertMode(flags), nil
+	return false, InsertMode(flags), nil //nolint:gosec
 }
 
 func PackDeleteFlagsVal(w []byte, ret bool) []byte {

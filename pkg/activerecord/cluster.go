@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash"
 	"hash/crc32"
+	"math"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -85,7 +86,12 @@ func (s *Shard) NextMaster() ShardInstance {
 
 	for i := 0; i < attempt; i++ {
 		newVal := atomic.AddInt32(&s.curMaster, 1)
-		newValMod := newVal % int32(len(s.Masters))
+		lenM := len(s.Masters)
+		if lenM > math.MaxInt32 {
+			panic("too many masters")
+		}
+
+		newValMod := newVal % int32(lenM)
 
 		if newValMod != newVal {
 			atomic.CompareAndSwapInt32(&s.curMaster, newVal, newValMod)
@@ -117,7 +123,12 @@ func (s *Shard) NextReplica() ShardInstance {
 
 	for i := 0; i < attempt; i++ {
 		newVal := atomic.AddInt32(&s.curReplica, 1)
-		newValMod := newVal % int32(len(s.Replicas))
+		lenR := len(s.Replicas)
+		if lenR > math.MaxInt32 {
+			panic("too many replicas")
+		}
+
+		newValMod := newVal % int32(lenR)
 
 		if newValMod != newVal {
 			atomic.CompareAndSwapInt32(&s.curReplica, newVal, newValMod)
@@ -343,7 +354,7 @@ func fillShardConnectionParams(masterDef string) ([]ShardInstanceConfig, error) 
 		}
 
 		port, errPort := strconv.Atoi(hostport[1])
-		if errPort != nil {
+		if errPort != nil || port > math.MaxUint16 {
 			return nil, fmt.Errorf("invalid port(%s): %w", hostport[1], errPort)
 		}
 
@@ -370,7 +381,7 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 	}
 
 	shardPoolSize, err := cfg.GetInt(path+"/PoolSize", int64(globParam.PoolSize))
-	if err != nil {
+	if err != nil || shardPoolSize > math.MaxInt32 {
 		return Shard{}, fmt.Errorf("can't get pool size: %w", err)
 	}
 
@@ -417,7 +428,12 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 
 		for _, shardCfg := range shards {
 			shardCfg.Mode = ModeMaster
-			shardCfg.PoolSize = int32(shardPoolSize) // ToDo check type conversion
+
+			if shardPoolSize > math.MaxInt32 {
+				return Shard{}, fmt.Errorf("can't get pool size: %w", err)
+			}
+
+			shardCfg.PoolSize = int32(shardPoolSize)
 			shardCfg.Timeout = shardTimeout
 			shardCfg.User = shardUserName
 			shardCfg.Password = shardPassword
@@ -450,7 +466,12 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 
 		for _, shardCfg := range shards {
 			shardCfg.Mode = ModeReplica
-			shardCfg.PoolSize = int32(shardPoolSize) // ToDo check type conversion
+
+			if shardPoolSize > math.MaxInt32 {
+				return Shard{}, fmt.Errorf("can't get pool size: %w", err)
+			}
+
+			shardCfg.PoolSize = int32(shardPoolSize)
 			shardCfg.Timeout = shardTimeout
 			shardCfg.User = shardUserName
 			shardCfg.Password = shardPassword
