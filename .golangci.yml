@@ -1,6 +1,5 @@
 # More info on config here: https://github.com/golangci/golangci-lint#config-file
 run:
-  deadline: 10m
   issues-exit-code: 1
   tests: true
 
@@ -14,8 +13,6 @@ linters-settings:
   govet:
     enable:
       - shadow
-  golint:
-    min-confidence: 0
   dupl:
     threshold: 100
   goconst:
