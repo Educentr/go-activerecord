@@ -327,6 +327,35 @@ func GetClusterInfoFromCfg(ctx context.Context, path string, globs MapGlobParam,
 	return cluster, nil
 }
 
+func fillShardConnectionParams(masterDef string) ([]ShardInstanceConfig, error) {
+	shards := strings.Split(masterDef, ",") // ToDo check length
+
+	ret := make([]ShardInstanceConfig, 0, len(shards))
+
+	for _, inst := range shards {
+		if inst == "" {
+			return nil, fmt.Errorf("invalid master instance options: addr is empty")
+		}
+
+		hostport := strings.SplitN(inst, ":", 2) // ToDo check
+		if len(hostport) != 2 {
+			return nil, fmt.Errorf("invalid master instance options: port is empty")
+		}
+
+		port, errPort := strconv.Atoi(hostport[1])
+		if errPort != nil {
+			return nil, fmt.Errorf("invalid port(%s): %w", hostport[1], errPort)
+		}
+
+		ret = append(ret, ShardInstanceConfig{
+			Addr: hostport[0],
+			Port: uint16(port), // ToDo check type conversion
+		})
+	}
+
+	return ret, nil
+}
+
 // Чтение информации по конкретному шарду из конфига
 func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobParam, optionCreator func(ShardInstanceConfig) (OptionInterface, error)) (Shard, error) {
 	cfg := Config(ctx)
@@ -346,6 +375,7 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 	}
 
 	// ToDo сделать возможность указать параметры на уровне кластера, если используются идентичные данные в каждом шарде
+	// ToDo сделать возможность для каждого шарда указывать свои креды
 	shardUserName, err := cfg.GetString(path+"/User", "")
 	if err != nil {
 		return Shard{}, fmt.Errorf("can't get user: %w", err)
@@ -380,35 +410,22 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 	}
 
 	if master != "" {
-		for _, inst := range strings.Split(master, ",") {
-			if inst == "" {
-				return Shard{}, fmt.Errorf("invalid master instance options: addr is empty")
-			}
+		shards, errFill := fillShardConnectionParams(master)
+		if errFill != nil {
+			return Shard{}, fmt.Errorf("can't fill shard connection params: %w", errFill)
+		}
 
-			hostport := strings.SplitN(inst, ":", 2) //ToDo check
-			if len(hostport) != 2 {
-				return Shard{}, fmt.Errorf("invalid master instance options: port is empty")
-			}
+		for _, shardCfg := range shards {
+			shardCfg.Mode = ModeMaster
+			shardCfg.PoolSize = int32(shardPoolSize) // ToDo check type conversion
+			shardCfg.Timeout = shardTimeout
+			shardCfg.User = shardUserName
+			shardCfg.Password = shardPassword
+			shardCfg.DB = shardDBName
 
-			port, err := strconv.Atoi(hostport[1])
-			if err != nil {
-				return Shard{}, fmt.Errorf("invalid port: %s", hostport[1])
-			}
-
-			shardCfg := ShardInstanceConfig{
-				Addr:     hostport[0],
-				Mode:     ModeMaster,
-				PoolSize: int32(shardPoolSize), // ToDo check type conversion
-				Timeout:  shardTimeout,
-				User:     shardUserName,
-				Password: shardPassword,
-				Port:     uint16(port), // ToDo check type conversion
-				DB:       shardDBName,
-			}
-
-			opt, err := optionCreator(shardCfg)
-			if err != nil {
-				return Shard{}, fmt.Errorf("can't create instanceOption: %w", err)
+			opt, errOpt := optionCreator(shardCfg)
+			if errOpt != nil {
+				return Shard{}, fmt.Errorf("can't create instanceOption: %w", errOpt)
 			}
 
 			ret.Masters = append(ret.Masters, ShardInstance{
@@ -426,34 +443,25 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 	}
 
 	if exReplica {
-		for _, inst := range strings.Split(replica, ",") {
-			if inst == "" {
-				return Shard{}, fmt.Errorf("invalid slave instance options: addr is empty")
+		shards, errFill := fillShardConnectionParams(replica)
+		if errFill != nil {
+			return Shard{}, fmt.Errorf("can't fill shard connection params: %w", errFill)
+		}
+
+		for _, shardCfg := range shards {
+			shardCfg.Mode = ModeReplica
+			shardCfg.PoolSize = int32(shardPoolSize) // ToDo check type conversion
+			shardCfg.Timeout = shardTimeout
+			shardCfg.User = shardUserName
+			shardCfg.Password = shardPassword
+			shardCfg.DB = shardDBName
+
+			opt, errOpt := optionCreator(shardCfg)
+			if errOpt != nil {
+				return Shard{}, fmt.Errorf("can't create instanceOption: %w", errOpt)
 			}
 
-			hostport := strings.SplitN(inst, ":", 2) //ToDo check
-			port, err := strconv.Atoi(hostport[1])
-			if err != nil {
-				return Shard{}, fmt.Errorf("invalid port: %s", hostport[1])
-			}
-
-			shardCfg := ShardInstanceConfig{
-				Addr:     hostport[0],
-				Mode:     ModeReplica,
-				PoolSize: int32(shardPoolSize), // ToDo check type conversion
-				Timeout:  shardTimeout,
-				User:     shardUserName,
-				Password: shardPassword,
-				Port:     uint16(port), // ToDo check type conversion
-				DB:       shardDBName,
-			}
-
-			opt, err := optionCreator(shardCfg)
-			if err != nil {
-				return Shard{}, fmt.Errorf("can't create instanceOption: %w", err)
-			}
-
-			ret.Replicas = append(ret.Replicas, ShardInstance{
+			ret.Masters = append(ret.Masters, ShardInstance{
 				ParamsID: opt.GetConnectionID(),
 				Config:   shardCfg,
 				Options:  opt,

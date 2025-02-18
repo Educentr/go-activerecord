@@ -58,6 +58,47 @@ func ParseFieldsTag(field *ast.Field, newfield *ds.FieldDeclaration, newindex *d
 	return nil
 }
 
+func getFieldFormat(ftype ast.Expr) (ds.Format, *arerror.ErrParseTypeFieldDecl) {
+	switch t := ftype.(type) {
+	case *ast.Ident:
+		return ds.Format(t.String()), nil
+	case *ast.ArrayType:
+		// Todo точно ли массив надо, а не срез?
+		if t.Elt.(*ast.Ident).Name != "byte" {
+			return "", &arerror.ErrParseTypeFieldDecl{FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseFieldArrayOfNotByte}
+		}
+
+		if t.Len == nil {
+			return "", &arerror.ErrParseTypeFieldDecl{FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseFieldArrayNotSlice}
+		}
+
+		// ToDo Not implemented
+		return "", &arerror.ErrParseTypeFieldDecl{FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseFieldBinary}
+	case *ast.SelectorExpr:
+		return ds.Format(t.X.(*ast.Ident).Name + "." + t.Sel.Name), nil
+	default:
+		return "", &arerror.ErrParseTypeFieldDecl{FieldType: fmt.Sprintf("%T: %+v", t, t), Err: arerror.ErrUnknown}
+	}
+}
+
+func gertImportsForField(newfield ds.FieldDeclaration) []string {
+	// ToDo перенести в атрибут самого филд тайпа FormatType, сделать там функу, для каждого типа, которая определяет нужен дополнительный
+	// import или нет тогда сможем избавиться от хардкода типов в этом месте
+	if newfield.Format == "float32" || newfield.Format == "float64" {
+		return []string{"math"}
+	}
+
+	if len(newfield.Mutators) > 0 && newfield.Format != "uint32" && newfield.Format != "uint64" && newfield.Format != "uint" {
+		return []string{"math"}
+	}
+
+	if newfield.PrimaryKey && newfield.Format != "string" {
+		return []string{"strconv"}
+	}
+
+	return []string{}
+}
+
 // Функция парсинга полей модели
 func ParseFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 	for _, field := range fields {
@@ -75,25 +116,13 @@ func ParseFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 			FieldsMap: map[string]ds.IndexField{},
 		}
 
-		switch t := field.Type.(type) {
-		case *ast.Ident:
-			newfield.Format = ds.Format(t.String())
-		case *ast.ArrayType:
-			// Todo точно ли массив надо, а не срез?
-			if t.Elt.(*ast.Ident).Name != "byte" {
-				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseFieldArrayOfNotByte}
-			}
+		var err *arerror.ErrParseTypeFieldDecl
 
-			if t.Len == nil {
-				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseFieldArrayNotSlice}
-			}
+		newfield.Format, err = getFieldFormat(field.Type)
+		if err != nil {
+			err.Name = newfield.Name
 
-			// ToDo Not implemented
-			return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: t.Elt.(*ast.Ident).Name, Err: arerror.ErrParseFieldBinary}
-		case *ast.SelectorExpr:
-			newfield.Format = ds.Format(t.X.(*ast.Ident).Name + "." + t.Sel.Name)
-		default:
-			return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: fmt.Sprintf("%T: %+v", t, t), Err: arerror.ErrUnknown}
+			return err
 		}
 
 		if err := ParseFieldsTag(field, &newfield, &newindex); err != nil {
@@ -114,24 +143,8 @@ func ParseFields(dst *ds.RecordPackage, fields []*ast.Field) error {
 			}
 		}
 
-		// ToDo перенести в атрибут самого филд тайпа FormatType, сделать там функу, дл каждого типа, которая определяет нужен дополнительный import или нет
-		// тогда сможем избавиться от хардкода типов в этом месте
-		if newfield.Format == "float32" || newfield.Format == "float64" {
-			_, err := dst.AddImport("math")
-			if err != nil {
-				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: string(newfield.Format), Err: err}
-			}
-		}
-
-		if len(newfield.Mutators) > 0 && newfield.Format != "uint32" && newfield.Format != "uint64" && newfield.Format != "uint" {
-			_, err := dst.AddImport("math")
-			if err != nil {
-				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: string(newfield.Format), Err: err}
-			}
-		}
-
-		if newfield.PrimaryKey && newfield.Format != "string" {
-			_, err := dst.AddImport("strconv")
+		for _, imp := range gertImportsForField(newfield) {
+			_, err := dst.AddImport(imp)
 			if err != nil {
 				return &arerror.ErrParseTypeFieldDecl{Name: newfield.Name, FieldType: string(newfield.Format), Err: err}
 			}
@@ -152,11 +165,11 @@ func ParseProcFieldsTag(index int, field *ast.Field, newfield *ds.ProcFieldDecla
 		for _, kv := range tagParam {
 			switch TagNameType(kv[0]) {
 			case ProcInputParamTag:
-				//результат бинарной операции 0|IN => IN; 1|IN => IN; 2|IN => INOUT (3);
-				newfield.Type = newfield.Type | ds.IN
+				// результат бинарной операции 0|IN => IN; 1|IN => IN; 2|IN => INOUT (3);
+				newfield.Type |= ds.IN
 			case ProcOutputParamTag:
-				//результат бинарной операции 0|OUT => OUT; 1|OUT => INOUT (3); 2|OUT => OUT;
-				newfield.Type = newfield.Type | ds.OUT
+				// результат бинарной операции 0|OUT => OUT; 1|OUT => INOUT (3); 2|OUT => OUT;
+				newfield.Type |= ds.OUT
 				orderIdx := index
 
 				if len(kv) == 2 {

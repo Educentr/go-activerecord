@@ -18,8 +18,8 @@ func parseStructFields(dst *ds.RecordPackage, gen *ast.GenDecl, name, pkgName st
 			continue
 		}
 
-		switch curr := currType.Type.(type) {
-		case *ast.StructType:
+		curr, ok := currType.Type.(*ast.StructType)
+		if ok {
 			if currType.Name.Name != name {
 				continue
 			}
@@ -99,8 +99,8 @@ func ParsePartialStructFields(dst *ds.RecordPackage, name, pkgName, path string)
 	dst.LinkedStructsMap[pkgName] = pkgDecl
 
 	for _, decl := range file.Decls {
-		switch gen := decl.(type) {
-		case *ast.GenDecl:
+		gen, ok := decl.(*ast.GenDecl)
+		if ok {
 			if gen.Tok != token.TYPE {
 				continue
 			}

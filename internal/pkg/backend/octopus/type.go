@@ -60,11 +60,12 @@ func (p FormatType) DefaultValue() string {
 		fname = p.packFunc
 	}
 
-	if strings.HasPrefix(p.Name, "Uint") {
+	switch {
+	case strings.HasPrefix(p.Name, "Uint"):
 		return fname + "([]byte{}, 0, iproto.ModeDefault)"
-	} else if strings.HasPrefix(p.Name, "String") {
+	case strings.HasPrefix(p.Name, "String"):
 		return fname + `([]byte{}, "", iproto.ModeDefault)`
-	} else {
+	default:
 		return "can't detect type"
 	}
 }

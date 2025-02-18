@@ -62,7 +62,7 @@ func NewConnectionOptions(server string, port uint16, mode activerecord.ServerMo
 	postgresOpts.BaseConnectionOptions.Mode = mode
 
 	for _, opt := range opts {
-		if err := opt.apply(postgresOpts); err != nil {
+		if err = opt.apply(postgresOpts); err != nil {
 			return nil, fmt.Errorf("error apply options: %w", err)
 		}
 	}

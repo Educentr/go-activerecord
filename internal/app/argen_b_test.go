@@ -140,14 +140,16 @@ func TestArGen_Run(t *testing.T) {
 	insertFlags := []byte{0x03, 0x00, 0x00, 0x00}
 	replaceFlags := []byte{0x05, 0x00, 0x00, 0x00}
 	insertTupleCardinality := []byte{0x02, 0x00, 0x00, 0x00}
-	insertTupleFields := append([]byte{0x04}, fieldValue...) //len + Field1
+	insertTupleFields := append([]byte{0x04}, fieldValue...) // len + Field1
 	insertTupleFields = append(insertTupleFields, []byte{0x00}...)
 
-	insertReq := append(namespace, insertFlags...)
+	insertReq := namespace
+	insertReq = append(insertReq, insertFlags...)
 	insertReq = append(insertReq, insertTupleCardinality...)
 	insertReq = append(insertReq, insertTupleFields...)
 
-	replaceReq := append(namespace, replaceFlags...)
+	replaceReq := namespace
+	replaceReq = append(replaceReq, replaceFlags...)
 	replaceReq = append(replaceReq, insertTupleCardinality...)
 	replaceReq = append(replaceReq, insertTupleFields...)
 
@@ -156,14 +158,16 @@ func TestArGen_Run(t *testing.T) {
 	responseSuccess := []byte{0x00, 0x00, 0x00, 0x00}
 	responseErrorDuplicate := []byte{0x02, 0x20, 0x00, 0x00}
 	insertRespCount := []byte{0x01, 0x00, 0x00, 0x00}
-	insertFqTupleSize := []byte{0x09, 0x00, 0x00, 0x00} //sizeof byte
+	insertFqTupleSize := []byte{0x09, 0x00, 0x00, 0x00} // sizeof byte
 
-	successInsertResponse := append(responseSuccess, insertRespCount...)
+	successInsertResponse := responseSuccess
+	successInsertResponse = append(successInsertResponse, insertRespCount...)
 	successInsertResponse = append(successInsertResponse, insertFqTupleSize...)
 	successInsertResponse = append(successInsertResponse, insertTupleCardinality...)
 	successInsertResponse = append(successInsertResponse, insertTupleFields...)
 
-	duplicateInsertResponse := append(responseErrorDuplicate, []byte("Duplicate key")...)
+	duplicateInsertResponse := responseErrorDuplicate
+	duplicateInsertResponse = append(duplicateInsertResponse, []byte("Duplicate key")...)
 
 	repositoryName := "foo"
 

@@ -54,7 +54,7 @@ func TestChannelShutdownTwice(t *testing.T) {
 
 func int64abs(v int64) int64 {
 	m := v >> 63 // Get all 111..111 for negative or 000..000 for positive;
-	v = v ^ m    // (NOT v) for negative and the same for positive;
+	v ^= m       // (NOT v) for negative and the same for positive;
 	v -= m       // +1 is for negative (hence m is all 111..111, which is -1 bit pattern), -0 for positive;
 	return v
 }

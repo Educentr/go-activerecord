@@ -7,7 +7,7 @@ import (
 	"github.com/Educentr/go-activerecord/pkg/activerecord"
 )
 
-//type WhereCondition
+// type WhereCondition
 
 // ToDo merge with octopus InsertModeInserOrReplace, e.t.c.
 const (

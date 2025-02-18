@@ -14,7 +14,8 @@ func TestPackSelect(t *testing.T) {
 	tuple1 := []byte{0x02, 0x00, 0x00, 0x00, 0x03, 97, 97, 97, 0x02, 0x10, 0x00}
 	tuple2 := []byte{0x02, 0x00, 0x00, 0x00, 0x03, 98, 98, 98, 0x02, 0x20, 0x00}
 
-	selectReq := append(namespace, indexNum...)
+	selectReq := namespace
+	selectReq = append(selectReq, indexNum...)
 	selectReq = append(selectReq, offset...)
 	selectReq = append(selectReq, limit...)
 	selectReq = append(selectReq, tuples...)
@@ -70,18 +71,21 @@ func TestPackInsertReplace(t *testing.T) {
 	insertFlags := []byte{0x03, 0x00, 0x00, 0x00}
 	replaceFlags := []byte{0x05, 0x00, 0x00, 0x00}
 	insertTupleCardinality := []byte{0x02, 0x00, 0x00, 0x00}
-	insertTupleFields := append([]byte{0x04}, fieldValue...) //len + Field1
+	insertTupleFields := append([]byte{0x04}, fieldValue...) // len + Field1
 	insertTupleFields = append(insertTupleFields, []byte{0x00}...)
 
-	insertReq := append(namespace, insertFlags...)
+	insertReq := namespace
+	insertReq = append(insertReq, insertFlags...)
 	insertReq = append(insertReq, insertTupleCardinality...)
 	insertReq = append(insertReq, insertTupleFields...)
 
-	replaceReq := append(namespace, replaceFlags...)
+	replaceReq := namespace
+	replaceReq = append(replaceReq, replaceFlags...)
 	replaceReq = append(replaceReq, insertTupleCardinality...)
 	replaceReq = append(replaceReq, insertTupleFields...)
 
-	insertreplaceReq := append(namespace, insertreplaceFlags...)
+	insertreplaceReq := namespace
+	insertreplaceReq = append(insertreplaceReq, insertreplaceFlags...)
 	insertreplaceReq = append(insertreplaceReq, insertTupleCardinality...)
 	insertreplaceReq = append(insertreplaceReq, insertTupleFields...)
 

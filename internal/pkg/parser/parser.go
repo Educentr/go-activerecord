@@ -57,7 +57,7 @@ func Parse(srcFileName string, rc *ds.RecordPackage) error {
 		return fmt.Errorf("error parse file `%s`: %w", srcFileName, err)
 	}
 
-	//ast.Print(&token.FileSet{}, node)
+	// ast.Print(&token.FileSet{}, node)
 	if node.Name.Name != "repository" {
 		return fmt.Errorf("package name in file `%s` is not `repository` skipping", srcFileName)
 	}

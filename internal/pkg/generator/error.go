@@ -14,11 +14,12 @@ func getTmplErrorLine(lines []string, tmplerror string) (string, error) {
 	lineTmpl := tmplErrRx.FindStringSubmatch(tmplerror)
 	if len(lineTmpl) > 1 {
 		lineNum, errParse := strconv.ParseInt(lineTmpl[1], 10, 64)
-		if errParse != nil {
+		switch {
+		case errParse != nil:
 			return "", arerror.ErrGeneragorGetTmplLine
-		} else if len(lines) == 0 {
+		case len(lines) == 0:
 			return "", arerror.ErrGeneragorEmptyTmplLine
-		} else {
+		default:
 			cntline := 3
 			startLine := int(lineNum) - cntline - 1
 			if startLine < 0 {

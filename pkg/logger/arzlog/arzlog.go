@@ -178,7 +178,9 @@ func Generate(mockers []logger.MockerLogger) string {
 
 	aggr := map[string][]string{}
 	for _, mock := range mockers {
-		aggr[GenerateMocker(mock)] = append(aggr[mock.MockerName], mock.FixturesSelector)
+		gMock := GenerateMocker(mock)
+		aggr[gMock] = aggr[mock.MockerName]
+		aggr[gMock] = append(aggr[gMock], mock.FixturesSelector)
 	}
 
 	for name, fixtures := range aggr {

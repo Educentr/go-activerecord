@@ -394,8 +394,8 @@ func TestPoolFullSize(t *testing.T) {
 		}
 
 		// emulate channel overload
-		//ch.stats.ReaderWorkTime = 100
-		//ch.stats.WriterWorkTime = 100
+		// ch.stats.ReaderWorkTime = 100
+		// ch.stats.WriterWorkTime = 100
 
 		time.Sleep(time.Millisecond * 10) // wait until next connection is established
 	}

@@ -210,7 +210,7 @@ func getPeers(n int, handler func(int, Conn, Packet), onAccept func(int, *Channe
 					}
 				}),
 				Logger: LoggerFunc(func(_ context.Context, format string, args ...interface{}) {
-					//log.Printf("[rebus test server] "+format, args...)
+					// log.Printf("[rebus test server] "+format, args...)
 				}),
 			},
 			Accept: func(conn net.Conn, cfg *ChannelConfig) (*Channel, error) {

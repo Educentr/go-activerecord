@@ -28,7 +28,7 @@ func newConnectionPool() *connectionPool {
 // GetConnectionID - получение ConnecitionID. После первого получения, больше нельзя его модифицировать. Можно только новый Options создать
 func (o *BaseConnectionOptions) GetConnectionID() string {
 	o.Calculated = true
-	hashInBytes := o.ConnectionHash.Sum(nil)[:]
+	hashInBytes := o.ConnectionHash.Sum(nil)
 
 	return hex.EncodeToString(hashInBytes)
 }

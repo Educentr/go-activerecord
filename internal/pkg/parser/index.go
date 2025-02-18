@@ -98,6 +98,36 @@ func ParseIndexPart(dst *ds.RecordPackage, fields []*ast.Field) error {
 	return nil
 }
 
+func parseIndexConditionTag(condTag string, fieldsMap map[string]int) (map[int]ds.IndexCondition, *arerror.ErrParseTypeIndexTagDecl) {
+	ret := map[int]ds.IndexCondition{}
+	for _, cond := range strings.Split(condTag, ";") {
+		start_cond := strings.Index(cond, "[")
+		if start_cond == -1 {
+			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrParseTagValueInvalid}
+		}
+
+		end_cond := strings.Index(cond[start_cond+1:], "]")
+		if end_cond == -1 {
+			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrParseTagValueInvalid}
+		}
+
+		if len(cond) == start_cond+end_cond+2 {
+			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrParseTagValueInvalid}
+		}
+
+		fieldName := cond[:start_cond]
+		if fldNum, ex := fieldsMap[fieldName]; !ex {
+			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrFieldNotExist}
+		} else if _, ex := ret[fldNum]; ex {
+			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrDuplicate}
+		} else {
+			ret[fldNum] = ds.IndexCondition{ConditionType: cond[start_cond+1 : start_cond+end_cond+1], Value: strings.Split(cond[start_cond+end_cond+2:], ",")}
+		}
+	}
+
+	return ret, nil
+}
+
 func ParseIndexTag(field *ast.Field, ind *ds.IndexDeclaration, fieldsMap map[string]int) error {
 	tagParam, err := splitTag(field, CheckFlagEmpty, map[TagNameType]ParamValueRule{PrimaryKeyTag: ParamNotNeedValue, UniqueTag: ParamNotNeedValue})
 	if err != nil {
@@ -113,29 +143,14 @@ func ParseIndexTag(field *ast.Field, ind *ds.IndexDeclaration, fieldsMap map[str
 		case SelectorTag:
 			ind.Selector = kv[1]
 		case ConditionalTag:
-			for _, cond := range strings.Split(kv[1], ";") {
-				start_cond := strings.Index(cond, "[")
-				if start_cond == -1 {
-					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrParseTagValueInvalid}
-				}
+			var errCond *arerror.ErrParseTypeIndexTagDecl
 
-				end_cond := strings.Index(cond[start_cond+1:], "]")
-				if end_cond == -1 {
-					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrParseTagValueInvalid}
-				}
+			ind.Conditions, errCond = parseIndexConditionTag(kv[1], fieldsMap)
+			if errCond != nil {
+				errCond.Name = ind.Name
+				errCond.TagName = kv[0]
 
-				if len(cond) == start_cond+end_cond+2 {
-					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrParseTagValueInvalid}
-				}
-
-				fieldName := cond[:start_cond]
-				if fldNum, ex := fieldsMap[fieldName]; !ex {
-					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrFieldNotExist}
-				} else if _, ex := ind.Conditions[fldNum]; ex {
-					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrDuplicate}
-				} else {
-					ind.Conditions[fldNum] = ds.IndexCondition{ConditionType: cond[start_cond+1 : start_cond+end_cond+1], Value: strings.Split(cond[start_cond+end_cond+2:], ",")}
-				}
+				return errCond
 			}
 		case FieldsTag:
 			for _, fieldName := range strings.Split(kv[1], ",") {

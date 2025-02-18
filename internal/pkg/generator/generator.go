@@ -249,7 +249,7 @@ func Generate(appInfo string, cl ds.RecordPackage, linkObject map[string]ds.Reco
 		params := NewPkgData(appInfo, cl)
 		params.LinkedObject = linkObject
 
-		//log.Printf("Generate package (%v)", cl)
+		// log.Printf("Generate package (%v)", cl)
 
 		var err *arerror.ErrGeneratorPhases
 
