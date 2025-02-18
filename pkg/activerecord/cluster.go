@@ -381,7 +381,7 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 	}
 
 	shardPoolSize, err := cfg.GetInt(path+"/PoolSize", int64(globParam.PoolSize))
-	if err != nil || shardPoolSize > math.MaxInt32 {
+	if err != nil {
 		return Shard{}, fmt.Errorf("can't get pool size: %w", err)
 	}
 
@@ -428,12 +428,7 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 
 		for _, shardCfg := range shards {
 			shardCfg.Mode = ModeMaster
-
-			if shardPoolSize > math.MaxInt32 {
-				return Shard{}, fmt.Errorf("can't get pool size: %w", err)
-			}
-
-			shardCfg.PoolSize = int32(shardPoolSize)
+			shardCfg.PoolSize = int32(shardPoolSize) // ToDo check type conversion
 			shardCfg.Timeout = shardTimeout
 			shardCfg.User = shardUserName
 			shardCfg.Password = shardPassword
