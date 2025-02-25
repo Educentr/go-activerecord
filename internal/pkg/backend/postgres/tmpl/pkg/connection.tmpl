@@ -24,6 +24,14 @@ func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceT
 			PoolSize: postgres.DefaultPoolSize,
 		},
 		func(sic activerecord.ShardInstanceConfig) (activerecord.OptionInterface, error) {
+			var tlsConfig *tls.Config
+			
+			if sic.TLSEnable {
+				tlsConfig = &tls.Config{
+					ServerName: sic.Addr,
+				}
+			}
+
 			return postgres.NewConnectionOptions(
 				sic.Addr,
 				sic.Port,
@@ -32,6 +40,7 @@ func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceT
 				postgres.WithCredentials(sic.User, sic.Password),			
 				postgres.WithPoolSize(sic.PoolSize),
 				postgres.WithDatabase(sic.DB),
+				postgres.WithTLSConfig(tlsConfig),
 			)
 		},
 		instanceType,

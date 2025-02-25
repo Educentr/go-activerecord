@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"hash/crc32"
 	"time"
@@ -120,6 +121,14 @@ func WithPoolSize(size int32) ConnectionOption {
 		octopusCfg.poolCfg.MaxConns = size
 
 		return octopusCfg.UpdateHash("s", size)
+	})
+}
+
+func WithTLSConfig(tlsConfig *tls.Config) ConnectionOption {
+	return optionConnectionFunc(func(octopusCfg *ConnectionOptions) error {
+		octopusCfg.poolCfg.ConnConfig.TLSConfig = tlsConfig
+
+		return octopusCfg.UpdateHash("t", fmt.Sprintf("%v", tlsConfig))
 	})
 }
 

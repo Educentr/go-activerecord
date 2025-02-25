@@ -40,14 +40,15 @@ const (
 
 // Структура используется для описания конфигурации конктретного инстанса
 type ShardInstanceConfig struct {
-	Timeout  time.Duration
-	Mode     ServerModeType
-	PoolSize int32
-	Addr     string
-	User     string
-	Password string
-	Port     uint16
-	DB       string
+	Timeout   time.Duration
+	Mode      ServerModeType
+	PoolSize  int32
+	Addr      string
+	User      string
+	Password  string
+	Port      uint16
+	DB        string
+	TLSEnable bool
 }
 
 // Структура описывающая инстанс в кластере
@@ -402,6 +403,11 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 		return Shard{}, fmt.Errorf("can't get db: %w", err)
 	}
 
+	shardTLSEnable, err := cfg.GetBool(path+"/TLSEnable", false)
+	if err != nil {
+		return Shard{}, fmt.Errorf("can't get tls enable: %w", err)
+	}
+
 	// ToDo different DB different rules
 	// if shardDBName == "" {
 	// 	return Shard{}, fmt.Errorf("shard db name should be specified in %s", path+"/DB")
@@ -433,6 +439,7 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 			shardCfg.User = shardUserName
 			shardCfg.Password = shardPassword
 			shardCfg.DB = shardDBName
+			shardCfg.TLSEnable = shardTLSEnable
 
 			opt, errOpt := optionCreator(shardCfg)
 			if errOpt != nil {
@@ -471,13 +478,14 @@ func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobPara
 			shardCfg.User = shardUserName
 			shardCfg.Password = shardPassword
 			shardCfg.DB = shardDBName
+			shardCfg.TLSEnable = shardTLSEnable
 
 			opt, errOpt := optionCreator(shardCfg)
 			if errOpt != nil {
 				return Shard{}, fmt.Errorf("can't create instanceOption: %w", errOpt)
 			}
 
-			ret.Masters = append(ret.Masters, ShardInstance{
+			ret.Replicas = append(ret.Replicas, ShardInstance{
 				ParamsID: opt.GetConnectionID(),
 				Config:   shardCfg,
 				Options:  opt,
