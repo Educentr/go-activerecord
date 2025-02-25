@@ -1,4 +1,4 @@
-module github.com/Educentr/go-activerecord
+module github.com/Educentr/go-activerecord/v3
 
 go 1.22.10
 
