@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
-	"github.com/Educentr/go-activerecord/internal/pkg/backend"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
 
 func TestGenerateOctopus(t *testing.T) {
@@ -90,7 +90,7 @@ func TestGenerateOctopus(t *testing.T) {
 					Mutators: map[string]ds.MutatorDeclaration{
 						"FsMutator": {
 							Name:       "FsMutator",
-							Pkg:        "github.com/Educentr/go-activerecord/internal/pkg/conv",
+							Pkg:        "github.com/Educentr/go-activerecord/v3/internal/pkg/conv",
 							Type:       "*parser_test.Foo",
 							ImportName: "mutatorFooMutatorField",
 							Update:     "updateFunc",
@@ -280,7 +280,7 @@ func TestGenerateOctopus(t *testing.T) {
 					Serializers: map[string]ds.SerializerDeclaration{
 						"s2i": {
 							Name:        "Output",
-							Pkg:         "github.com/Educentr/go-activerecord/pkg/serializer",
+							Pkg:         "github.com/Educentr/go-activerecord/v3/pkg/serializer",
 							Type:        "int",
 							ImportName:  "serializerOutput",
 							Marshaler:   "OutputMarshal",

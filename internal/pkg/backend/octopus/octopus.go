@@ -5,8 +5,8 @@ import (
 	"log"
 	"text/template"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	octopusPkg "github.com/Educentr/go-activerecord/pkg/octopus"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	octopusPkg "github.com/Educentr/go-activerecord/v3/pkg/octopus"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"

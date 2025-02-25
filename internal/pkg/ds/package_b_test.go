@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
 
 func TestRecordPackage_FindImport(t *testing.T) {

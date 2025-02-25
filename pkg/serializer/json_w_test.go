@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Educentr/go-activerecord/pkg/serializer/errs"
+	"github.com/Educentr/go-activerecord/v3/pkg/serializer/errs"
 )
 
 func TestJSONUnmarshal(t *testing.T) {

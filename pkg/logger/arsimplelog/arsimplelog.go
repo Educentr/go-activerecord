@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Educentr/go-activerecord/pkg/logger"
+	"github.com/Educentr/go-activerecord/v3/pkg/logger"
 	// ToDo не очень правильная зависимость, с такими успехами придётся тащить все логгеры для всех бекендов, непонятно зачем
 )
 

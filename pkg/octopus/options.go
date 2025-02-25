@@ -5,8 +5,8 @@ import (
 	"hash/crc32"
 	"time"
 
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
-	"github.com/Educentr/go-activerecord/pkg/iproto/iproto"
+	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto"
 )
 
 // Константы определяющие дефолтное поведение конектора к octopus-у

@@ -1,7 +1,7 @@
 package postgres
 
 import (
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
 )
 
 type OnConflictAction uint8

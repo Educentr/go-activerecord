@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
 
 type Foo struct {
@@ -21,7 +21,7 @@ func TestParsePartialStructFields(t *testing.T) {
 
 	dst := ds.NewRecordPackage()
 
-	if _, err := dst.AddImport("github.com/Educentr/go-activerecord/internal/pkg/parser"); err != nil {
+	if _, err := dst.AddImport("github.com/Educentr/go-activerecord/v3/internal/pkg/parser"); err != nil {
 		t.Errorf("can't prepare test data: %s", err)
 		return
 	}

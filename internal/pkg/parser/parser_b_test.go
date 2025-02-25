@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/internal/pkg/parser"
-	"github.com/Educentr/go-activerecord/internal/pkg/testutil"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend/octopus"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/parser"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/testutil"
 	"gotest.tools/assert"
 	"gotest.tools/assert/cmp"
 )

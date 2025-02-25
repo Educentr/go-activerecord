@@ -17,12 +17,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
-	"github.com/Educentr/go-activerecord/internal/pkg/backend"
-	"github.com/Educentr/go-activerecord/internal/pkg/checker"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/internal/pkg/generator"
-	"github.com/Educentr/go-activerecord/internal/pkg/parser"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/checker"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/generator"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/parser"
 )
 
 // Структура приложения

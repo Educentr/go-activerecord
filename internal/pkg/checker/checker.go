@@ -4,9 +4,9 @@ import (
 	"errors"
 	"log"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
-	"github.com/Educentr/go-activerecord/internal/pkg/backend"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
 
 // Checker структура описывающая checker

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
 )
 
 // Описание приложения. Информация необходимая для разметки артефактов

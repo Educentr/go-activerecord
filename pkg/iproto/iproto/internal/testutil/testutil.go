@@ -3,7 +3,7 @@ package testutil
 import (
 	"net"
 
-	"github.com/Educentr/go-activerecord/pkg/iproto/iproto"
+	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto"
 	"golang.org/x/net/context"
 )
 

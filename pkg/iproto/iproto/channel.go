@@ -14,9 +14,9 @@ import (
 
 	"github.com/gobwas/pool/pbytes"
 
-	pbufio "github.com/Educentr/go-activerecord/pkg/iproto/util/bufio"
-	wio "github.com/Educentr/go-activerecord/pkg/iproto/util/io"
-	egotime "github.com/Educentr/go-activerecord/pkg/iproto/util/time"
+	pbufio "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/bufio"
+	wio "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/io"
+	egotime "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/time"
 
 	// ToDo разобраться зачем и по возможности заменить на context
 	"golang.org/x/net/context"

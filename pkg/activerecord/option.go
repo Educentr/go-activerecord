@@ -3,7 +3,7 @@ package activerecord
 import (
 	"context"
 
-	"github.com/Educentr/go-activerecord/pkg/logger"
+	"github.com/Educentr/go-activerecord/v3/pkg/logger"
 )
 
 type Option interface {

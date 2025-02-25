@@ -5,8 +5,8 @@ import (
 	"log"
 	"text/template"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	postgresPkg "github.com/Educentr/go-activerecord/pkg/postgres"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	postgresPkg "github.com/Educentr/go-activerecord/v3/pkg/postgres"
 )
 
 type BackendGenerator struct {

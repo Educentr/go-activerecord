@@ -4,7 +4,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/textutil"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/textutil"
 )
 
 var BaseTemplateFuncs = template.FuncMap{

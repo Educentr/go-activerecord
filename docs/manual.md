@@ -192,7 +192,7 @@ type TriggersFoo struct {
 
 Объявление дополнительных сериализаторов для полей. Когда не хватает обычных типов и необходимо работать, например, со словарями, то можно объявить сериализатор, который будет применяться для определённого поля. Тип сериализатора переопределяет тип поля внутри объекта. Допустимые параметры в тегах:
 
-- `pkg` - указывает на пакет в котором находится определение сериализатора. По умолчанию `github.com/Educentr/go-activerecord/pkg/serializer`. Пакет не обязательно импортировать, импорт добавиться автоматически.
+- `pkg` - указывает на пакет в котором находится определение сериализатора. По умолчанию `github.com/Educentr/go-activerecord/v3/pkg/serializer`. Пакет не обязательно импортировать, импорт добавиться автоматически.
 - `marshaler` - функция сериализации данных, на вход функция принимает параметры указанные при объявлении сериализатора и переменную с типом поля к которому привязывается сериализатор, на выход ожидается тип указанный в сериализаторе. Имя по умолчанию `Name + "Marshal"`
 - `unmarshaler` - функция десериализации данных, на вход функция принимает параметры указанные при объявлении сериализатора и переменную с типом сериализатора, на выход ожидается тип поля к которому привязывается сериализатор. Имя по умолчанию `Name + "Unmarshal"`
 
@@ -695,7 +695,7 @@ package test
 import (
   "context"
   "github.com/mailru/activerecord-cookbook/example/testutil/fixture"
-  "github.com/Educentr/go-activerecord/pkg/octopus"
+  "github.com/Educentr/go-activerecord/v3/pkg/octopus"
 )
 
 func sometest() {
@@ -738,7 +738,7 @@ import (
   "context"
   "github.com/mailru/activerecord-cookbook/example/testutil/fixture"
   "github.com/mailru/activerecord-cookbook/example/model/repository/generated/reward"
-  "github.com/Educentr/go-activerecord/pkg/octopus"
+  "github.com/Educentr/go-activerecord/v3/pkg/octopus"
 )
 
 func sometest() {

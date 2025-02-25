@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )

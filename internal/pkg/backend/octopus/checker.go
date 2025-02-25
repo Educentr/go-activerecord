@@ -3,8 +3,8 @@ package octopus
 import (
 	"strconv"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
 
 func (c BackendGenerator) Check(cl *ds.RecordPackage) error {

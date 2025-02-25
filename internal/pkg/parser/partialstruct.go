@@ -7,8 +7,8 @@ import (
 	"go/token"
 	"path/filepath"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
 
 func parseStructFields(dst *ds.RecordPackage, gen *ast.GenDecl, name, pkgName string) ([]ds.PartialFieldDeclaration, error) {

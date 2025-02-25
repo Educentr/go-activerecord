@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	argen "github.com/Educentr/go-activerecord/internal/app"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	argen "github.com/Educentr/go-activerecord/v3/internal/app"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 	"golang.org/x/mod/modfile"
 )
 

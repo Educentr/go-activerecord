@@ -16,10 +16,10 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/tools/imports"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
-	"github.com/Educentr/go-activerecord/internal/pkg/backend"
-	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend/octopus"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
 
 const TemplateName = `ARPkgTemplate`

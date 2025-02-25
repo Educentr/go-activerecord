@@ -4,14 +4,14 @@ import (
 	"go/ast"
 	"testing"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/internal/pkg/parser"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/parser"
 )
 
 func TestParseSerializer(t *testing.T) {
 	dst := ds.NewRecordPackage()
 
-	if _, err := dst.AddImport("github.com/Educentr/go-activerecord/notexistsfolder/dictionary"); err != nil {
+	if _, err := dst.AddImport("github.com/Educentr/go-activerecord/v3/notexistsfolder/dictionary"); err != nil {
 		t.Errorf("can't prepare test data: %s", err)
 		return
 	}
@@ -32,7 +32,7 @@ func TestParseSerializer(t *testing.T) {
 				fields: []*ast.Field{
 					{
 						Names: []*ast.Ident{{Name: "Foo"}},
-						Tag:   &ast.BasicLit{Value: "`ar:\"pkg:github.com/Educentr/go-activerecord/notexistsfolder/serializer\"`"},
+						Tag:   &ast.BasicLit{Value: "`ar:\"pkg:github.com/Educentr/go-activerecord/v3/notexistsfolder/serializer\"`"},
 						Type: &ast.StarExpr{
 							X: &ast.SelectorExpr{
 								X:   &ast.Ident{Name: "dictionary"},
@@ -51,7 +51,7 @@ func TestParseSerializer(t *testing.T) {
 				fields: []*ast.Field{
 					{
 						Names: []*ast.Ident{{Name: "Foo"}},
-						Tag:   &ast.BasicLit{Value: "`ar:\"pkg:github.com/Educentr/go-activerecord/notexistsfolder/serializer\"`"},
+						Tag:   &ast.BasicLit{Value: "`ar:\"pkg:github.com/Educentr/go-activerecord/v3/notexistsfolder/serializer\"`"},
 						Type: &ast.StarExpr{
 							X: &ast.SelectorExpr{
 								X:   &ast.Ident{Name: "notimportedpackage"},
@@ -75,7 +75,7 @@ func TestParseSerializer(t *testing.T) {
 
 func TestParseTypeSerializer(t *testing.T) {
 	dst := ds.NewRecordPackage()
-	if _, err := dst.AddImport("github.com/Educentr/go-activerecord/notexistsfolder/dictionary"); err != nil {
+	if _, err := dst.AddImport("github.com/Educentr/go-activerecord/v3/notexistsfolder/dictionary"); err != nil {
 		t.Errorf("can't prepare test data: %s", err)
 		return
 	}

@@ -3,9 +3,9 @@ package checker
 import (
 	"testing"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
-	"github.com/Educentr/go-activerecord/internal/pkg/backend/postgres"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend/octopus"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend/postgres"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
 
 func Test_checkBackend(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/internal/pkg/textutil"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/textutil"
 )
 
 type FixturePkgData struct {

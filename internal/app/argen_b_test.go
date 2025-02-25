@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/Educentr/go-activerecord/internal/app"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
-	"github.com/Educentr/go-activerecord/internal/pkg/testutil"
-	"github.com/Educentr/go-activerecord/pkg/octopus"
+	"github.com/Educentr/go-activerecord/v3/internal/app"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/testutil"
+	"github.com/Educentr/go-activerecord/v3/pkg/octopus"
 )
 
 func TestInit(t *testing.T) {
@@ -315,7 +315,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
 	"` + testModuleName + `/model/repository/argen/` + repositoryName + `"
 )
 

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/Educentr/go-activerecord/pkg/activerecord"
-	"github.com/Educentr/go-activerecord/pkg/iproto/iproto"
+	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
+	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto"
 )
 
 // ToDo подумать как унести в пакет octopus но так что бы октопус на начал зависеть от activerecord

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"regexp"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/arerror"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
 )
 
 // PkgNameRx регулярное выражение вырезающее имя импортируемого пакета

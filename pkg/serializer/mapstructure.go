@@ -6,7 +6,7 @@ import (
 
 	"github.com/mailru/mapstructure"
 
-	"github.com/Educentr/go-activerecord/pkg/serializer/errs"
+	"github.com/Educentr/go-activerecord/v3/pkg/serializer/errs"
 )
 
 func MapstructureUnmarshal(data string, v any) error {

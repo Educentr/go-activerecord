@@ -3,7 +3,7 @@ package activerecord
 import (
 	"testing"
 
-	"github.com/Educentr/go-activerecord/pkg/logger/arsimplelog"
+	"github.com/Educentr/go-activerecord/v3/pkg/logger/arsimplelog"
 )
 
 func TestInitActiveRecord(t *testing.T) {

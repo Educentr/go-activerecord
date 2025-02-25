@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Educentr/go-activerecord/pkg/logger"
-	"github.com/Educentr/go-activerecord/pkg/logger/arsimplelog"
+	"github.com/Educentr/go-activerecord/v3/pkg/logger"
+	"github.com/Educentr/go-activerecord/v3/pkg/logger/arsimplelog"
 )
 
 var ErrNoData = errors.New("no data")

@@ -3,7 +3,7 @@ package textutil_test
 import (
 	"testing"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/textutil"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/textutil"
 )
 
 func TestCamelToSnake(t *testing.T) {

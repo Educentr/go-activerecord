@@ -5,9 +5,9 @@ import (
 	"errors"
 	"html/template"
 
-	"github.com/Educentr/go-activerecord/internal/pkg/backend/octopus"
-	"github.com/Educentr/go-activerecord/internal/pkg/backend/postgres"
-	"github.com/Educentr/go-activerecord/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend/octopus"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend/postgres"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
 
 type BackendDriver interface {

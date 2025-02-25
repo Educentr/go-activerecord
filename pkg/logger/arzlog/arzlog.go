@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Educentr/go-activerecord/pkg/logger"
+	"github.com/Educentr/go-activerecord/v3/pkg/logger"
 	zlog "github.com/rs/zerolog"
 )
 
