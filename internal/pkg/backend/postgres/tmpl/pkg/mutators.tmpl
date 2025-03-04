@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
 	"github.com/Educentr/go-activerecord/v3/pkg/postgres"
 {{- range $ind, $imp := .Imports }}
 	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
