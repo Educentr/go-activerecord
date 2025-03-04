@@ -8,6 +8,12 @@ import (
 type (
 	OpCode uint8
 )
+
+type FieldValue struct {
+	Field string
+	Value any
+}
+
 type ModelStruct interface {
 	Insert(ctx context.Context) error
 	Replace(ctx context.Context) error

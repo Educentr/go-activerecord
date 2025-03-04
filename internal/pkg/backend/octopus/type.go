@@ -49,7 +49,7 @@ func (p FormatType) PackFunc() string {
 }
 
 func (p FormatType) StringDeserializer() []string {
-	log.Fatal("not implemented")
+	log.Fatal("StringDeserializer not implemented")
 
 	return nil
 }

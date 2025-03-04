@@ -277,10 +277,10 @@ func TestArGen_Run(t *testing.T) {
 go 1.19
 
 require (
-	github.com/Educentr/go-activerecord v1.5.4
+	github.com/Educentr/go-activerecord/v3 v3.0.2
 )
 
-replace github.com/Educentr/go-activerecord => ` + srcPath
+replace github.com/Educentr/go-activerecord/v3 => ` + srcPath
 
 				modFile := filepath.Join(tt.initArgs.root, "/go.mod")
 				if err := os.WriteFile(modFile, []byte(gomod), 0600); err != nil {

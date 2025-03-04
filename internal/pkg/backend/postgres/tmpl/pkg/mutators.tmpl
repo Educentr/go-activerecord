@@ -1,0 +1,101 @@
+package {{ .ARPkg }}
+
+import (
+	"bytes"
+	"context"
+
+	"github.com/Educentr/go-activerecord/v3/pkg/postgres"
+{{- range $ind, $imp := .Imports }}
+	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
+{{- end }}
+)
+
+{{ $mutators := .Mutators -}}
+{{ $PublicStructName := .ARPkgTitle -}}
+{{ $fields := .FieldList }}
+{{ $mutatorLen := len .Mutators }}
+
+{{ if ne $mutatorLen 0 -}}
+type Mutators struct {
+    {{- range $i, $mut := $mutators }}
+	{{ $mut.Name }}    postgres.MutatorField
+	field{{ $mut.Name }}Original {{ $mut.Type }}
+    {{- end }}
+}
+{{ end -}}
+
+{{ range $_, $fstruct := $fields -}}
+	{{ $packerparam := packerParam $fstruct.Format -}}
+
+	{{ range $i, $mut := $fstruct.Mutators -}}
+		{{ $mutatorparam := mutatorParam $mut $fstruct.Format -}}
+		{{ $mtype := $fstruct.Format }}
+
+func (obj *{{ $PublicStructName }}) {{ $mutatorparam.Name }}{{ $fstruct.Name }}(mutArg {{ $mtype }}) error {
+		{{- if eq $mutatorparam.Name "Inc" }}
+	if mutArg == 0 {
+		return nil
+	}
+
+	if uint64({{ $packerparam.MaxValue }} - obj.field{{ $fstruct.Name }}) < uint64(mutArg) {
+		return fmt.Errorf("overflow type '{{ $fstruct.Format }}' after Inc %d", mutArg)
+	}
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpAdd, Value: mutArg})
+	obj.field{{ $fstruct.Name }} += {{ $packerparam.TypeName }}(mutArg)
+			
+		{{- else if eq $mutatorparam.Name "Dec" }}
+	if mutArg == 0 {
+		return nil
+	}
+
+	if uint64(obj.field{{ $fstruct.Name }} - {{ $packerparam.MinValue }}) < uint64(mutArg) {
+		return fmt.Errorf("overflow type '{{ $fstruct.Format }}' after Dec %d", mutArg)
+	}
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpAdd, Value: -mutArg})
+	obj.field{{ $fstruct.Name }} -= {{ $packerparam.TypeName }}(mutArg)
+		
+		{{- else if eq $mutatorparam.Name "And" }}
+ToDo Unimplemented
+	if obj.field{{ $fstruct.Name }} == 0 || obj.field{{ $fstruct.Name }} & mutArg == obj.field{{ $fstruct.Name }} {
+		return nil
+	}
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpAnd, Value: uint32(mutArg)})
+	obj.field{{ $fstruct.Name }} &= mutArg
+		
+		{{- else if eq $mutatorparam.Name "Or" "SetBit" }}
+ToDo Unimplemented 
+	if mutArg == 0 || obj.field{{ $fstruct.Name }} | mutArg == obj.field{{ $fstruct.Name }} {
+		return nil
+	}
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpOr, Value: uint32(mutArg)})
+	obj.field{{ $fstruct.Name }} |= mutArg
+
+		{{- else if eq $mutatorparam.Name "ClearBit" }}
+ToDo Unimplemented
+	if mutArg == 0 || obj.field{{ $fstruct.Name }} & ^mutArg == obj.field{{ $fstruct.Name }} {
+		return nil
+	}
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpAnd, Value: uint32(^mutArg)})
+	obj.field{{ $fstruct.Name }} &= ^mutArg
+
+		{{- else if eq $mutatorparam.Name "Xor" }}
+	if mutArg == 0 || obj.field{{ $fstruct.Name }} ^ mutArg == obj.field{{ $fstruct.Name }} {
+		return nil
+	}
+
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpXor, Value: uint32(mutArg)})
+	obj.field{{ $fstruct.Name }} ^= mutArg
+
+		{{- else }}
+Unknown mutator type in template!!!
+		{{- end }}
+
+	return nil
+}
+	{{- end }}
+{{ end }}

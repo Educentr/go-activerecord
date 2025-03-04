@@ -43,6 +43,7 @@ type PkgData struct {
 	ProcInFieldList  []ds.ProcFieldDeclaration
 	ProcOutFieldList []ds.ProcFieldDeclaration
 	ServerConfKey    string
+	EnableSelectAll  bool
 	Container        ds.NamespaceDeclaration
 	Indexes          []ds.IndexDeclaration
 	Serializers      map[string]ds.SerializerDeclaration
@@ -81,6 +82,7 @@ func NewPkgData(appInfo string, cl ds.RecordPackage) PkgData {
 		FieldMap:         cl.FieldsMap,
 		ProcInFieldList:  cl.ProcInFields,
 		ProcOutFieldList: cl.ProcOutFields.List(),
+		EnableSelectAll:  cl.EnableSelectAll,
 		FieldObject:      cl.FieldsObjectMap,
 		ServerConfKey:    cl.ServerConfKey,
 		Container:        cl.Namespace,

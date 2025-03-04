@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
+	// ToDo drop arlogger 
+	arlogger "github.com/Educentr/go-activerecord/v3/pkg/logger"
 	"github.com/Educentr/go-activerecord/v3/pkg/postgres"
 {{- range $ind, $imp := .Imports }}
 	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
@@ -17,7 +19,6 @@ import (
 
 {{ $pkgName := .ARPkg }}
 {{ $serializers := .Serializers -}}
-{{ $mutators := .Mutators -}}
 {{ $PublicStructName := .ARPkgTitle -}}
 {{ $LinkedObject := .LinkedObject }}
 {{ $flags := .Flags }}
@@ -55,6 +56,36 @@ func SelectByPrimary(ctx context.Context, pk {{ $ind.Type }}) (*{{ $PublicStruct
 	return {{ $ind.Selector }}(ctx, pk)
 }
 	{{ end }}
+{{ end }}
+
+{{ if .EnableSelectAll }}
+func SelectAll(ctx context.Context) ([]*{{ $PublicStructName }}, error) {
+	logger := activerecord.Logger()
+	ctx = logger.SetLoggerValueToContext(ctx, arlogger.ValueLogPrefix{"select_all": 1})
+	metricTimer := activerecord.Metric().Timer("postgres", "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount("postgres", "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount("postgres", "{{ $PublicStructName }}")
+
+	columnNames := []string{
+	{{- range $_, $fstruct := $fields }}
+		{{ $packerparam := packerParam $fstruct.Format -}}
+		"{{ $fstruct.Name }}",
+	{{ end }}
+	}
+
+	query, err := postgres.GenerateSelectAll(tableName, columnNames)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "select_gen", 1)
+		logger.Error(ctx, fmt.Sprintf("Error get all from db '%s'", err))
+
+		return nil, err
+	}
+
+	metricTimer.Timing(ctx, "select_gen")
+	metricStatCnt.Inc(ctx, "select_all", 1)
+
+	return selectRawDB(ctx, query, activerecord.NewLimiter(uint32(postgres.MaxLimit)))
+}
 {{ end }}
 
 {{ range $num, $ind := .Indexes -}}

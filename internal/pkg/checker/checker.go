@@ -45,7 +45,7 @@ func checkLinkedObject(cl *ds.RecordPackage, linkedObjects map[string]string) er
 			return &arerror.ErrCheckPackageLinkedDecl{Pkg: cl.Namespace.PackageName, Object: fobj.ObjectName, Err: arerror.ErrCheckObjectNotFound}
 		}
 
-		// ToDo сделать проверку, что есть индекс по которому будет селектиться связанный объект. Сейчас есть в поле `key` указать несуществующий индекс то сгенерируется некомпилируемый код
+		// ToDo сделать проверку, что есть индекс по которому будет селектиться связанный объект. Сейчас если в поле `key` указать несуществующий индекс то сгенерируется некомпилируемый код
 	}
 
 	return nil

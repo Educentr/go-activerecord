@@ -238,6 +238,8 @@ func parseDoc(dst *ds.RecordPackage, nodeName string, doc *ast.CommentGroup) err
 					for _, b := range be {
 						dst.Backends = append(dst.Backends, ds.Backend(b))
 					}
+				case "enableSelectAll":
+					dst.EnableSelectAll = true
 				default:
 					retErr := arerror.ErrParseDocDecl{Name: kv[0], Err: arerror.ErrUnknown}
 					if len(kv) > 1 {

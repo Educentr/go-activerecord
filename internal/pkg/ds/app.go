@@ -79,6 +79,7 @@ type RecordPackage struct {
 	Indexes               []IndexDeclaration                   // Список индексов, важна последовательность для некоторых хранилищ
 	IndexMap              map[string]int                       // Обратный индекс от имён для индексов
 	SelectorMap           map[string]int                       // Список селекторов, используется для контроля дублей
+	EnableSelectAll       bool                                 // Признак того, что сущность поддерживает выборку всех записей
 	Backends              []Backend                            // Список бекендов для которых надо сгенерировать пакеты (сейчас допустим один и только один)
 	SerializerMap         map[string]SerializerDeclaration     // Список сериализаторов используемых в этой сущности
 	MutatorMap            map[string]MutatorDeclaration        // Список мутаторов используемых в этой сущности

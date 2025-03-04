@@ -195,12 +195,13 @@ func TestGenerateSelect(t *testing.T) {
 
 func TestGenerateUpdate(t *testing.T) {
 	tests := []struct {
-		name          string
-		tableName     string
-		primaryIndex  postgres.Index
-		updates       []postgres.UpdateParams
-		expectedQuery string
-		expectedError error
+		name           string
+		tableName      string
+		primaryIndex   postgres.Index
+		updates        []postgres.UpdateParams
+		idempotencyKey []activerecord.FieldValue
+		expectedQuery  string
+		expectedError  error
 	}{
 		{
 			name:      "Single update with OpSet",
@@ -226,8 +227,9 @@ func TestGenerateUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedQuery: `UPDATE "users" SET name = $1 WHERE id = $2`,
-			expectedError: nil,
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery:  `UPDATE "users" SET name = $1 WHERE id = $2`,
+			expectedError:  nil,
 		},
 		{
 			name:      "Single update with OpAdd",
@@ -253,8 +255,9 @@ func TestGenerateUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedQuery: `UPDATE "users" SET age = age + $1 WHERE id = $2 RETURNING age`,
-			expectedError: nil,
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery:  `UPDATE "users" SET age = age + $1 WHERE id = $2 RETURNING age`,
+			expectedError:  nil,
 		},
 		{
 			name:      "Single update with OpAnd",
@@ -280,8 +283,9 @@ func TestGenerateUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedQuery: `UPDATE "users" SET flags = flags & $1 WHERE id = $2 RETURNING flags`,
-			expectedError: nil,
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery:  `UPDATE "users" SET flags = flags & $1 WHERE id = $2 RETURNING flags`,
+			expectedError:  nil,
 		},
 		{
 			name:      "Update with DBSerializer",
@@ -307,8 +311,9 @@ func TestGenerateUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedQuery: `UPDATE "users" SET Date = $1 WHERE id = $2`,
-			expectedError: nil,
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery:  `UPDATE "users" SET Date = $1 WHERE id = $2`,
+			expectedError:  nil,
 		},
 		{
 			name:      "Bulk update not implemented",
@@ -344,8 +349,9 @@ func TestGenerateUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedQuery: "",
-			expectedError: fmt.Errorf("bulk update not implemented"),
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery:  "",
+			expectedError:  fmt.Errorf("bulk update not implemented"),
 		},
 		{
 			name:      "Primary key length mismatch",
@@ -375,14 +381,15 @@ func TestGenerateUpdate(t *testing.T) {
 					},
 				},
 			},
-			expectedQuery: "",
-			expectedError: fmt.Errorf("primary key length ([1]) not equal to index fields in update 0"),
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery:  "",
+			expectedError:  fmt.Errorf("primary key length ([1]) not equal to index fields in update 0"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q, err := postgres.GenerateUpdate(tt.tableName, tt.primaryIndex, tt.updates)
+			q, err := postgres.GenerateUpdate(tt.tableName, tt.primaryIndex, tt.updates, tt.idempotencyKey)
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {

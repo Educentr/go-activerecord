@@ -64,7 +64,7 @@ var NamespacePackages = NSPackage {
             return {{ $ns.Namespace.PackageName }}.MarshalFixtures([]*{{ $ns.Namespace.PackageName }}.{{ $ns.Namespace.PublicName }}{obj})
 
 			{{ else }}
-			return nil, fmt.Errorf("not implemented")
+			return nil, fmt.Errorf("Unpacker not implemented")
 			{{ end }}
         },
 		FixtureUnpacker: func(ctx context.Context, source []byte) (res []any, err error) {
@@ -97,7 +97,7 @@ var NamespacePackages = NSPackage {
                     return {{ $ns.Namespace.PackageName }}.Unpack{{ $field.Name }}(bytes.NewReader(packedField))
                     {{- end }}
 					{{ else }}
-					return nil, fmt.Errorf("not implemented")
+					return nil, fmt.Errorf("Unpacker not implemented")
 					{{ end }}
                 },
             },
@@ -114,7 +114,7 @@ var NamespacePackages = NSPackage {
 					{{ if eq "octopus" (index $ns.Backends 0) }}
 					return {{ $ns.Namespace.PackageName }}.UnpackKeyIndex{{ $ind.Name }}(packedKeys)
 					{{ else }}
-					return nil, fmt.Errorf("not implemented")
+					return nil, fmt.Errorf("Unpacker not implemented")
 					{{ end }}
 				},
             },
@@ -129,7 +129,7 @@ var NamespacePackages = NSPackage {
 				{{ if eq "octopus" (index $ns.Backends 0) }}
 				return {{ $ns.Namespace.PackageName }}.UnpackKeyIndex{{ $pk.Name }}(packedKeys)
 				{{ else }}
-				return nil, fmt.Errorf("not implemented")
+				return nil, fmt.Errorf("Unpacker not implemented")
 				{{ end }}
 			},
             {{- end }}

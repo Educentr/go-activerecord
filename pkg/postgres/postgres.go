@@ -166,6 +166,12 @@ func (q *Query) AddNoConflictDoUpdate(tableName string, pk Index, fieldNames []s
 	)
 }
 
+func (q *Query) AddFieldValue(fv ...activerecord.FieldValue) {
+	for _, f := range fv {
+		q.QueryString += fmt.Sprintf("%s = $%d", f.Field, q.AddParams(f.Value))
+	}
+}
+
 func (q *Query) AddParams(key ...any) int {
 	q.Params = append(q.Params, key...)
 
@@ -228,8 +234,16 @@ func QuoteIdentifier(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
-func GenerateSelectAll(tableName string, fieldNames []string) (string, error) {
-	return fmt.Sprintf("SELECT %s FROM %s LIMIT %d", strings.Join(fieldNames, ", "), QuoteIdentifier(tableName), MaxLimit), nil
+func GenerateSelectAll(tableName string, fieldNames []string) (*Query, error) {
+	// ToDo quote field names
+	q := &Query{
+		QueryString: fmt.Sprintf("SELECT %s FROM %s", strings.Join(fieldNames, ", "), QuoteIdentifier(tableName)),
+		Params:      []any{},
+	}
+
+	q.AddLimitOffset(uint32(MaxLimit), 0)
+
+	return q, nil
 }
 
 func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][]any, offset, limit uint32, cursor CursorPosition) (*Query, error) {
@@ -295,7 +309,29 @@ func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][
 	return q, nil
 }
 
-func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams) (*Query, error) {
+// ToDo заменить idempotencyKey передаваемые явно в функцию, на With...
+// Но возможно это и не понадобиться потому, что надо много переделывать. Нужно отдельно собирать, все что должны сделать
+// все With... и потом понимать в какое место запроса надо положить результат.
+// type QueryOption interface {
+// 	apply(*Query) error
+// }
+
+// type optionQueryFunc func(*Query) error
+
+// func (o optionQueryFunc) apply(c *Query) error {
+// 	return o(c)
+// }
+
+// func WithIdempotencyKey(idempotencyKey []FieldValue) QueryOption {
+// 	return optionQueryFunc(func(q *Query) error {
+// 		q.AddFieldValue(idempotencyKey...)
+
+// 		return nil
+// 	})
+
+// }
+
+func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams, idempotencyKey []activerecord.FieldValue) (*Query, error) {
 	// ToDo generate bulk update
 	isBulk := len(updates) > 1
 	if isBulk {
@@ -333,6 +369,9 @@ func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams
 			q.AddQuery(operation)
 
 			q.AddWhereBlock()
+
+			q.AddFieldValue(idempotencyKey...)
+
 			q.ConditionFields(primaryIndex.Fields.GetFieldNames())
 
 			if primaryIndex.MultiField() {

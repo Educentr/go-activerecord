@@ -16,7 +16,8 @@ type Operation struct {
 
 type BaseField struct {
 	activerecord.BaseField
-	UpdateOps []Operation
+	UpdateOps   []Operation
+	CheckFields []activerecord.FieldValue
 }
 
 type UpdateParams struct {

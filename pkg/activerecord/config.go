@@ -147,9 +147,9 @@ func (dc *DefaultConfig) GetStringIfExists(confPath string) (string, bool, error
 }
 
 func (dc *DefaultConfig) GetStrings(confPath string, dfl []string) ([]string, error) {
-	return []string{}, fmt.Errorf("not implemented")
+	return []string{}, fmt.Errorf("GetStrings not implemented")
 }
 
 func (dc *DefaultConfig) GetStruct(confPath string, valuePtr interface{}) (bool, error) {
-	return false, fmt.Errorf("not implemented")
+	return false, fmt.Errorf("GetStruct not implemented")
 }

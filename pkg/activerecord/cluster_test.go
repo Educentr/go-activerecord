@@ -39,6 +39,7 @@ func TestGetClusterInfoFromCfg(t *testing.T) {
 				mockConfig.EXPECT().GetStringIfExists("testconfig/master").Return("", false, nil)
 				mockConfig.EXPECT().GetStringIfExists("testconfig").Return("host1:0,host2:0", true, nil)
 				mockConfig.EXPECT().GetStringIfExists("testconfig/replica").Return("", false, nil)
+				mockConfig.EXPECT().GetBool("testconfig/TLSEnable", false).Return(false, nil)
 			},
 			args: args{
 				ctx:   ctx,
@@ -86,6 +87,7 @@ func TestGetClusterInfoFromCfg(t *testing.T) {
 				mockConfig.EXPECT().GetString("testconfig/DB", "").Return("", nil)
 				mockConfig.EXPECT().GetStringIfExists("testconfig/master").Return("host2:0", true, nil)
 				mockConfig.EXPECT().GetStringIfExists("testconfig/replica").Return("host1:0", true, nil)
+				mockConfig.EXPECT().GetBool("testconfig/TLSEnable", false).Return(false, nil)
 			},
 			args: args{
 				ctx:   ctx,
@@ -135,6 +137,8 @@ func TestGetClusterInfoFromCfg(t *testing.T) {
 				mockConfig.EXPECT().GetStringIfExists("testconfig/master").Return("", false, nil)
 				mockConfig.EXPECT().GetStringIfExists("testconfig").Return("host1:0", true, nil)
 				mockConfig.EXPECT().GetStringIfExists("testconfig/replica").Return("host2:0", true, nil)
+				mockConfig.EXPECT().GetBool("testconfig/TLSEnable", false).Return(false, nil)
+
 			},
 			args: args{
 				ctx:   ctx,

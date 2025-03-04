@@ -21,6 +21,18 @@ func (m Mutator) DBSerializer() string {
 	return ""
 }
 
+type MutatorParam struct {
+	Name          string
+	AvailableType []FormatType
+	ArgType       string
+}
+
+// ToDo перенести в описание форматов (type.go)
+var MutatorMapper = map[string]MutatorParam{
+	ds.IncMutator: {Name: "Inc", AvailableType: NumericFormatT},
+	ds.DecMutator: {Name: "Dec", AvailableType: NumericFormatT},
+}
+
 type FormatType struct {
 	TypeName   ds.Format
 	Name       string
@@ -59,7 +71,7 @@ func (p FormatType) GetMutatorByName(name string) Mutator {
 }
 
 func (p FormatType) PackConvFunc(fieldname string) string {
-	log.Fatal("not implemented")
+	log.Fatal("PackConvFunc not implemented")
 
 	return ""
 }
@@ -95,7 +107,7 @@ func (p FormatType) DefaultValue() string {
 }
 
 func (p FormatType) UnpackType() string {
-	log.Fatal("not implemented")
+	log.Fatal("UnpackType not implemented")
 
 	return ""
 }
@@ -127,13 +139,13 @@ func (p FormatType) MaxValue() string {
 }
 
 func (p FormatType) ToString() []string {
-	log.Fatal("not implemented")
+	log.Fatal("ToString not implemented")
 
 	return nil
 }
 
 func (p FormatType) MutatorTypeConv() string {
-	log.Fatal("not implemented")
+	log.Fatal("MutatorTypeConv not implemented")
 
 	return ""
 }

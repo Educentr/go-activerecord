@@ -63,5 +63,21 @@ func (b BackendGenerator) TemplateFuncs() template.FuncMap {
 
 			return postgresPkg.ASC
 		},
+		"mutatorParam": func(mut string, format ds.Format) MutatorParam {
+			ret, ex := MutatorMapper[mut]
+			if !ex {
+				log.Fatalf("mutator packer for type `%s` not found", format)
+			}
+
+			for _, availFormat := range ret.AvailableType {
+				if availFormat.TypeName == format {
+					return ret
+				}
+			}
+
+			log.Fatalf("Mutator `%s` not available for type `%s`", mut, format)
+
+			return MutatorParam{}
+		},
 	}
 }

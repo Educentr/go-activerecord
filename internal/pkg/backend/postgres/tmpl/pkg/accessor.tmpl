@@ -44,6 +44,27 @@ func (obj *{{ $PublicStructName }}) Get{{ $fstruct.Name }}() {{ $rtype }} {
 	return obj.field{{ $fstruct.Name }}
 }
 
+func (obj *{{ $PublicStructName }}) SetAndCheck{{ $fstruct.Name }}({{ $fstruct.Name }} {{ $rtype }}) error {
+	for _, checkField := range obj.BaseField.CheckFields {
+		if checkField.Field == "{{ $fstruct.Name }}" {
+			return errors.New("value already changed. Can't check this value")
+		}
+	}
+
+	for _, updateOp := range obj.BaseField.UpdateOps {
+		if updateOp.Field == "{{ $fstruct.Name }}" {
+			return errors.New("value already changed. Can't update this value")
+		}
+	}
+
+	obj.BaseField.CheckFields = append(obj.BaseField.CheckFields, activerecord.FieldValue{
+		Field: "{{ $fstruct.Name }}",
+		Value: {{ $fstruct.Name }},
+	})
+
+	return obj.Set{{ $fstruct.Name }}({{ $fstruct.Name }})
+}
+
 func (obj *{{ $PublicStructName }}) Set{{ $fstruct.Name }}({{ $fstruct.Name }} {{ $rtype }}) error {
 	{{- if $fstruct.PrimaryKey }}
 	if obj.BaseField.Exists {

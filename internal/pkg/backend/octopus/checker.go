@@ -15,6 +15,10 @@ func (c BackendGenerator) Check(cl *ds.RecordPackage) error {
 		}
 	}
 
+	if cl.EnableSelectAll {
+		return &arerror.ErrCheckPackageDecl{Pkg: cl.Namespace.PackageName, Err: arerror.ErrCheckSelectAllNotSupported}
+	}
+
 	return nil
 }
 

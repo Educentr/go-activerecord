@@ -12,6 +12,7 @@ var (
 	ErrCheckFieldSerializerNotFound        = errors.New("serializer not found")
 	ErrCheckFieldSerializerNotSupported    = errors.New("serializer not supported")
 	ErrCheckFieldInvalidFormat             = errors.New("invalid format")
+	ErrCheckSelectAllNotSupported          = errors.New("select all not supported")
 	ErrCheckFieldInvalidProcFormat         = errors.New("invalid proc format")
 	ErrTableNameNotCanonical               = errors.New("table name not canonical. The general consensus is to use lowercase letters separated by underscores for readability and avoid reserved words to prevent confusion or errors")
 	ErrCheckFieldMutatorConflictPK         = errors.New("conflict mutators with primary_key")
