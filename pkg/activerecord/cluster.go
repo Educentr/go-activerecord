@@ -369,6 +369,8 @@ func fillShardConnectionParams(masterDef string) ([]ShardInstanceConfig, error) 
 }
 
 // Чтение информации по конкретному шарду из конфига
+//
+//nolint:gocognit
 func getShardInfoFromCfg(ctx context.Context, path string, globParam MapGlobParam, optionCreator func(ShardInstanceConfig) (OptionInterface, error)) (Shard, error) {
 	cfg := Config(ctx)
 	ret := Shard{
