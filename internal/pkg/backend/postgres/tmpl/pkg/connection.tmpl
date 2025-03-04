@@ -29,6 +29,11 @@ func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceT
 			if sic.TLSEnable {
 				tlsConfig = &tls.Config{
 					ServerName: sic.Addr,
+					InsecureSkipVerify: true,
+				}
+
+				if sic.TLSCheckCert {
+					tlsConfig.InsecureSkipVerify = false
 				}
 			}
 

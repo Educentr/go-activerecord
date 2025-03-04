@@ -40,15 +40,16 @@ const (
 
 // Структура используется для описания конфигурации конктретного инстанса
 type ShardInstanceConfig struct {
-	Timeout   time.Duration
-	Mode      ServerModeType
-	PoolSize  int32
-	Addr      string
-	User      string
-	Password  string
-	Port      uint16
-	DB        string
-	TLSEnable bool
+	Timeout      time.Duration
+	Mode         ServerModeType
+	PoolSize     int32
+	Addr         string
+	User         string
+	Password     string
+	Port         uint16
+	DB           string
+	TLSEnable    bool
+	TLSCheckCert bool
 }
 
 // Структура описывающая инстанс в кластере
