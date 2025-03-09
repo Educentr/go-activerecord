@@ -296,6 +296,26 @@ func (obj *{{ $PublicStructName }}) Insert(ctx context.Context) error {
 	return err
 }
 
+func (obj *{{ $PublicStructName }}) InsertIfNotExist(ctx context.Context) error {
+	metricStatCnt := activerecord.Metric().StatCount("postgres", "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount("postgres", "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "insert_request", 1)
+
+	if obj.BaseField.Exists {
+		metricErrCnt.Inc(ctx, "insert_exists", 1)
+		return fmt.Errorf("can't insert already exists object")
+	}
+
+	err := obj.insertReplace(ctx, postgres.IgnoreDuplicate)
+
+	if err == nil {
+		metricStatCnt.Inc(ctx, "insert_success", 1)
+	}
+
+	return err
+}
+
 func (obj *{{ $PublicStructName }}) Replace(ctx context.Context) error {
 	// ToDo implement replace for postgres
 	return fmt.Errorf("Replace not implemented")

@@ -183,6 +183,10 @@ func {{ $ind.Selector }}s(ctx context.Context, keys []{{ $ind.Type }}{{ if not $
 	return res, err
 }
 
+{{ if ne $ind.SelectorCount "" }}
+ToDo Count not implemented yet.
+{{ end }}
+
 func {{ $ind.Selector }}(ctx context.Context, key {{ $ind.Type }}{{ if not $ind.Unique }}, limiter activerecord.SelectorLimiter{{ end }}) ({{ if $ind.Unique }}{{ else }}[]{{ end }}*{{ $PublicStructName }}, error) {
 	selected, err := {{ $ind.Selector }}s(ctx, []{{ $ind.Type }}{key}{{ if not $ind.Unique }}, limiter{{ end }})
 	if err != nil {

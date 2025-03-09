@@ -93,6 +93,10 @@ func (c BackendGenerator) CheckIndexes(cl *ds.RecordPackage) error {
 		if len(ind.Conditions) != 0 {
 			return &arerror.ErrCheckPackageIndexDecl{Pkg: cl.Namespace.PackageName, Index: ind.Name, Err: arerror.ErrCheckIndexConditionNotSupported}
 		}
+
+		if ind.SelectorCount != "" {
+			return &arerror.ErrCheckPackageIndexDecl{Pkg: cl.Namespace.PackageName, Index: ind.Name, Err: arerror.ErrCheckIndexCountNotSupported}
+		}
 	}
 
 	return nil

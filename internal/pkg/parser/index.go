@@ -21,8 +21,8 @@ func ParseIndexPartTag(field *ast.Field, ind *ds.IndexDeclaration, indexMap map[
 	var fieldnum int64 = 1
 
 	for _, kv := range tagParam {
-		switch kv[0] {
-		case "selector":
+		switch TagNameType(kv[0]) {
+		case SelectorTag:
 			ind.Selector = kv[1]
 		case "index":
 			exIndNum, ex := indexMap[kv[1]]
@@ -128,6 +128,7 @@ func parseIndexConditionTag(condTag string, fieldsMap map[string]int) (map[int]d
 	return ret, nil
 }
 
+// ToDo объединить с парсингом частично индекса, есть повторяющийся код!
 func ParseIndexTag(field *ast.Field, ind *ds.IndexDeclaration, fieldsMap map[string]int) error {
 	tagParam, err := splitTag(field, CheckFlagEmpty, map[TagNameType]ParamValueRule{PrimaryKeyTag: ParamNotNeedValue, UniqueTag: ParamNotNeedValue})
 	if err != nil {
@@ -162,6 +163,12 @@ func ParseIndexTag(field *ast.Field, ind *ds.IndexDeclaration, fieldsMap map[str
 					ind.FieldsMap[fieldName] = ds.IndexField{IndField: fldNum, Order: ds.IndexOrderAsc}
 					ind.Fields = append(ind.Fields, fldNum)
 				}
+			}
+		case "selector_count":
+			ind.SelectorCount = "CountBy" + ind.Name
+
+			if kv[1] != "" {
+				ind.SelectorCount = kv[1]
 			}
 		case OrderDescTag:
 			for _, fn := range strings.Split(kv[1], ",") {

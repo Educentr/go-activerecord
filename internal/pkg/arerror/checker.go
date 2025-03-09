@@ -28,6 +28,7 @@ var (
 	ErrCheckFieldsProcNotImpl              = errors.New("proc fields not implemented")
 	ErrCheckFieldsOrderDecl                = errors.New("incorrect order of fields")
 	ErrCheckIndexConditionNotSupported     = errors.New("index condition not supported")
+	ErrCheckIndexCountNotSupported         = errors.New("count by index not supported")
 	ErrCheckIndexConditionHasNotValue      = errors.New("index condition without value")
 	ErrCheckInternalError                  = errors.New("internal error")
 )
