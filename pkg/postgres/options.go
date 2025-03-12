@@ -28,7 +28,8 @@ var crc32table = crc32.MakeTable(0x4C11DB7)
 // ConnectionOptions - опции используемые для подключения
 type ConnectionOptions struct {
 	activerecord.BaseConnectionOptions
-	poolCfg pgxpool.Config
+	afterConnectAction []func(ctx context.Context, conn *pgx.Conn) error
+	poolCfg            pgxpool.Config
 }
 
 // NewConnectionOptions - создание структуры с опциями и дефолтными значениями. Для модификации значений по умолчанию,
@@ -72,6 +73,8 @@ func NewConnectionOptions(server string, port uint16, mode activerecord.ServerMo
 	if err != nil {
 		return nil, fmt.Errorf("can't get pool: %w", err)
 	}
+
+	postgresOpts.afterConnectAction = make([]func(ctx context.Context, conn *pgx.Conn) error, 0)
 
 	return postgresOpts, nil
 }
@@ -117,18 +120,29 @@ func WithTimeout(connection time.Duration) ConnectionOption {
 
 // WithPoolSize - опция для изменения размера пулла подключений
 func WithPoolSize(size int32) ConnectionOption {
-	return optionConnectionFunc(func(octopusCfg *ConnectionOptions) error {
-		octopusCfg.poolCfg.MaxConns = size
+	return optionConnectionFunc(func(backendCfg *ConnectionOptions) error {
+		backendCfg.poolCfg.MaxConns = size
 
-		return octopusCfg.UpdateHash("s", size)
+		return backendCfg.UpdateHash("s", size)
 	})
 }
 
 func WithTLSConfig(tlsConfig *tls.Config) ConnectionOption {
-	return optionConnectionFunc(func(octopusCfg *ConnectionOptions) error {
-		octopusCfg.poolCfg.ConnConfig.TLSConfig = tlsConfig
+	return optionConnectionFunc(func(backendCfg *ConnectionOptions) error {
+		backendCfg.poolCfg.ConnConfig.TLSConfig = tlsConfig
 
-		return octopusCfg.UpdateHash("t", fmt.Sprintf("%v", tlsConfig))
+		return backendCfg.UpdateHash("t", fmt.Sprintf("%v", tlsConfig))
+	})
+}
+
+func WithTimeZone(tz string) ConnectionOption {
+	return optionConnectionFunc(func(backendCfg *ConnectionOptions) error {
+		backendCfg.afterConnectAction = append(backendCfg.afterConnectAction, func(ctx context.Context, conn *pgx.Conn) error {
+			_, err := conn.Exec(ctx, "SET TIME ZONE $1", tz)
+			return err
+		})
+
+		return backendCfg.UpdateHash("z", tz)
 	})
 }
 

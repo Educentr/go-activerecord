@@ -37,6 +37,8 @@ func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceT
 				}
 			}
 
+			z, _ := time.Now().Zone()
+
 			return postgres.NewConnectionOptions(
 				sic.Addr,
 				sic.Port,
@@ -46,6 +48,7 @@ func getConnection(ctx context.Context, instanceType activerecord.ShardInstanceT
 				postgres.WithPoolSize(sic.PoolSize),
 				postgres.WithDatabase(sic.DB),
 				postgres.WithTLSConfig(tlsConfig),
+				postgres.WithTimeZone(z),
 			)
 		},
 		instanceType,

@@ -59,7 +59,7 @@ func (obj *{{ $PublicStructName }}) SetAndCheck{{ $fstruct.Name }}({{ $fstruct.N
 
 	obj.BaseField.CheckFields = append(obj.BaseField.CheckFields, activerecord.FieldValue{
 		Field: "{{ $fstruct.Name }}",
-		Value: {{ $fstruct.Name }},
+		Value: obj.Get{{ $fstruct.Name }}(),
 	})
 
 	return obj.Set{{ $fstruct.Name }}({{ $fstruct.Name }})

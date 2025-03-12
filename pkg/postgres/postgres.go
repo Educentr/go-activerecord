@@ -168,7 +168,7 @@ func (q *Query) AddNoConflictDoUpdate(tableName string, pk Index, fieldNames []s
 
 func (q *Query) AddFieldValue(fv ...activerecord.FieldValue) {
 	for _, f := range fv {
-		q.QueryString += fmt.Sprintf("%s = $%d", f.Field, q.AddParams(f.Value))
+		q.QueryString += fmt.Sprintf("%s = $%d AND ", f.Field, q.AddParams(f.Value))
 	}
 }
 
@@ -345,10 +345,16 @@ func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams
 			return nil, fmt.Errorf("primary key length (%+v) not equal to index fields in update %d", u.PK, num)
 		}
 
-		for _, op := range u.Ops {
+		returning := []string{}
+
+		for n, op := range u.Ops {
 			// ToDo sql serializers
-			operation := op.Field + " = "
-			returning := []string{}
+			operation := ""
+			if n > 0 {
+				operation += ", "
+			}
+
+			operation += op.Field + " = "
 
 			sql := "$%d"
 			ret := op.Field
@@ -367,28 +373,28 @@ func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams
 			}
 
 			q.AddQuery(operation)
+		}
 
-			q.AddWhereBlock()
+		q.AddWhereBlock()
 
-			q.AddFieldValue(idempotencyKey...)
+		q.AddFieldValue(idempotencyKey...)
 
-			q.ConditionFields(primaryIndex.Fields.GetFieldNames())
+		q.ConditionFields(primaryIndex.Fields.GetFieldNames())
 
-			if primaryIndex.MultiField() {
-				innerPlaceholder := make([]string, 0, len(u.PK))
+		if primaryIndex.MultiField() {
+			innerPlaceholder := make([]string, 0, len(u.PK))
 
-				for _, kField := range u.PK {
-					innerPlaceholder = append(innerPlaceholder, fmt.Sprintf("$%d", q.AddParams(kField)))
-				}
-
-				q.QueryString += " = (" + strings.Join(innerPlaceholder, ", ") + ")"
-			} else {
-				q.QueryString += fmt.Sprintf(" = $%d", q.AddParams(u.PK[0]))
+			for _, kField := range u.PK {
+				innerPlaceholder = append(innerPlaceholder, fmt.Sprintf("$%d", q.AddParams(kField)))
 			}
 
-			if len(returning) > 0 {
-				q.AddReturning(returning)
-			}
+			q.QueryString += " = (" + strings.Join(innerPlaceholder, ", ") + ")"
+		} else {
+			q.QueryString += fmt.Sprintf(" = $%d", q.AddParams(u.PK[0]))
+		}
+
+		if len(returning) > 0 {
+			q.AddReturning(returning)
 		}
 	}
 
