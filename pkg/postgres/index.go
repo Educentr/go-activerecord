@@ -18,8 +18,9 @@ type CursorPosition struct {
 }
 
 type OrderField struct {
-	Field string
-	Order Order
+	Field   string
+	Order   Order
+	Partial bool // такие поля используются только в order но не используются в where
 }
 
 func (of OrderField) String() string {
@@ -40,6 +41,10 @@ type OrderedFields []OrderField
 func (ofs OrderedFields) GetFieldNames() []string {
 	retFields := make([]string, 0, len(ofs))
 	for _, f := range ofs {
+		if f.Partial {
+			break
+		}
+
 		retFields = append(retFields, f.Field)
 	}
 

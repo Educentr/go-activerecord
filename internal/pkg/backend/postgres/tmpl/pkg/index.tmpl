@@ -88,7 +88,9 @@ func SelectAll(ctx context.Context) ([]*{{ $PublicStructName }}, error) {
 }
 {{ end }}
 
-{{ range $num, $ind := .Indexes -}}
+{{ $indexes := .Indexes }}
+
+{{ range $num, $ind := $indexes -}}
 	{{ $lenfld := len $ind.Fields -}}
 	{{ if ne $lenfld 1 }}
 type {{ $ind.Type }} struct {
@@ -117,10 +119,19 @@ func (is {{ $ind.Type }}) pack() []any {
 
 var index{{ $ind.Name }} = postgres.Index{
 	Fields:       postgres.OrderedFields{
-		{{- range $_, $fieldNum := $ind.Fields }}
-			{{- $ifield := index $fields $fieldNum }}
-			{{- $iifield := index $ind.FieldsMap $ifield.Name }}
-		postgres.OrderField{Field: "{{ $ifield.Name }}", Order: {{ indexOrder $iifield }} },
+		{{ if eq $num $ind.Num }}
+			{{- range $_, $fieldNum := $ind.Fields }}
+				{{- $ifield := index $fields $fieldNum }}
+				{{- $iifield := index $ind.FieldsMap $ifield.Name }}
+		postgres.OrderField{Field: "{{ $ifield.Name }}", Order: {{ indexOrder $iifield }}},
+			{{ end }}		
+		{{ else }}
+			{{ $origInd := index $indexes $ind.Num }}
+			{{- range $numfield, $fieldNum := $origInd.Fields }}
+				{{- $ifield := index $fields $fieldNum }}
+				{{- $iifield := index $ind.FieldsMap $ifield.Name }}
+		postgres.OrderField{Field: "{{ $ifield.Name }}", Order: {{ indexOrder $iifield }}, {{ if ge $numfield (len $ind.Fields) }}Partial: true{{ end }} },
+			{{ end }}
 		{{ end }}
 	},
 	Unique:       {{ $ind.Unique }},
