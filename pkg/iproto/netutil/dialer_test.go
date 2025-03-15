@@ -66,20 +66,17 @@ func TestDialerDialLimits(t *testing.T) {
 	}
 }
 
-//nolint:unused
 type dialCall struct {
 	time          time.Time
 	delay         time.Duration
 	network, addr string
 }
 
-//nolint:unused
 type server struct {
 	mu    sync.Mutex
 	calls []dialCall
 }
 
-//nolint:unused
 func (s *server) dial(ctx context.Context, n, a string) (net.Conn, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

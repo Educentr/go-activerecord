@@ -100,6 +100,7 @@ func TestGetConnection(t *testing.T) {
 		port   uint16
 		opts   []ConnectionOption
 	}
+
 	tests := []struct {
 		name    string
 		args    args
@@ -144,6 +145,7 @@ func TestGetConnection(t *testing.T) {
 			if err != nil {
 				t.Errorf("can't initialize options: %s", err)
 			}
+
 			_, err = GetConnection(tt.args.ctx, octopusOpts)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("GetConnection() error = %v, wantErr %v", err, tt.wantErr)

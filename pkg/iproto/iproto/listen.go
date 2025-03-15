@@ -112,7 +112,7 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) (err error) {
 		ch, err := accept(conn, config)
 		if err != nil {
 			if log != nil {
-				log.Printf(ctx, "Channel initalization error: %v\n", err)
+				log.Printf(ctx, "Channel initialization error: %v\n", err)
 			}
 
 			continue

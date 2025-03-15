@@ -107,7 +107,6 @@ func TestAcquireWriterSize(t *testing.T) {
 		// Get the writer. Expect that we reuse initial.
 		if w = AcquireWriterSize(dest, size); w != initial {
 			t.Errorf("%dth AcquireWriterSize did not returned initial writer", i)
-
 		}
 		// Write byte to the writer.
 		_ = w.WriteByte(str[j])

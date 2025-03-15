@@ -52,7 +52,7 @@ type Config struct {
 	WorkQueueSize int
 
 	// QueueTiming is used to calculate duration from task receiving
-	// to begining of task execution.
+	// to beginning of task execution.
 	// QueueTiming stat.SimpleTiming
 
 	// ExecTiming is used to calculate duration of task execution.
@@ -404,12 +404,12 @@ func (p *Pool) barrier(timeout <-chan time.Time, done <-chan struct{}) error {
 // If some worker can not receive incoming task until timeout or done chanel it
 // stops trying to send the task to remaining workers.
 func (p *Pool) multicast(task Task, timeout <-chan time.Time, done <-chan struct{}) (n int, err error) {
-	// NOTE: if for some reasons it is neccessary to check that pool is closed
+	// NOTE: if for some reasons it is necessary to check that pool is closed
 	// and return ErrPoolClosed, then you MUST edit the barrier() method such
 	// that it will check the ErrPoolClosed case and make p.Done() waiting or
 	// its timeout or done channels closure.
 	// You will also need to edit the worker run() method, which is also rely
-	// on this behaviour iniside kill case.
+	// on this behavior iniside kill case.
 	for _, w := range p.workers() {
 		callMaybe(p.config.OnTaskIn)
 		t := p.wrapTask(task)
@@ -706,7 +706,7 @@ func (w *worker) run(t Task) {
 
 			return
 		case <-w.kill:
-			// Receving from w.kill means that pool is closing and no more
+			// Receiving from w.kill means that pool is closing and no more
 			// tasks will be queued soon.
 			if w.noCork {
 				// Drop everything

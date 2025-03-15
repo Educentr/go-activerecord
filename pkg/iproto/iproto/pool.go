@@ -107,7 +107,7 @@ type PoolConfig struct {
 	// A zero value disables the rate limiter.
 	RateBurst int
 
-	// RateWait is used to determine the desired behaviour of request rate limiting
+	// RateWait is used to determine the desired behavior of request rate limiting
 	// on the pool. A zero value sets the requests to rather be "policied" than "shaped",
 	// and the corresponding function calls will return `RateError' caused by `ErrPolicied'.
 	// when limiter is unable to satisfy the request. With a value of `true' the limiter will
@@ -115,7 +115,7 @@ type PoolConfig struct {
 	// will either block until the request can be satisfied, or return at once if the
 	// predicted wait time exceeds the context deadline. Cancellation of the context also
 	// forces a premature return with an error.
-	// See golang.org/x/time/rate documentation for .Allow() and .Wait() behaviour.
+	// See golang.org/x/time/rate documentation for .Allow() and .Wait() behavior.
 	RateWait bool
 }
 
@@ -219,7 +219,7 @@ func NewPool(network, addr string, config *PoolConfig) *Pool {
 
 		Timeout: c.DialTimeout,
 
-		// Do not set LoopTimeout cause we making the same behaviour with
+		// Do not set LoopTimeout cause we making the same behavior with
 		// p.dialer.SetDeadline().
 		LoopTimeout: 0,
 

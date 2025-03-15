@@ -100,7 +100,7 @@ type ChannelConfig struct {
 	// It is Init implementation responsibility to handle timeouts during
 	// initialization. That is, it could block some significant iproto parts
 	// depending on caller – iproto.Server within accept loop, iproto.Pool
-	// withing dialing, or some custom user initiator.
+	// within dialing, or some custom user initiator.
 	//
 	// If Init is nil then no additional initialization prepared.
 	Init func(context.Context, *Channel) error
@@ -319,7 +319,7 @@ func (c *Channel) Init() (err error) {
 // not aligned to the Packet bounds.
 //
 // It returns non-nil error when channel is already stopped or hijacked or when
-// error occured somewhere while shutting down the channel.
+// error occurred somewhere while shutting down the channel.
 func (c *Channel) Hijack() (conn net.Conn, rbuf []byte, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -567,7 +567,7 @@ func (c *Channel) Shutdown() {
 		<-c.shutdown
 	}
 
-	// Let the shutdown packet to be sent. This is neccessary if we are on
+	// Let the shutdown packet to be sent. This is necessary if we are on
 	// shutdown receiving side. In other way it will be a racy write.
 	//
 	// We must close the stopper only after <-c.shutdown. That is, receiving

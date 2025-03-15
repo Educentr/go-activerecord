@@ -31,13 +31,16 @@ func TestPrintfUnmarshal(t *testing.T) {
 			wantErr: errs.ErrPrintfParse,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var got float64
+
 			err := PrintfUnmarshal("", tt.args.val, &got)
 			if tt.wantErr != err && !errors.Is(err, tt.wantErr) {
 				t.Errorf("PrintfUnmarshal() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
 			if tt.wantErr == nil && !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("PrintfUnmarshal() = %v, want %v", got, tt.want)
 			}

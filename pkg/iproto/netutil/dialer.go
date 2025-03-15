@@ -17,7 +17,7 @@ var (
 	ErrClosed = errors.New("dialer owner has been gone")
 )
 
-// BackgroundDialer is a wrapper around Dialer that contains logic of glueing
+// BackgroundDialer is a wrapper around Dialer that contains logic of gluing
 // and cancellation of dial requests.
 type BackgroundDialer struct {
 	mu       sync.Mutex
@@ -34,7 +34,7 @@ type BackgroundDialer struct {
 // not done yet, it returns done channel of that goroutine.
 // It returns non-nil error only if dial routine was not started.
 //
-// Started routine could be cancelled by calling Cancel method.
+// Started routine could be canceled by calling Cancel method.
 //
 // Note that cb is called only once. That is, if caller A calls Dial and caller
 // B calls Dial immediately after, both of them will receive the same done
@@ -59,7 +59,7 @@ func (d *BackgroundDialer) Cancel() {
 // A deadline is an absolute time after which all dial routines fail.
 // The deadline applies to all future and pending dials, not just the
 // immediately following call to Dial.
-// Cancelling some routine by calling Cancel method will not affect deadline.
+// Canceling some routine by calling Cancel method will not affect deadline.
 // After a deadline has been exceeded, the dialer can be refreshed by setting a
 // deadline in the future.
 //
@@ -71,7 +71,7 @@ func (d *BackgroundDialer) SetDeadline(t time.Time) {
 }
 
 // SetDeadlineAtLeast sets the dial deadline if current deadline is zero or
-// less than t. The other behaviour is the same as in SetDeadline.
+// less than t. The other behavior is the same as in SetDeadline.
 //
 // A zero value for t is ignored.
 //
@@ -109,7 +109,7 @@ func (d *BackgroundDialer) setDeadline(t time.Time) {
 		d.timer = time.AfterFunc(tm, d.Cancel)
 	} else {
 		// We do not check d.timer.Stop() here cause it is not a problem, if
-		// deadline has been reached and some dialing routine was cancelled.
+		// deadline has been reached and some dialing routine was canceled.
 		d.timer.Reset(tm)
 	}
 }
@@ -158,7 +158,7 @@ type Dialer struct {
 
 // Dial tries to connect until some of events occur:
 // - successful connect;
-// – ctx is cancelled;
+// – ctx is canceled;
 // – dialer owner is closed;
 // – loop timeout exceeded (if set);
 func (d *Dialer) Dial(ctx context.Context) (conn net.Conn, err error) {

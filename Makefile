@@ -78,6 +78,11 @@ lint: install-lint
 full-lint: install-lint
 	$(GOLANGCI_BIN) run --config=.golangci.yml ./... --build-tags=activerecord
 
+# Linter will check only diffs with main branch (default)
+.PHONY: lint-fix
+lint-fix: lint
+	$(GOLANGCI_BIN) run --fix --config=.golangci.yml ./... --build-tags=activerecord
+
 # создание отчета о покрытии тестами
 .PHONY: cover
 cover:

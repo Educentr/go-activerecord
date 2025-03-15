@@ -67,7 +67,6 @@ type MetaData struct {
 	AppInfo    string
 }
 
-//nolint:revive
 //go:embed tmpl/meta.tmpl
 var MetaTmpl string
 

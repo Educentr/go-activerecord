@@ -45,7 +45,6 @@ func (b BackendGenerator) CheckFields(cl *ds.RecordPackage) error {
 func (b BackendGenerator) CheckNamespace(cl *ds.RecordPackage) error {
 	if !rxCanonicalTableName.MatchString(cl.Namespace.ObjectName) {
 		return &arerror.ErrCheckPackageNamespaceDecl{Pkg: cl.Namespace.PackageName, Name: cl.Namespace.ObjectName, Err: arerror.ErrTableNameNotCanonical}
-
 	}
 	return nil
 }

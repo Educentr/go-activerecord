@@ -10,6 +10,10 @@ import (
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
 
+const (
+	indexFieldDeclCountProps = 2
+)
+
 func ParseIndexPartTag(field *ast.Field, ind *ds.IndexDeclaration, indexMap map[string]int, fields []ds.FieldDeclaration, indexes []ds.IndexDeclaration) error {
 	tagParam, err := splitTag(field, CheckFlagEmpty, map[TagNameType]ParamValueRule{})
 	if err != nil {
@@ -154,32 +158,30 @@ func ParseIndexTag(field *ast.Field, ind *ds.IndexDeclaration, fieldsMap map[str
 				return errCond
 			}
 		case FieldsTag:
-			for _, fieldName := range strings.Split(kv[1], ",") {
+			for _, fieldDecl := range strings.Split(kv[1], ",") {
+				fieldDeclPars := strings.SplitN(fieldDecl, "=", indexFieldDeclCountProps)
+				fieldName := fieldDeclPars[0]
+
+				fieldOrder := ds.IndexOrderAsc
+				if len(fieldDeclPars) > 1 && fieldDeclPars[1] == "desc" {
+					fieldOrder = ds.IndexOrderDesc
+				}
+
 				if fldNum, ex := fieldsMap[fieldName]; !ex {
 					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrFieldNotExist}
 				} else if _, ex := ind.FieldsMap[fieldName]; ex {
 					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrDuplicate}
 				} else {
-					ind.FieldsMap[fieldName] = ds.IndexField{IndField: fldNum, Order: ds.IndexOrderAsc}
+					ind.FieldsMap[fieldName] = ds.IndexField{IndField: fldNum, Order: fieldOrder}
 					ind.Fields = append(ind.Fields, fldNum)
 				}
 			}
-		case "selector_count":
-			ind.SelectorCount = "CountBy" + ind.Name
+		// case "selector_count":
+		// 	ind.SelectorCount = "CountBy" + ind.Name
 
-			if kv[1] != "" {
-				ind.SelectorCount = kv[1]
-			}
-		case OrderDescTag:
-			for _, fn := range strings.Split(kv[1], ",") {
-				if _, ex := fieldsMap[fn]; !ex {
-					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrFieldNotExist}
-				} else if indField, ex := ind.FieldsMap[fn]; !ex {
-					return &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", Name: ind.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrFieldNotExist}
-				} else {
-					indField.Order = ds.IndexOrderDesc
-				}
-			}
+		// 	if kv[1] != "" {
+		// 		ind.SelectorCount = kv[1]
+		// 	}
 		default:
 			val := "NO VALUE"
 			if len(kv) > 1 {

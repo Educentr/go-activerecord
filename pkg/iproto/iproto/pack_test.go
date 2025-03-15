@@ -81,7 +81,6 @@ func TestUnpack(t *testing.T) {
 			t.Errorf("[%v] Unpack('%x' %T) = %+v; want %+v", i, bytes, v.Unpacked, reflect.Indirect(got), v.Unpacked)
 		}
 	}
-
 }
 
 func TestBER(t *testing.T) {
@@ -129,7 +128,6 @@ func TestBER(t *testing.T) {
 			}
 		})
 	}
-
 }
 
 type testStrings []string

@@ -201,7 +201,7 @@ func (c *Cluster) reset(ps []*Pool, disableInserted bool) (inserted, removed, ig
 		peers = result
 	}
 
-	// Must call under mutex preventing non-consistent behaviour.
+	// Must call under mutex preventing non-consistent behavior.
 	c.emitBeforeChange(peers)
 	c.storePeers(peers)
 
@@ -254,7 +254,6 @@ func (c *Cluster) readPeers() []*Pool {
 }
 
 func (c *Cluster) storePeers(p []*Pool) {
-	//nolint:gosec
 	atomic.StorePointer(&c.peers, unsafe.Pointer(&p))
 }
 

@@ -268,5 +268,4 @@ func UnpackLua(data []byte) (name string, args [][]byte, err error) {
 	}
 
 	return string(procName), args, nil
-
 }

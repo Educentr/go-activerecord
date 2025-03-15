@@ -95,7 +95,7 @@ func (s *ServeMux) ServeIProto(ctx context.Context, c Conn, p Packet) {
 }
 
 // RecoverHandler tries to make recover after handling packet.
-// If panic was occured it logs its message and stack of panicked goroutine.
+// If panic was occurred it logs its message and stack of panicked goroutine.
 // Note that this handler should be the last one in the chain of handler wrappers,
 // e.g.: PoolHandler(RecoverHandler(h)) or ParallelHandler(RecoverHandler(h)).
 func RecoverHandler(h Handler) Handler {

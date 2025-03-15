@@ -113,7 +113,7 @@ func TestChannelCall(t *testing.T) {
 	} {
 		wg.Add(1)
 		//nolint:staticcheck
-		//nolint:govet
+
 		go func(i int, test testCase) {
 			client, server, err := getClientServerConns()
 			if err != nil {

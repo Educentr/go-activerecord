@@ -25,6 +25,7 @@ func TestMapstructureUnmarshal(t *testing.T) {
 	type args struct {
 		val string
 	}
+
 	tests := []struct {
 		name    string
 		args    args
@@ -121,6 +122,7 @@ func TestMapstructureUnmarshal(t *testing.T) {
 			if tt.wantErr != err && !errors.Is(err, tt.wantErr) {
 				t.Errorf("MapstructureUnmarshal() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
 			if tt.wantErr == nil && !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("MapstructureUnmarshal() = %v, want %v", got, tt.want)
 			}

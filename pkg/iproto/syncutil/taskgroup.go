@@ -49,10 +49,10 @@ func (t *TaskGroup) init() {
 // That is, for m already running tasks Do(n, n < m) will return n channels
 // referring to a previously spawned task goroutines.
 //
-// All currenlty executing tasks can be signaled to cancel by calling
+// All currently executing tasks can be signaled to cancel by calling
 // TaskGroup's Cancel() method.
 //
-// nolint:gocognit
+//nolint:gocognit
 func (t *TaskGroup) Do(ctx context.Context, n int, task func(context.Context, int) error) []<-chan error {
 	t.init()
 

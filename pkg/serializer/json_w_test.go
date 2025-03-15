@@ -86,12 +86,14 @@ func TestJSONUnmarshal(t *testing.T) {
 			wantErr: errs.ErrUnmarshalJSON,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := tt.exec(tt.args.val)
 			if tt.wantErr != err && !errors.Is(err, tt.wantErr) {
 				t.Errorf("JSONUnmarshal() error = %v, wantErr %v", err, tt.wantErr)
 			}
+
 			if tt.wantErr == nil && !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("JSONUnmarshal() = %v, want %v", got, tt.want)
 			}

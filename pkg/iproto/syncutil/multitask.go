@@ -75,7 +75,7 @@ func (m Multitask) Do(ctx context.Context, n int, actor func(context.Context, in
 
 // Every starts n goroutines and runs actor inside each. If some actor returns
 // error it stops processing and cancel other actions by canceling their
-// context argument. It returns first error occured.
+// context argument. It returns first error occurred.
 func Every(ctx context.Context, n int, actor func(context.Context, int) error) error {
 	m := Multitask{
 		ContinueOnError: false,

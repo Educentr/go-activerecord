@@ -196,7 +196,6 @@ func (c *Cluster) NextReplica(shardNum int) (ShardInstance, bool) {
 	}
 
 	return ShardInstance{}, false
-
 }
 
 // Append добавляет новый шард в кластер

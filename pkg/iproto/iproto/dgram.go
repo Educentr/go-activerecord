@@ -177,7 +177,7 @@ func (p *PacketServer) Close() {
 func (p *PacketServer) writer() {
 	defer close(p.writeDone)
 
-	// writerTo helps to use bufio.Writer for glueing same destination packets.
+	// writerTo helps to use bufio.Writer for gluing same destination packets.
 	w := writerTo{p.conn, nil}
 	mtu := p.config.MaxTransmissionUnit
 	buf := pbufio.AcquireWriterSize(&w, mtu)

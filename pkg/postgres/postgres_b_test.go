@@ -20,6 +20,7 @@ func TestGenerateSelect(t *testing.T) {
 		limit      uint32
 		cursor     postgres.CursorPosition
 	}
+
 	tests := []struct {
 		name    string
 		args    args
@@ -179,6 +180,7 @@ func TestGenerateSelect(t *testing.T) {
 			wantErr: false,
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := postgres.GenerateSelect(tt.args.tableName, tt.args.fieldNames, tt.args.index, tt.args.keys, tt.args.offset, tt.args.limit, tt.args.cursor)
@@ -186,6 +188,7 @@ func TestGenerateSelect(t *testing.T) {
 				t.Errorf("GenerateSelect() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("GenerateSelect() = %v, want %v", got, tt.want)
 			}

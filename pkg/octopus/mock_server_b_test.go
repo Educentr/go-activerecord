@@ -25,10 +25,12 @@ func TestMockServer_ProcessRequest(t *testing.T) {
 	type fields struct {
 		oft []FixtureType
 	}
+
 	type args struct {
 		msg uint8
 		req []byte
 	}
+
 	tests := []struct {
 		name   string
 		fields fields

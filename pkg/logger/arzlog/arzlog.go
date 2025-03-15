@@ -141,7 +141,7 @@ func (l *ARLogger) do(event *zlog.Event, args ...interface{}) {
 	// Вот тут прям очень плохо выглядит migic num и не всегда корректно работает
 	// выставить какой то конкретный skip не получится там есть несколько уровней вложенности
 	// как выбирать необходимый пока не понятно...
-	event.Stack().CallerSkipFrame(2).Msg(msg)
+	event.Stack().CallerSkipFrame(2).Msg(msg) //nolint:gomnd
 }
 
 func (l *ARLogger) Fatal(ctx context.Context, args ...interface{}) {
@@ -177,6 +177,7 @@ func Generate(mockers []logger.MockerLogger) string {
 	code := ""
 
 	aggr := map[string][]string{}
+
 	for _, mock := range mockers {
 		gMock := GenerateMocker(mock)
 		aggr[gMock] = aggr[mock.MockerName]

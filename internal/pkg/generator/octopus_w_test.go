@@ -362,7 +362,6 @@ func TestGenerateOctopus(t *testing.T) {
 			for name := range ret {
 				t.Errorf("generated (%s) but not needed: %s", ret[name], name)
 			}
-
 		})
 	}
 }

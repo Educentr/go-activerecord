@@ -337,7 +337,7 @@ func writeToFile(dirPkg string, dstFileName string, data []byte) error {
 		}
 	}
 
-	dstFile, err := os.Create(dstFileName) //nolint:gosec
+	dstFile, err := os.Create(dstFileName)
 	if err != nil {
 		return fmt.Errorf("error create file: %w", err)
 	}

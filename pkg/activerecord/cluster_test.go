@@ -138,7 +138,6 @@ func TestGetClusterInfoFromCfg(t *testing.T) {
 				mockConfig.EXPECT().GetStringIfExists("testconfig").Return("host1:0", true, nil)
 				mockConfig.EXPECT().GetStringIfExists("testconfig/replica").Return("host2:0", true, nil)
 				mockConfig.EXPECT().GetBool("testconfig/TLSEnable", false).Return(false, nil)
-
 			},
 			args: args{
 				ctx:   ctx,

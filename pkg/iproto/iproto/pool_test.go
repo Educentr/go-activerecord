@@ -232,13 +232,12 @@ func TestPoolShutdown(t *testing.T) {
 	if act, exp := int(atomic.LoadInt32(rcvShutdown)), 4; act != exp {
 		t.Fatalf("server recevied shutdown from %d channels; want %d", act, exp)
 	}
-
 }
 
 func TestPoolPeerShutdown(t *testing.T) {
 	// sem used to limit successful redial attempts.
 	sem := make(chan struct{}, 1)
-	// srv used to retreive "accepted" connections.
+	// srv used to retrieve "accepted" connections.
 	srv := make(chan net.Conn, 1)
 	n := new(int32)
 	p := NewPool("stubnet", "S", &PoolConfig{

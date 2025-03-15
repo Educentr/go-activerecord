@@ -135,7 +135,7 @@ func InitActiveRecord(opts ...Option) {
 	defer createMutex.Unlock()
 
 	if instance != nil {
-		panic(fmt.Sprintf("can't initialise twice, first from `%s`", instance.instanceCreator))
+		panic(fmt.Sprintf("can't initialize twice, first from `%s`", instance.instanceCreator))
 	}
 
 	caller := "unknown_caller"

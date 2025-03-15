@@ -18,40 +18,31 @@ func TestParseIndex(t *testing.T) {
 
 	wantRp := ds.NewRecordPackage()
 	wantRp.Fields = []ds.FieldDeclaration{
-		{Name: "Field1", Format: "int"},
-		{Name: "Field2", Format: "int"},
+		{Name: "WeekNum", Format: "int"},
+		{Name: "Amount", Format: "int"},
 	}
-	wantRp.FieldsMap = map[string]int{"Field1": 0, "Field2": 1}
+	wantRp.FieldsMap = map[string]int{"WeekNum": 0, "Amount": 1}
 	wantRp.Indexes = []ds.IndexDeclaration{
 		{
-			Name:     "Field1Field2",
+			Name:     "WeekAmount",
 			Num:      0,
-			Selector: "SelectByField1Field2",
+			Selector: "SelectByWeekAmount",
 			Fields:   []int{0, 1},
 			FieldsMap: map[string]ds.IndexField{
-				"Field1": {IndField: 0, Order: 0},
-				"Field2": {IndField: 1, Order: 0},
+				"WeekNum": {IndField: 0, Order: 0},
+				"Amount":  {IndField: 1, Order: 1},
 			},
-			Unique: true,
-		},
-		{
-			Name:     "Field1Part",
-			Num:      0,
-			Selector: "SelectByField1",
-			Fields:   []int{0},
-			FieldsMap: map[string]ds.IndexField{
-				"Field1": {IndField: 0, Order: 0},
-			},
-			Partial: true,
+			Unique:     false,
+			Conditions: map[int]ds.IndexCondition{},
 		},
 	}
-	wantRp.IndexMap = map[string]int{"Field1Field2": 0, "Field1Part": 1}
-	wantRp.SelectorMap = map[string]int{"SelectByField1": 1, "SelectByField1Field2": 0}
+	wantRp.IndexMap = map[string]int{"WeekAmount": 0}
+	wantRp.SelectorMap = map[string]int{"SelectByWeekAmount": 0}
 
 	rp := ds.NewRecordPackage()
 
 	err := rp.AddField(ds.FieldDeclaration{
-		Name:       "Field1",
+		Name:       "WeekNum",
 		Format:     "int",
 		PrimaryKey: false,
 	})
@@ -61,24 +52,9 @@ func TestParseIndex(t *testing.T) {
 	}
 
 	err = rp.AddField(ds.FieldDeclaration{
-		Name:       "Field2",
+		Name:       "Amount",
 		Format:     "int",
 		PrimaryKey: false,
-	})
-	if err != nil {
-		t.Errorf("can't prepare test data: %s", err)
-		return
-	}
-
-	err = rp.AddIndex(ds.IndexDeclaration{
-		Name:      "Field1Field2",
-		Num:       0,
-		Selector:  "SelectByField1Field2",
-		Fields:    []int{0, 1},
-		FieldsMap: map[string]ds.IndexField{"Field1": {IndField: 0, Order: ds.IndexOrderAsc}, "Field2": {IndField: 1, Order: ds.IndexOrderAsc}},
-		Primary:   false,
-		Unique:    true,
-		Type:      "",
 	})
 	if err != nil {
 		t.Errorf("can't prepare test data: %s", err)
@@ -92,14 +68,14 @@ func TestParseIndex(t *testing.T) {
 		want    *ds.RecordPackage
 	}{
 		{
-			name: "simple index part",
+			name: "simple index",
 			args: args{
 				dst: rp,
 				fields: []*ast.Field{
 					{
-						Names: []*ast.Ident{{Name: "Field1Part"}},
+						Names: []*ast.Ident{{Name: "WeekAmount"}},
 						Type:  &ast.Ident{Name: "bool"},
-						Tag:   &ast.BasicLit{Value: "`" + `ar:"index:Field1Field2;fieldnum:1;selector:SelectByField1"` + "`"},
+						Tag:   &ast.BasicLit{Value: "`" + `ar:"fields:WeekNum,Amount=desc"` + "`"},
 					},
 				},
 			},
@@ -109,7 +85,7 @@ func TestParseIndex(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := parser.ParseIndexPart(tt.args.dst, tt.args.fields); (err != nil) != tt.wantErr {
+			if err := parser.ParseIndexes(tt.args.dst, tt.args.fields); (err != nil) != tt.wantErr {
 				t.Errorf("ParseIndexPart() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}

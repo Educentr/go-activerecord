@@ -129,7 +129,7 @@ var index{{ $ind.Name }} = postgres.Index{
 			{{ $origInd := index $indexes $ind.Num }}
 			{{- range $numfield, $fieldNum := $origInd.Fields }}
 				{{- $ifield := index $fields $fieldNum }}
-				{{- $iifield := index $ind.FieldsMap $ifield.Name }}
+				{{- $iifield := index $origInd.FieldsMap $ifield.Name }}
 		postgres.OrderField{Field: "{{ $ifield.Name }}", Order: {{ indexOrder $iifield }}, {{ if ge $numfield (len $ind.Fields) }}Partial: true{{ end }} },
 			{{ end }}
 		{{ end }}
