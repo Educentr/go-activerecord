@@ -237,7 +237,7 @@ func QuoteIdentifier(s string) string {
 func GenerateSelectAll(tableName string, fieldNames []string, index Index, limit uint32, cursor CursorPosition) (*Query, error) {
 	// ToDo quote field names
 	q := &Query{
-		QueryString: fmt.Sprintf("SELECT %s FROM %s", strings.Join(fieldNames, ", "), QuoteIdentifier(tableName)),
+		QueryString: fmt.Sprintf("SELECT %s FROM %s WHERE true", strings.Join(fieldNames, ", "), QuoteIdentifier(tableName)),
 		Params:      []any{},
 	}
 
@@ -245,7 +245,7 @@ func GenerateSelectAll(tableName string, fieldNames []string, index Index, limit
 		return nil, fmt.Errorf("limit %d is more than max limit %d", limit, MaxLimit)
 	}
 
-	q.AddWhereCondition(index.CursorConditions(cursor, len(q.Params)-1))
+	q.AddWhereCondition(index.CursorConditions(cursor, len(q.Params)))
 	q.AddQuery(index.OrderConditions())
 
 	q.AddLimitOffset(limit, 0)

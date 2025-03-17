@@ -76,7 +76,7 @@ func selectRawDB(ctx context.Context, query *postgres.Query, limiter activerecor
 	rows, errCall := connection.Call(ctx, query.QueryString, query.Params)
 	if errCall != nil {
 		metricErrCnt.Inc(ctx, "select_db", 1)
-		logger.Error(ctx, "Error select from db", errCall, connection.Info())
+		logger.Error(ctx, "Error select from db", errCall, connection.Info(), query.QueryString)
 
 		return nil, errCall
 	}
