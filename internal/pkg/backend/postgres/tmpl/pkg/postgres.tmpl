@@ -27,7 +27,9 @@ import (
 {{ $procInLen := len .ProcInFieldList }}
 {{ $mutatorLen := len .Mutators }}
 
-func selectDB (ctx context.Context, index postgres.Index, keys [][]any, limiter activerecord.SelectorLimiter) ([]*{{ $PublicStructName }}, error) {
+// ToDo возможно эта фёнкция не нужна, добавляет запутанности и дублирования части кода при этом вызывается в одно месте
+// надо унести в index.go.tmpl во внутрь функции selectBy...
+func selectDB (ctx context.Context, index postgres.Index, keys [][]any, limiter activerecord.SelectorLimiter, cursor postgres.CursorPosition) ([]*{{ $PublicStructName }}, error) {
 	logger := activerecord.Logger()
 	ctx = logger.SetLoggerValueToContext(ctx, arlogger.ValueLogPrefix{"limiter": limiter.String()})
 	metricTimer := activerecord.Metric().Timer("postgres", "{{ $PublicStructName }}")
@@ -41,7 +43,7 @@ func selectDB (ctx context.Context, index postgres.Index, keys [][]any, limiter 
 	{{ end }}
 	}
 
-	query, err := postgres.GenerateSelect(tableName, columnNames, index, keys, limiter.Offset(), limiter.Limit(), postgres.CursorPosition{})
+	query, err := postgres.GenerateSelect(tableName, columnNames, index, keys, limiter.Offset(), limiter.Limit(), cursor)
 	if err != nil {
 		metricErrCnt.Inc(ctx, "select_gen", 1)
 		logger.Error(ctx, fmt.Sprintf("Error get db '%s'", err))

@@ -27,6 +27,7 @@ import (
 {{ $procInLen := len .ProcInFieldList }}
 {{ $mutatorLen := len .Mutators }}
 
+{{ $enableSelectAll := .EnableSelectAll }}
 {{ $pktype := "" }}
 {{ $pklenfld := 1 }}
 {{ $pkind := index .Indexes 0 }}
@@ -55,11 +56,9 @@ func (obj *{{ $PublicStructName }}) Primary() {{ $ind.Type }} {
 func SelectByPrimary(ctx context.Context, pk {{ $ind.Type }}) (*{{ $PublicStructName }}, error) {
 	return {{ $ind.Selector }}(ctx, pk)
 }
-	{{ end }}
-{{ end }}
 
-{{ if .EnableSelectAll }}
-func SelectAll(ctx context.Context) ([]*{{ $PublicStructName }}, error) {
+		{{ if $enableSelectAll }}
+func SelectAll(ctx context.Context, limit uint32, cursor postgres.CursorPosition) ([]*{{ $PublicStructName }}, error) {
 	logger := activerecord.Logger()
 	ctx = logger.SetLoggerValueToContext(ctx, arlogger.ValueLogPrefix{"select_all": 1})
 	metricTimer := activerecord.Metric().Timer("postgres", "{{ $PublicStructName }}")
@@ -73,7 +72,7 @@ func SelectAll(ctx context.Context) ([]*{{ $PublicStructName }}, error) {
 	{{ end }}
 	}
 
-	query, err := postgres.GenerateSelectAll(tableName, columnNames)
+	query, err := postgres.GenerateSelectAll(tableName, columnNames, index{{ $ind.Name }}, limit, cursor)
 	if err != nil {
 		metricErrCnt.Inc(ctx, "select_gen", 1)
 		logger.Error(ctx, fmt.Sprintf("Error get all from db '%s'", err))
@@ -84,8 +83,12 @@ func SelectAll(ctx context.Context) ([]*{{ $PublicStructName }}, error) {
 	metricTimer.Timing(ctx, "select_gen")
 	metricStatCnt.Inc(ctx, "select_all", 1)
 
-	return selectRawDB(ctx, query, activerecord.NewLimiter(uint32(postgres.MaxLimit)))
+	return selectRawDB(ctx, query, activerecord.NewLimiter(uint32(limit)))
 }
+		{{ end }}
+
+
+	{{ end }}
 {{ end }}
 
 {{ $indexes := .Indexes }}
@@ -184,7 +187,7 @@ func {{ $ind.Selector }}s(ctx context.Context, keys []{{ $ind.Type }}{{ if not $
 	{{ end }}
 	}
 
-	res, err := selectDB(ctx, index{{ $ind.Name }}, packedKeys, limiter)
+	res, err := selectDB(ctx, index{{ $ind.Name }}, packedKeys, limiter, postgres.CursorPosition{})
 	if err != nil {
 		return res, err	
 	}
@@ -198,7 +201,7 @@ func {{ $ind.Selector }}s(ctx context.Context, keys []{{ $ind.Type }}{{ if not $
 ToDo Count not implemented yet.
 {{ end }}
 
-func {{ $ind.Selector }}(ctx context.Context, key {{ $ind.Type }}{{ if not $ind.Unique }}, limiter activerecord.SelectorLimiter{{ end }}) ({{ if $ind.Unique }}{{ else }}[]{{ end }}*{{ $PublicStructName }}, error) {
+func {{ $ind.Selector }}(ctx context.Context, key {{ $ind.Type }}{{ if not $ind.Unique }}, limiter activerecord.SelectorLimiter{{ end }}) ({{ if not $ind.Unique }}[]{{ end }}*{{ $PublicStructName }}, error) {
 	selected, err := {{ $ind.Selector }}s(ctx, []{{ $ind.Type }}{key}{{ if not $ind.Unique }}, limiter{{ end }})
 	if err != nil {
 		return nil, err

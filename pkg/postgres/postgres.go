@@ -234,14 +234,21 @@ func QuoteIdentifier(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
 }
 
-func GenerateSelectAll(tableName string, fieldNames []string) (*Query, error) {
+func GenerateSelectAll(tableName string, fieldNames []string, index Index, limit uint32, cursor CursorPosition) (*Query, error) {
 	// ToDo quote field names
 	q := &Query{
 		QueryString: fmt.Sprintf("SELECT %s FROM %s", strings.Join(fieldNames, ", "), QuoteIdentifier(tableName)),
 		Params:      []any{},
 	}
 
-	q.AddLimitOffset(uint32(MaxLimit), 0)
+	if limit > uint32(MaxLimit) {
+		return nil, fmt.Errorf("limit %d is more than max limit %d", limit, MaxLimit)
+	}
+
+	q.AddWhereCondition(index.CursorConditions(cursor, len(q.Params)-1))
+	q.AddQuery(index.OrderConditions())
+
+	q.AddLimitOffset(limit, 0)
 
 	return q, nil
 }
