@@ -224,10 +224,7 @@ func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
 	}
 	defer rows.Close()
 
-	metricTimer.Timing(ctx, "update_db")
-	metricStatCnt.Inc(ctx, "updated_rows", float64(rows.CommandTag().RowsAffected()))
-// ToDo возвращать ошибку если не обновили ни одного результата, по идее такого быть не может, из-за того, что мы запись подняли из БД
-// вероятно произошла гонка и надо уведомить пользователя об этом
+	for rows.Next() {
 /* ToDo update mutator fields
 	_, err = octopus.ProcessResp(respBytes, octopus.NeedRespFlag|octopus.UniqRespFlag)
 	if err != nil {
@@ -236,6 +233,17 @@ func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
 		return err
 	}
 */
+	}
+
+	metricTimer.Timing(ctx, "update_db")
+	metricStatCnt.Inc(ctx, "updated_rows", float64(rows.CommandTag().RowsAffected()))
+	if rows.CommandTag().RowsAffected() == 0 {
+		metricErrCnt.Inc(ctx, "update_not_affected", 1)
+		logger.Info(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error update db", "No rows affected", connection.Info())
+
+		return fmt.Errorf("no rows affected")
+	}
+
 {{if gt $mutatorLen 0}}
 	}
 {{end}}
