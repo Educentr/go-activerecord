@@ -241,7 +241,7 @@ func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
 		metricErrCnt.Inc(ctx, "update_not_affected", 1)
 		logger.Info(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error update db", "No rows affected", connection.Info())
 
-		return fmt.Errorf("no rows affected")
+		return activerecord.ErrNoRowsAffected
 	}
 
 {{if gt $mutatorLen 0}}

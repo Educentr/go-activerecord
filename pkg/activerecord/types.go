@@ -2,6 +2,7 @@ package activerecord
 
 import (
 	"context"
+	"errors"
 	"hash"
 )
 
@@ -48,4 +49,8 @@ const (
 	OpDelete               // Atomic delete array value
 	OpInsert
 	OpUpdate
+)
+
+var (
+	ErrNoRowsAffected = errors.New("no rows affected")
 )
