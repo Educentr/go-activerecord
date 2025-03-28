@@ -30,6 +30,7 @@ func New(ctx context.Context) *{{ $PublicStructName }} {
 	newObj := {{ $PublicStructName }}{}
 	{{- if $fields }}
 	newObj.BaseField.UpdateOps = []postgres.Operation{}
+	newObj.BaseField.CheckFields = []activerecord.FieldValue{}
 	newObj.BaseField.Objects = map[string][]activerecord.ModelStruct{}
     {{ end }}
     {{- if ne $mutatorLen 0 -}}

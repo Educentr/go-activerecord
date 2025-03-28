@@ -165,7 +165,8 @@ func (obj *{{ $PublicStructName }}) Delete(ctx context.Context) error {
 
 	obj.BaseField.Exists = false
 	obj.BaseField.UpdateOps = []postgres.Operation{}
-
+	obj.BaseField.CheckFields = []activerecord.FieldValue{}
+	
 	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Success delete")
 
 	metricTimer.Finish(ctx, "delete")
@@ -241,7 +242,7 @@ func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
 		metricErrCnt.Inc(ctx, "update_not_affected", 1)
 		logger.Info(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Error update db", "No rows affected", connection.Info())
 
-		return activerecord.ErrNoRowsAffected
+		return errors.Wrap(activerecord.ErrNoRowsAffected, "{{ $PublicStructName }}: " + obj.PrimaryString())
 	}
 
 {{if gt $mutatorLen 0}}
@@ -277,6 +278,8 @@ func (obj *{{ $PublicStructName }}) Update(ctx context.Context) error {
 {{end}}
 
 	obj.BaseField.UpdateOps = []postgres.Operation{}
+	obj.BaseField.CheckFields = []activerecord.FieldValue{}
+
 
 	logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Success update")
 
@@ -439,6 +442,8 @@ func (obj *{{ $PublicStructName }}) insertReplace(ctx context.Context, insertMod
 
 	obj.BaseField.Exists = true
 	obj.BaseField.UpdateOps = []postgres.Operation{}
+	obj.BaseField.CheckFields = []activerecord.FieldValue{}
+
 	{{- if gt $mutatorLen 0 }}
 	obj.ClearMutatorUpdateOpts()
 	{{- end }}

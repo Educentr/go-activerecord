@@ -47,13 +47,13 @@ func (obj *{{ $PublicStructName }}) Get{{ $fstruct.Name }}() {{ $rtype }} {
 func (obj *{{ $PublicStructName }}) SetAndCheck{{ $fstruct.Name }}({{ $fstruct.Name }} {{ $rtype }}) error {
 	for _, checkField := range obj.BaseField.CheckFields {
 		if checkField.Field == "{{ $fstruct.Name }}" {
-			return errors.New("value already changed. Can't check this value")
+			return errors.New("value of {{ $fstruct.Name }} already checked. Can't double check this value")
 		}
 	}
 
 	for _, updateOp := range obj.BaseField.UpdateOps {
 		if updateOp.Field == "{{ $fstruct.Name }}" {
-			return errors.New("value already changed. Can't update this value")
+			return errors.New("value of {{ $fstruct.Name }} already changed. Can't update this value")
 		}
 	}
 
