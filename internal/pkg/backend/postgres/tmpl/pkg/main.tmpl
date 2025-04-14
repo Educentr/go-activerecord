@@ -122,16 +122,16 @@ func RowToStruct(ctx context.Context, rows pgx.Rows) (*{{ $PublicStructName }}, 
 			{{ $serparams := $fstruct.Serializer.Params }}
 			{{ $underlyingType := trimPrefix (printf "%s" $rtype) "*"}}
 
-	bvar := {{ $fstruct.Name }}
+	bvar := val{{ $fstruct.Name  }}
 	var svar = new({{ $underlyingType }})
 
 	err = {{ $serializer.ImportName }}.{{ $serializer.Unmarshaler }}({{ $serparams }}bvar, svar)
 	if err != nil {
-		errRet = fmt.Errorf("error unmarshal field {{ $fstruct.Name }}: %w", err)
-		return
+		errRet := fmt.Errorf("error unmarshal field {{ $fstruct.Name }}: %w", err)
+		return nil, errRet
 	}
 
-	np.Set{{ $fstruct.Name }}(svar)
+	np.Set{{ $fstruct.Name }}({{ if eq $underlyingType $rtype }}*{{ end }}svar)
 
 		{{ else }}
 	np.Set{{ $fstruct.Name }}(val{{ $fstruct.Name }})
