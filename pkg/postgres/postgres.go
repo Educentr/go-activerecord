@@ -263,7 +263,7 @@ func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][
 	}
 
 	bulkSelect := len(keys) > 1
-	oneRowResult := limit == 1 || (!bulkSelect && index.Unique)
+	oneRowResult := !bulkSelect && index.Unique
 
 	q := NewSelectQuery(tableName, fieldNames, index)
 
