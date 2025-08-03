@@ -414,12 +414,12 @@ func NewThreshold(limit uint32) Limiter {
 Генерируемые методы:
 
 | Название    | Операция  |
-| ----------- | --------- | ------ |
-| `SetBit*`   | `         | = arg` |
+| ----------- | --------- |
+| `SetBit*`   | `\|= arg` |
 | `ClearBit*` | `&= ^arg` |
 | `Inc*`      | `+= arg`  |
 | `Dec*`      | `-= arg`  |
-| `Or*`       | `         | = arg` |
+| `Or*`       | `\|= arg` |
 | `Xor*`      | `^= arg`  |
 | `And*`      | `&= arg`  |
 

@@ -7,10 +7,10 @@ import (
 	"log"
 	"strings"
 
-	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
 	"github.com/pkg/errors"
-	// ToDo drop arlogger 
-	arlogger "github.com/Educentr/go-activerecord/v3/pkg/logger"
+
+	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
+	arlogger "github.com/Educentr/go-activerecord/v3/pkg/logger" // ToDo drop arlogger 
 	"github.com/Educentr/go-activerecord/v3/pkg/postgres"
 {{- range $ind, $imp := .Imports }}
 	{{ if ne $imp.ImportName "" }}{{ $imp.ImportName }} {{ end }}"{{ $imp.Path }}"
