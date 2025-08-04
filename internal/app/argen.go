@@ -186,7 +186,7 @@ func (a *ArGen) saveGenerateResult(name, dst string, genRes []generator.Generate
 		dstFileName := filepath.Join(dirPkg, gen.Name)
 
 		// Сохранение результата генерации в файл
-		log.Printf("Write package `%s` (%s) into file `%s`", name, dstFileName, dstFileName)
+		// log.Printf("Write package `%s` (%s) into file `%s`", name, dstFileName, dstFileName)
 
 		if err := writeToFile(dirPkg, dstFileName, gen.Data); err != nil {
 			return &arerror.ErrGeneratorFile{Name: name, Backend: string(gen.Backend), Filename: dstFileName, Err: err}
@@ -194,7 +194,7 @@ func (a *ArGen) saveGenerateResult(name, dst string, genRes []generator.Generate
 
 		// Удаляем из "лишних" фалов то, что перегенерировали
 		if _, ex := a.fileToRemove[dstFileName]; ex {
-			log.Printf("Replace file: %s", dstFileName)
+			// log.Printf("Replace file: %s", dstFileName)
 			delete(a.fileToRemove, dstFileName)
 		} else {
 			log.Printf("Create file: %s", dstFileName)
@@ -202,7 +202,7 @@ func (a *ArGen) saveGenerateResult(name, dst string, genRes []generator.Generate
 
 		// Удаляем из лишних все директории сгенерированных пакетов
 		if _, ex := a.fileToRemove[dirPkg]; ex {
-			log.Printf("Replace dir: %s", dirPkg)
+			// log.Printf("Replace dir: %s", dirPkg)
 			delete(a.fileToRemove, dirPkg)
 		}
 	}
