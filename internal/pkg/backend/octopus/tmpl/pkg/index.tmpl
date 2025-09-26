@@ -208,7 +208,7 @@ func {{ $ind.Selector }}(ctx context.Context, key {{ $ind.Type }}{{ if not $ind.
 	{{ if $ind.Unique -}}
 	if len(selected) > 0 {
 		if len(selected) > 1 {
-			activerecord.Logger().Error(ctx, "{{ $PublicStructName }}", "More than one tuple for uniq key ID '%s': %d", key, len(selected))
+			activerecord.Logger().Error(ctx, "{{ $PublicStructName }}", fmt.Sprintf("More than one tuple for uniq key {{ $ind.Selector }} '%s': %d", key, len(selected)))
 		}
 
 		return selected[0], nil

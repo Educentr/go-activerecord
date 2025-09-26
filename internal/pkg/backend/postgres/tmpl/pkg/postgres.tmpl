@@ -301,7 +301,7 @@ func (obj *{{ $PublicStructName }}) Insert(ctx context.Context) error {
 		return fmt.Errorf("can't insert already exists object")
 	}
 
-	err := obj.insertReplace(ctx, postgres.NoDuplicateAction)
+	err := obj.insertReplace(ctx, postgres.NoDuplicateAction, pk)
 
 	if err == nil {
 		metricStatCnt.Inc(ctx, "insert_success", 1)
@@ -321,7 +321,7 @@ func (obj *{{ $PublicStructName }}) InsertIfNotExist(ctx context.Context) error 
 		return fmt.Errorf("can't insert already exists object")
 	}
 
-	err := obj.insertReplace(ctx, postgres.IgnoreDuplicate)
+	err := obj.insertReplace(ctx, postgres.IgnoreDuplicate, pk)
 
 	if err == nil {
 		metricStatCnt.Inc(ctx, "insert_success", 1)
@@ -335,13 +335,22 @@ func (obj *{{ $PublicStructName }}) Replace(ctx context.Context) error {
 	return fmt.Errorf("Replace not implemented")
 }
 
-func (obj *{{ $PublicStructName }}) InsertOrReplace(ctx context.Context) error {
+func (obj *{{ $PublicStructName }}) InsertOrReplace(ctx context.Context, conflictIndex ...postgres.OnConflictIndex) error {
 	metricStatCnt := activerecord.Metric().StatCount("postgres", "{{ $PublicStructName }}")
 
 	metricStatCnt.Inc(ctx, "insertorreplace_request", 1)
 
-	err := obj.insertReplace(ctx, postgres.Replace)
+	conflictKey := pk
 
+	if len(conflictIndex) > 1 {
+		return fmt.Errorf("only one conflict index supported")
+	}
+
+	if len(conflictIndex) == 1 {
+		conflictKey = onConflictIndexMap[conflictIndex[0]]
+	}
+
+	err := obj.insertReplace(ctx, postgres.Replace, conflictKey)
 	if err == nil {
 		metricStatCnt.Inc(ctx, "insertorreplace_success", 1)
 	}
@@ -349,7 +358,7 @@ func (obj *{{ $PublicStructName }}) InsertOrReplace(ctx context.Context) error {
 	return err
 }
 
-func (obj *{{ $PublicStructName }}) insertReplace(ctx context.Context, insertMode postgres.OnConflictAction) error {
+func (obj *{{ $PublicStructName }}) insertReplace(ctx context.Context, insertMode postgres.OnConflictAction, conflictIndex postgres.Index) error {
 	var (
 		err error
 	)
@@ -387,7 +396,7 @@ func (obj *{{ $PublicStructName }}) insertReplace(ctx context.Context, insertMod
 	{{ end }}
 	}
 
-	query, err := postgres.GenerateInsert(tableName, pk, columnNames, [][]any{values}, returning, insertMode)
+	query, err := postgres.GenerateInsert(tableName, pk, columnNames, [][]any{values}, returning, insertMode, conflictIndex)
 	if err != nil {
 		metricErrCnt.Inc(ctx, "insert_gen", 1)
 		logger.Error(ctx, fmt.Sprintf("Error get db '%s'", err))

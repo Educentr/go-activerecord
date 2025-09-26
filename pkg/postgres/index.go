@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+type OnConflictIndex int
+
 type Order uint8
 
 const (

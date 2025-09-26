@@ -480,7 +480,7 @@ func TestGenerateInsert(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q, err := postgres.GenerateInsert(tt.tableName, tt.pk, tt.fieldNames, tt.values, tt.returning, tt.conflictAction)
+			q, err := postgres.GenerateInsert(tt.tableName, tt.pk, tt.fieldNames, tt.values, tt.returning, tt.conflictAction, tt.pk)
 
 			if tt.expectedErr != nil {
 				assert.EqualError(t, err, tt.expectedErr.Error())

@@ -148,7 +148,7 @@ func GenerateFixtureTmpl(dstFile io.Writer, params octopus.FixturePkgData) *arer
 		return &arerror.ErrGeneratorPhases{Backend: "octopus", Phase: "parse", Err: errB}
 	}
 
-	templatePackage, err := template.New(TemplateName).Funcs(octopus.FixtureTemplateFuncs).Funcs(BaseTemplateFuncs).Funcs(b.TemplateFuncs()).Parse(disclaimer + octopus.FixtureTmpl)
+	templatePackage, err := template.New(TemplateName).Funcs(octopus.FixtureTemplateFuncs).Funcs(stringTemplateFuncs).Funcs(b.TemplateFuncs()).Funcs(mathTemplateFuncs).Parse(disclaimer + octopus.FixtureTmpl)
 	if err != nil {
 		tmplLines, errgetline := getTmplErrorLine(strings.SplitAfter(disclaimer+octopus.FixtureTmpl, "\n"), err.Error())
 		if errgetline != nil {
@@ -174,7 +174,7 @@ func GenerateFixtureTmpl(dstFile io.Writer, params octopus.FixturePkgData) *arer
 }
 
 func GenerateByTmpl(params any, backendName string, funcs template.FuncMap, templateName, tmpl string) ([]byte, *arerror.ErrGeneratorPhases) {
-	templater := template.New(TemplateName).Funcs(funcs).Funcs(BaseTemplateFuncs)
+	templater := template.New(TemplateName).Funcs(funcs).Funcs(stringTemplateFuncs).Funcs(mathTemplateFuncs)
 
 	disclaimerProcess, err := templater.Parse(disclaimer)
 	if err != nil {

@@ -139,11 +139,11 @@ func (q *Query) GenerateWhereKeys(multiField bool, keys [][]any) {
 	}
 }
 
-func (q *Query) AddNoConflictDoNothing(fieldNames []string) {
+func (q *Query) AddOnConflictDoNothing(fieldNames []string) {
 	q.QueryString += " ON CONFLICT DO NOTHING"
 }
 
-func (q *Query) AddNoConflictDoUpdate(tableName string, pk Index, fieldNames []string) {
+func (q *Query) AddOnConflictDoUpdate(tableName string, pk Index, fieldNames []string, conflictKey Index) {
 	pkfields := make(map[string]struct{}, len(pk.Fields))
 	updateFields := []string{}
 
@@ -161,7 +161,7 @@ func (q *Query) AddNoConflictDoUpdate(tableName string, pk Index, fieldNames []s
 	}
 
 	q.QueryString += fmt.Sprintf(" ON CONFLICT (%s) DO UPDATE SET %s",
-		strings.Join(pk.Fields.GetFieldNames(), ", "),
+		strings.Join(conflictKey.Fields.GetFieldNames(), ", "),
 		strings.Join(updateFields, ", "),
 	)
 }
@@ -420,7 +420,11 @@ func GenerateDelete(tableName string, primaryKey Index, keys [][]any) (*Query, e
 	return q, nil
 }
 
-func GenerateInsert(tableName string, pk Index, fieldNames []string, values [][]any, returning []string, conflictAction OnConflictAction) (*Query, error) {
+func GenerateInsert(tableName string, pk Index, fieldNames []string, values [][]any, returning []string, conflictAction OnConflictAction, conflictKey Index) (*Query, error) {
+	if !conflictKey.Unique {
+		return nil, fmt.Errorf("conflict key must be unique")
+	}
+
 	bulk := len(values) > 1
 
 	if bulk && conflictAction == IgnoreDuplicate {
@@ -451,9 +455,9 @@ func GenerateInsert(tableName string, pk Index, fieldNames []string, values [][]
 
 	switch conflictAction {
 	case IgnoreDuplicate:
-		q.AddNoConflictDoNothing(fieldNames)
+		q.AddOnConflictDoNothing(fieldNames)
 	case Replace:
-		q.AddNoConflictDoUpdate(tableName, pk, fieldNames)
+		q.AddOnConflictDoUpdate(tableName, pk, fieldNames, conflictKey)
 	case NoDuplicateAction:
 	default:
 		return nil, fmt.Errorf("unknown conflict action")

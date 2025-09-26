@@ -30,14 +30,18 @@ import (
 {{ $pktype := "" }}
 {{ $pklenfld := 1 }}
 {{ $pkind := index .Indexes 0 }}
+{{ $iotaConflict := 0 }}
 {{ range $num, $ind := .Indexes -}}
-{{ $lenfld := len $ind.Fields -}}
+	{{ if $ind.Unique }}
+const OnConflict{{ $ind.Name }} postgres.OnConflictIndex = {{ $iotaConflict }}
+		{{ $iotaConflict = add $iotaConflict 1 }}
+	{{ end }}
 	{{ if $ind.Primary }}
 		{{ $pktype = $ind.Type }}
 		{{ $pklenfld = len $ind.Fields }}
 		{{ $pkind = $ind }}
 func (obj *{{ $PublicStructName }}) Primary() {{ $ind.Type }} {
-		{{ if ne $lenfld 1 }}
+		{{ if ne $pklenfld 1 }}
 	return {{ $ind.Type }}{
 			{{- range $_, $fieldNum := $ind.Fields }}
 				{{- $ifield := index $fields $fieldNum }}
@@ -222,6 +226,14 @@ func {{ $ind.Selector }}(ctx context.Context, key {{ $ind.Type }}{{ if not $ind.
 	{{- end }}
 }
 {{ end }}
+
+var onConflictIndexMap = []postgres.Index{
+{{ range $num, $ind := .Indexes -}}
+	{{ if $ind.Unique }}
+	index{{ $ind.Name }},
+	{{ end }}
+{{ end -}}
+}
 
 func (obj *{{ $PublicStructName }}) PrimaryString() string {
 	ret := []string{
