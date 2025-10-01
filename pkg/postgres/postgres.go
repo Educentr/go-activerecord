@@ -144,10 +144,10 @@ func (q *Query) AddOnConflictDoNothing(fieldNames []string) {
 }
 
 func (q *Query) AddOnConflictDoUpdate(tableName string, pk Index, fieldNames []string, conflictKey Index) {
-	pkfields := make(map[string]struct{}, len(pk.Fields))
+	pkfields := make(map[string]struct{}, len(conflictKey.Fields))
 	updateFields := []string{}
 
-	for _, pkf := range pk.Fields.GetFieldNames() {
+	for _, pkf := range conflictKey.Fields.GetFieldNames() {
 		updateFields = append(updateFields, fmt.Sprintf("%s=%s.%s", pkf, tableName, pkf))
 		pkfields[pkf] = struct{}{}
 	}
