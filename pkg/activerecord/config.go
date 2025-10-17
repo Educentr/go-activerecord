@@ -82,7 +82,7 @@ func (dc *DefaultConfig) GetIntIfExists(confPath string) (int64, bool, error) {
 			return ret, true, nil
 		}
 
-		return 0, false, fmt.Errorf("param %s has type %T, want int", confPath, param)
+		return 0, false, fmt.Errorf("param %s has type %T, want int64", confPath, param)
 	}
 
 	return 0, false, nil
