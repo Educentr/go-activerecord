@@ -7,24 +7,180 @@
 
 ### Декларирование конфигурации хранилища
 
+**Для Octopus:**
 ```go
-//ar:shard_by_func:shard_func
-//ar:shard_by_field:Id:7
 //ar:serverConf:confKey
-//ar:backend:octopus,tarantool
+//ar:namespace:5
+//ar:backend:octopus
+type FieldsUser struct {
+    Id   int32  `ar:"primary_key"`
+    Name string `ar:"size:256"`
+}
+```
+
+**Для PostgreSQL:**
+```go
+//ar:serverConf:pgConfKey
+//ar:namespace:users
+//ar:backend:postgres
+type FieldsUser struct {
+    Id   int32  `ar:"primary_key"`
+    Name string `ar:"size:256"`
+}
 ```
 
 ### Декларирование полей
 
+**Основные теги для полей:**
+
+```go
+type FieldsProduct struct {
+    // Первичный ключ
+    Id int64 `ar:"primary_key"`
+
+    // Простое поле с селектором
+    Code string `ar:"size:64;selector:SelectByCode"`
+
+    // Уникальный индекс
+    Email string `ar:"unique;size:256;selector:SelectByEmail"`
+
+    // Поле с сериализацией JSON
+    Meta string `ar:"serializer:Json;size:1024"`
+
+    // Поле с мутаторами для атомарных операций
+    Counter uint32 `ar:"mutators:inc,dec"`
+    Flags   uint32 `ar:"mutators:set_bit,clear_bit"`
+
+    // Обычное поле
+    CreatedAt uint32 `ar:""`
+}
+```
+
 ### Декларирование связанных сущностей
+
+```go
+type FieldsObjectUser struct {
+    UserId int64 `ar:"key:Id;object:User;field:UserId"`
+}
+```
+
+Позволяет автоматически подгружать связанные объекты через методы `GetUser()`.
 
 ### Декларирование индексов
 
+**Простой индекс:**
+```go
+type IndexesProduct struct {
+    // Уникальный составной индекс
+    CodeType bool `ar:"fields:Code,Type;unique"`
+}
+```
+
+**Индекс с условием (PostgreSQL):**
+```go
+type IndexesProduct struct {
+    ActiveProducts bool `ar:"fields:Status,CreatedAt;condition:Status=1,DeletedAt is null"`
+}
+```
+
+**Индекс с сортировкой:**
+```go
+type IndexesProduct struct {
+    RecentFirst bool `ar:"fields:Status,CreatedAt;order:Status asc,CreatedAt desc"`
+}
+```
+
 #### Частичные индексы
+
+Позволяют делать выборки по части составного индекса:
+
+```go
+type (
+    IndexesProduct struct {
+        StatusCreated bool `ar:"fields:Status,CreatedAt,Id"`
+    }
+
+    IndexPartsProduct struct {
+        // Выборка только по Status (первое поле индекса)
+        StatusPart bool `ar:"index:StatusCreated;fieldnum:1;selector:SelectByStatus"`
+
+        // Выборка по Status и CreatedAt (первые 2 поля)
+        StatusCreatedPart bool `ar:"index:StatusCreated;fieldnum:2;selector:SelectByStatusAndDate"`
+    }
+)
+```
 
 ### Декларирование триггеров
 
-### Декларирование флагов
+Триггеры вызываются при исключительных ситуациях:
+
+```go
+type TriggersFoo struct {
+    RepairTuple bool `ar:"pkg:github.com/myapp/model/repair;func:RepairTuple"`
+}
+```
+
+Функция триггера для Octopus:
+```go
+package repair
+
+import "github.com/Educentr/go-activerecord/v3/pkg/octopus"
+
+func RepairTuple(tuple *octopus.TupleData) error {
+    // Логика восстановления поврежденного tuple
+    if len(tuple.Fields) < 5 {
+        // Добавляем недостающие поля
+        tuple.Fields = append(tuple.Fields, []byte("default_value"))
+    }
+    return nil
+}
+```
+
+### Декларирование сериализаторов
+
+**Встроенные сериализаторы:**
+
+```go
+type FieldsConfig struct {
+    // JSON сериализатор
+    Settings string `ar:"serializer:Json;size:2048"`
+
+    // Printf формат
+    Version string `ar:"serializer:Printf,%d.%d.%d;size:16"`
+
+    // Mapstructure для сложных структур
+    Params string `ar:"serializer:Mapstructure;size:4096"`
+}
+
+type SerializersConfig struct {
+    Settings map[string]interface{} `ar:""`
+    Params   *MyParamsStruct        `ar:"pkg:github.com/myapp/types;object:ParamsObj"`
+}
+```
+
+**Пользовательский сериализатор:**
+
+```go
+type SerializersProduct struct {
+    Tags []string `ar:"pkg:github.com/myapp/serializers;object:TagsSerializer"`
+}
+```
+
+В пакете serializers:
+```go
+package serializers
+
+func TagsSerializerMarshal(tags []string) (string, error) {
+    return strings.Join(tags, ","), nil
+}
+
+func TagsSerializerUnmarshal(data string) ([]string, error) {
+    if data == "" {
+        return []string{}, nil
+    }
+    return strings.Split(data, ","), nil
+}
+```
 
 ## Конфигурирование
 
@@ -129,10 +285,327 @@ func (dc *ARConfig) GetStruct(ctx context.Context, confPath string, valuePtr int
 изменять свои параметры в течении времени. Тогда необходимо в методе `GetLastUpdateTime` отдавать время последнего обновления конфига.
 Это позволит перечитывать параметры подключения на лету и пере-подключаться к базе.
 
+## Работа с моделями в коде
+
+### Создание новых записей
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/myapp/model/repository/generated/user"
+)
+
+func CreateUser(ctx context.Context, name, email string) error {
+    // Создаем новый объект
+    u := user.New(ctx)
+
+    // Устанавливаем значения полей
+    u.SetName(name)
+    u.SetEmail(email)
+    u.SetCreatedAt(uint32(time.Now().Unix()))
+
+    // Сохраняем в БД
+    if err := u.Insert(ctx); err != nil {
+        return fmt.Errorf("failed to insert user: %w", err)
+    }
+
+    return nil
+}
+```
+
+### Поиск записей
+
+**По уникальному ключу:**
+```go
+// Возвращает один объект или ошибку
+user, err := user.SelectById(ctx, 123)
+if err != nil {
+    return err
+}
+
+fmt.Println(user.GetName())
+```
+
+**По неуникальному индексу:**
+```go
+// Требуется лимитер для защиты от выборки всей БД
+limiter := activerecord.NewLimiter(100)
+users, err := user.SelectByStatus(ctx, "active", limiter)
+if err != nil {
+    return err
+}
+
+for _, u := range users {
+    fmt.Printf("User: %s (%s)\n", u.GetName(), u.GetEmail())
+}
+```
+
+**По составному индексу:**
+```go
+// Создаем ключ для поиска
+key := user.EmailStatusIndexType{
+    Email:  "test@example.com",
+    Status: "active",
+}
+
+u, err := user.SelectByEmailStatus(ctx, key)
+if err != nil {
+    return err
+}
+```
+
+**Множественная выборка по ключам:**
+```go
+ids := []int64{1, 2, 3, 4, 5}
+users, err := user.SelectByIds(ctx, ids)
+if err != nil {
+    return err
+}
+```
+
+### Обновление записей
+
+**Простое обновление:**
+```go
+user, err := user.SelectById(ctx, 123)
+if err != nil {
+    return err
+}
+
+// Изменяем поля
+user.SetName("New Name")
+user.SetUpdatedAt(uint32(time.Now().Unix()))
+
+// Обновляем в БД (обновятся только измененные поля)
+if err := user.Update(ctx); err != nil {
+    return err
+}
+```
+
+**Полная перезапись:**
+```go
+// Replace обновляет ВСЕ поля, не только измененные
+if err := user.Replace(ctx); err != nil {
+    return err
+}
+```
+
+**Insert or Replace:**
+```go
+u := user.New(ctx)
+u.SetId(123)
+u.SetName("Name")
+u.SetEmail("email@example.com")
+
+// Добавит новую запись или перезапишет существующую
+if err := u.InsertOrReplace(ctx); err != nil {
+    return err
+}
+```
+
+### Удаление записей
+
+```go
+user, err := user.SelectById(ctx, 123)
+if err != nil {
+    return err
+}
+
+if err := user.Delete(ctx); err != nil {
+    return err
+}
+```
+
 ## Атомарность на уровне БД
 
 ### Мутаторы
 
+Мутаторы позволяют выполнять атомарные операции на уровне БД:
+
+**Инкремент/декремент:**
+```go
+user, err := user.SelectById(ctx, 123)
+if err != nil {
+    return err
+}
+
+// Увеличиваем счетчик на 10 (атомарно в БД)
+user.IncLoginCount(10)
+
+// Применяем изменения
+if err := user.Update(ctx); err != nil {
+    return err
+}
+
+// После Update значение синхронизируется обратно в объект
+fmt.Println("New count:", user.GetLoginCount())
+```
+
+**Битовые операции:**
+```go
+user, err := user.SelectById(ctx, 123)
+if err != nil {
+    return err
+}
+
+// Устанавливаем биты флагов (атомарно)
+user.SetBitFlags(0x04)  // Установить бит
+user.ClearBitFlags(0x02) // Очистить бит
+
+if err := user.Update(ctx); err != nil {
+    return err
+}
+```
+
+**Другие операции:**
+```go
+// Побитовое ИЛИ
+user.OrFlags(0x10)
+
+// Побитовое И
+user.AndFlags(0xFF)
+
+// Побитовое XOR
+user.XorFlags(0x20)
+
+// Все операции применяются при вызове Update
+user.Update(ctx)
+```
+
 ## Архитектурное построение
 
+### Разделение на слои
+
+Рекомендуемая структура проекта:
+
+```
+myapp/
+├── cmd/
+│   └── myapp/
+│       └── main.go
+├── internal/
+│   ├── service/          # Бизнес-логика
+│   │   └── user.go
+│   └── handler/          # HTTP/gRPC обработчики
+│       └── user.go
+└── model/
+    └── repository/
+        ├── declaration/  # Декларативные описания (decl/)
+        │   ├── user.go
+        │   └── product.go
+        └── generated/    # Сгенерированный код (cmpl/)
+            ├── user/
+            └── product/
+```
+
+### Инициализация подключений
+
+```go
+package main
+
+import (
+    "context"
+    "github.com/Educentr/go-activerecord/v3/pkg/activerecord"
+    "github.com/myapp/internal/config"
+    "github.com/myapp/model/repository/generated/user"
+)
+
+func main() {
+    ctx := context.Background()
+
+    // Инициализируем конфиг
+    cfg := config.New()
+
+    // Регистрируем конфиг в ActiveRecord
+    activerecord.RegisterConfig(cfg)
+
+    // Опционально: регистрируем метрики
+    metrics := NewPrometheusMetrics()
+    activerecord.RegisterMetrics(metrics)
+
+    // Опционально: регистрируем логгер
+    logger := zerolog.New(os.Stdout)
+    activerecord.RegisterLogger(&logger)
+
+    // Теперь можно работать с моделями
+    u, err := user.SelectById(ctx, 1)
+    // ...
+}
+```
+
 ## Best practices
+
+### 1. Всегда используйте лимитеры для неуникальных индексов
+
+❌ **Плохо:**
+```go
+// Может вернуть миллионы записей!
+users, _ := user.SelectByStatus(ctx, "active", nil)
+```
+
+✅ **Хорошо:**
+```go
+limiter := activerecord.NewLimiter(1000)
+users, err := user.SelectByStatus(ctx, "active", limiter)
+if err != nil {
+    return err
+}
+```
+
+### 2. Проверяйте ошибки выборки
+
+```go
+user, err := user.SelectById(ctx, id)
+if err != nil {
+    if errors.Is(err, activerecord.ErrNotFound) {
+        return fmt.Errorf("user not found")
+    }
+    return fmt.Errorf("database error: %w", err)
+}
+```
+
+### 3. Используйте мутаторы для счетчиков
+
+❌ **Плохо (race condition):**
+```go
+user, _ := user.SelectById(ctx, id)
+user.SetCounter(user.GetCounter() + 1)
+user.Update(ctx)
+```
+
+✅ **Хорошо (атомарно):**
+```go
+user, _ := user.SelectById(ctx, id)
+user.IncCounter(1)
+user.Update(ctx)
+```
+
+### 4. Не изменяйте первичные ключи
+
+```go
+user, _ := user.SelectById(ctx, 123)
+// user.SetId(456) // ОШИБКА! Первичный ключ защищен от изменения
+```
+
+### 5. Используйте контекст для таймаутов
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+
+user, err := user.SelectById(ctx, id)
+```
+
+### 6. Порядок полей для Octopus критичен
+
+Для Octopus порядок полей в `Fields*` должен **точно** совпадать с порядком в tuple!
+
+### 7. Всегда запускайте `make generate` перед коммитом
+
+```bash
+make generate  # Генерирует моки и проверяет код
+make lint      # Проверяет качество кода
+make test      # Запускает тесты
+```

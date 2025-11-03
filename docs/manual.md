@@ -75,7 +75,7 @@ type TriggersFoo struct {
 
 ### namespace
 
-Номер спейса если используется `octopus` (`tarantool 1.5`). При вызове функции/процедуры содержит имя процедуры
+Для `octopus` (`tarantool 1.5`) - номер спейса (числовой идентификатор). Для `postgres` - имя таблицы в базе данных. При вызове функции/процедуры содержит имя процедуры
 
 ### backend
 
@@ -201,7 +201,6 @@ type TriggersFoo struct {
 - `Json` - позволяет хранить в БД строку и десериализовывать ее в кастомный тип пользователя, под капотом использует стандартный пакет encoding/json
 - `Printf` - позволяет хранить в БД строку в определённом формате подобном `printf`, обязательно указывать формат в определении поля, см. `serializer` в структуре `Fields`
 - `Mapstructure` - позволяет хранить в БД строку и десериализовывать ее в кастомный тип пользователя с возможностями библиотеки `mapstructure` см. <https://pkg.go.dev/github.com/mitchellh/mapstructure>
-- `Intarray` - сериализатор PostgreSQL для колонок типа `intarray`
 
 ### Mutators\*
 
@@ -546,9 +545,9 @@ type (
 package repository
 
 //ar:serverConf:confKey
-//ar:table:bar
+//ar:namespace:bar
 //ar:backend:postgres
-type FieldsFoo struct {
+type FieldsBar struct {
     Id       string `ar:"primary_key;size:36"`
     Code     string `ar:"size:128;selector:SelectByCode"`
     Email    string `ar:"size:256;selector:SelectByEmail"`
@@ -683,7 +682,7 @@ GetPlatform SetPlatform
 Доступ к фикстурам осуществляется по первичному ключу описанному в структуре модели
 
 Если файлы не были созданы предварительно генератор создает пустые `yaml` файлы для всех сущностей описанной модели.
-Именование полей модели в `yaml` файле в формате snake case. Подсмотреть на [примере](activerecord-cookbook/tree/main/example/testutil/fixture)
+Именование полей модели в `yaml` файле в формате snake case. Подсмотреть на [примере](https://github.com/mailru/activerecord-cookbook/tree/main/example/testutil/fixture)
 
 ## Примеры использования фикстур
 
