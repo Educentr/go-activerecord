@@ -167,6 +167,10 @@ func GetInstance() *ActiveRecord {
 	return instance
 }
 
+func IsInitialized() bool {
+	return instance != nil
+}
+
 func Logger() logger.LoggerInterface {
 	return GetInstance().logger
 }
