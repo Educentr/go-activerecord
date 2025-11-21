@@ -464,3 +464,431 @@ func (obj *{{ $PublicStructName }}) insertReplace(ctx context.Context, insertMod
 
 	return nil
 }
+
+// BulkInsertReplace performs bulk INSERT ... ON CONFLICT ... DO UPDATE with automatic
+// mapping of database-managed fields (InitByDB) back to objects.
+//
+// The function:
+// 1. Executes bulk INSERT with ON CONFLICT DO UPDATE
+// 2. Uses RETURNING to get back all InitByDB fields (auto-incremented, generated, etc.)
+// 3. Matches returned rows to original objects using conflictIndex (if suitable) or another unique index without InitByDB fields
+// 4. Updates objects with the database-managed field values
+//
+// Matching index selection priority:
+// - First: Uses conflictIndex if it's unique and has no InitByDB fields
+// - Second: Uses any other unique index without InitByDB fields
+// - Returns error if no suitable index exists
+//
+// Example:
+//   objs := []*{{ $PublicStructName }}{obj1, obj2, obj3}
+//   err := BulkInsertReplace(ctx, objs, OnConflict{{ (index .Indexes 0).Name }})
+func BulkInsertReplace(ctx context.Context, objs []*{{ $PublicStructName }}, conflictIndex postgres.Index) error {
+	if len(objs) == 0 {
+		return nil
+	}
+
+	logger := activerecord.Logger()
+	metricTimer := activerecord.Metric().Timer("postgres", "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount("postgres", "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount("postgres", "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "bulk_insertorreplace_request", 1)
+
+	// Выбираем индекс для сопоставления результатов
+	// Приоритет: conflictIndex (если без InitByDB полей) -> любой другой уникальный индекс без InitByDB
+	// Примечание: conflictIndex всегда уникальный (проверяется в GenerateInsert)
+	var matchIndex postgres.Index
+	var matchIndexName string
+	useConflictIndex := false
+
+	// Сначала проверяем conflictIndex - он самый подходящий для сопоставления
+	{{ range $num, $ind := .Indexes -}}
+	{{ if $ind.Unique }}
+	if matchIndexName == "" {
+		// Проверяем совпадает ли conflictIndex с index{{ $ind.Name }}
+		if len(conflictIndex.Fields) == len(index{{ $ind.Name }}.Fields) {
+			fieldsMatch := true
+			for i := range conflictIndex.Fields {
+				if conflictIndex.Fields[i].Field != index{{ $ind.Name }}.Fields[i].Field {
+					fieldsMatch = false
+					break
+				}
+			}
+
+			if fieldsMatch {
+				// Проверяем есть ли InitByDB поля в этом индексе
+				{{ $hasInitByDBFields := false }}
+				{{- range $_, $fieldNum := $ind.Fields }}
+					{{- $fstruct := index $fields $fieldNum }}
+					{{ if $fstruct.InitByDB }}
+						{{ $hasInitByDBFields = true }}
+					{{ end }}
+				{{ end }}
+				{{ if not $hasInitByDBFields }}
+				matchIndex = index{{ $ind.Name }}
+				matchIndexName = "{{ $ind.Name }}"
+				useConflictIndex = true
+				{{ end }}
+			}
+		}
+	}
+	{{ end }}
+	{{ end }}
+
+	// Если conflictIndex не подошел, ищем любой другой подходящий индекс
+	if matchIndexName == "" {
+		{{ range $num, $ind := .Indexes -}}
+		{{ if $ind.Unique }}
+			{{ $hasInitByDBFields := false }}
+			{{- range $_, $fieldNum := $ind.Fields }}
+				{{- $fstruct := index $fields $fieldNum }}
+				{{ if $fstruct.InitByDB }}
+					{{ $hasInitByDBFields = true }}
+				{{ end }}
+			{{ end }}
+			{{ if not $hasInitByDBFields }}
+		if matchIndexName == "" {
+			matchIndex = index{{ $ind.Name }}
+			matchIndexName = "{{ $ind.Name }}"
+		}
+			{{ end }}
+		{{ end }}
+		{{ end }}
+	}
+
+	if matchIndexName == "" {
+		metricErrCnt.Inc(ctx, "bulk_insert_no_match_index", 1)
+		return fmt.Errorf("BulkInsertReplace is not available for {{ $PublicStructName }}: no unique index without InitByDB fields found. Please add a unique index on non-auto-generated fields to enable this functionality")
+	}
+
+	if useConflictIndex {
+		logger.Debug(ctx, "{{ $PublicStructName }}", "BulkInsertReplace", fmt.Sprintf("Using conflictIndex '%s' for matching", matchIndexName))
+	} else {
+		logger.Debug(ctx, "{{ $PublicStructName }}", "BulkInsertReplace", fmt.Sprintf("Using index '%s' for matching (conflictIndex not suitable)", matchIndexName))
+	}
+
+	allValues := [][]any{}
+
+	// Собираем все returning поля: поля управляемые БД + поля для сопоставления
+	returningFields := []string{}
+	{{ range $ind, $fstruct := $fields }}
+	{{ if $fstruct.InitByDB }}
+	returningFields = append(returningFields, "{{ $fstruct.Name }}")
+	{{ end }}
+	{{ end }}
+
+	// Добавляем поля индекса для сопоставления
+	for _, field := range matchIndex.Fields {
+		{{ $allFieldsCode := "" }}
+		{{ range $ind, $fstruct := $fields }}
+			{{ if $fstruct.InitByDB }}
+				{{ if ne $allFieldsCode "" }}
+					{{ $allFieldsCode = printf "%s else " $allFieldsCode }}
+				{{ end }}
+				{{ $allFieldsCode = printf "%sif field.Field == \"%s\" { /* skip InitByDB field */ }" $allFieldsCode $fstruct.Name }}
+			{{ end }}
+		{{ end }}
+		{{ if ne $allFieldsCode "" }}
+		{{ $allFieldsCode }} else {
+			returningFields = append(returningFields, field.Field)
+		}
+		{{ else }}
+		returningFields = append(returningFields, field.Field)
+		{{ end }}
+	}
+
+	// Собираем значения для вставки
+	for _, obj := range objs {
+		values := []any{}
+		{{ range $ind, $fstruct := $fields }}
+			{{ if $fstruct.InitByDB }}
+		if obj.isInited{{$fstruct.Name}} {
+			values = append(values, obj.Get{{ $fstruct.Name }}())
+		} else {
+			values = append(values, postgres.DefaultValueDB)
+		}
+			{{ else }}
+		values = append(values, obj.Get{{ $fstruct.Name }}())
+			{{ end }}
+		{{ end }}
+		allValues = append(allValues, values)
+	}
+
+	columnNames := []string{
+	{{- range $_, $fstruct := $fields }}
+		"{{ $fstruct.Name }}",
+	{{ end }}
+	}
+
+	query, err := postgres.GenerateInsert(tableName, pk, columnNames, allValues, returningFields, postgres.Replace, conflictIndex)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "bulk_insert_gen", 1)
+		logger.Error(ctx, fmt.Sprintf("Error generate bulk insert '%s'", err))
+		return err
+	}
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", "BulkInsertReplace", query.QueryString)
+
+	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "bulk_insert_preparedb", 1)
+		logger.Error(ctx, fmt.Sprintf("Error get db connection '%s'", err))
+		return err
+	}
+
+	rows, errCall := connection.Call(ctx, query.QueryString, query.Params)
+	if errCall != nil {
+		metricErrCnt.Inc(ctx, "bulk_insert_db", 1)
+		logger.Error(ctx, "Error bulk insert into db", query.QueryString, errCall, connection.Info())
+		return errCall
+	}
+	defer rows.Close()
+
+	metricTimer.Timing(ctx, "bulk_insert_db")
+
+	// Создаем карту для сопоставления результатов с исходными объектами
+	objMap := make(map[string]*{{ $PublicStructName }}, len(objs))
+
+	// Функция для генерации ключа из объекта на основе matchIndex
+	makeObjKey := func(obj *{{ $PublicStructName }}) string {
+		keyParts := make([]any, 0, len(matchIndex.Fields))
+		for _, field := range matchIndex.Fields {
+			{{ range $ind, $fstruct := $fields }}
+			{{ if not $fstruct.InitByDB }}
+			if field.Field == "{{ $fstruct.Name }}" {
+				keyParts = append(keyParts, obj.Get{{ $fstruct.Name }}())
+			}
+			{{ end }}
+			{{ end }}
+		}
+
+		// Создаем строковый ключ
+		keyStr := ""
+		for i, part := range keyParts {
+			if i > 0 {
+				keyStr += "|"
+			}
+			keyStr += fmt.Sprintf("%v", part)
+		}
+		return keyStr
+	}
+
+	for _, obj := range objs {
+		key := makeObjKey(obj)
+		objMap[key] = obj
+	}
+
+	// Обрабатываем результаты RETURNING
+	rowNum := 0
+	for rows.Next() {
+		rowNum++
+
+		// Создаем слайс для Scan - сначала InitByDB поля, потом поля для сопоставления
+		scanDest := make([]any, 0, len(returningFields))
+
+		{{ range $ind, $fstruct := $fields }}
+		{{ if $fstruct.InitByDB }}
+		var val{{ $fstruct.Name }} {{ $fstruct.Format }}
+		scanDest = append(scanDest, &val{{ $fstruct.Name }})
+		{{ end }}
+		{{ end }}
+
+		// Добавляем переменные для полей сопоставления
+		matchValues := make(map[string]any)
+		for _, field := range matchIndex.Fields {
+			{{ range $ind, $fstruct := $fields }}
+			{{ if not $fstruct.InitByDB }}
+			if field.Field == "{{ $fstruct.Name }}" {
+				var matchVal{{ $fstruct.Name }} {{ $fstruct.Format }}
+				scanDest = append(scanDest, &matchVal{{ $fstruct.Name }})
+				matchValues["{{ $fstruct.Name }}"] = &matchVal{{ $fstruct.Name }}
+			}
+			{{ end }}
+			{{ end }}
+		}
+
+		err := rows.Scan(scanDest...)
+		if err != nil {
+			metricErrCnt.Inc(ctx, "bulk_insert_scan", 1)
+			logger.Error(ctx, "Error scan bulk insert result", err)
+			return err
+		}
+
+		// Создаем ключ для сопоставления из возвращенных значений
+		keyParts := make([]any, 0, len(matchIndex.Fields))
+		for _, field := range matchIndex.Fields {
+			if valPtr, ok := matchValues[field.Field]; ok {
+				{{ range $ind, $fstruct := $fields }}
+				{{ if not $fstruct.InitByDB }}
+				if field.Field == "{{ $fstruct.Name }}" {
+					keyParts = append(keyParts, *(valPtr.(*{{ $fstruct.Format }})))
+				}
+				{{ end }}
+				{{ end }}
+			}
+		}
+
+		keyStr := ""
+		for i, part := range keyParts {
+			if i > 0 {
+				keyStr += "|"
+			}
+			keyStr += fmt.Sprintf("%v", part)
+		}
+
+		obj, ok := objMap[keyStr]
+		if !ok {
+			metricErrCnt.Inc(ctx, "bulk_insert_match", 1)
+			logger.Warn(ctx, "Could not match returning row to original object", "key", keyStr)
+			continue
+		}
+
+		// Обновляем автоинкрементные поля
+		{{ range $ind, $fstruct := $fields }}
+		{{ if $fstruct.InitByDB }}
+		if !obj.isInited{{$fstruct.Name}} {
+			obj.Set{{ $fstruct.Name }}(val{{ $fstruct.Name }})
+		}
+		{{ end }}
+		{{ end }}
+
+		obj.BaseField.Exists = true
+		obj.BaseField.UpdateOps = []postgres.Operation{}
+		obj.BaseField.CheckFields = []activerecord.FieldValue{}
+		{{- if gt $mutatorLen 0 }}
+		obj.ClearMutatorUpdateOpts()
+		{{- end }}
+	}
+
+	if rows.Err() != nil {
+		metricErrCnt.Inc(ctx, "bulk_insert_db", 1)
+		logger.Error(ctx, "Error bulk insert into db", query.QueryString, rows.Err(), connection.Info())
+		return rows.Err()
+	}
+
+	metricTimer.Timing(ctx, "bulk_insert_process")
+	metricStatCnt.Inc(ctx, "bulk_insertorreplace_success", float64(rowNum))
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", "BulkInsertReplace", fmt.Sprintf("Success bulk insert %d rows", rowNum))
+
+	metricTimer.Finish(ctx, "bulk_insertreplace")
+
+	return nil
+}
+
+// BulkUpdate performs bulk update of multiple objects using a single SQL query.
+//
+// The function:
+// 1. Validates all objects exist and have changes
+// 2. Generates single UPDATE ... FROM (VALUES ...) query
+// 3. Executes the query and returns number of updated rows
+//
+// Note: Uses UPDATE ... FROM (VALUES ...) for optimal performance.
+// All objects are updated in a single database roundtrip.
+//
+// Limitations:
+// - Only OpSet operations are supported (OpAdd, OpAnd, etc. not supported in bulk)
+// - All objects must have UpdateOps
+//
+// Example:
+//   objs := []*{{ $PublicStructName }}{obj1, obj2, obj3}
+//   updated, err := BulkUpdate(ctx, objs)
+//   // updated = number of actually updated rows
+func BulkUpdate(ctx context.Context, objs []*{{ $PublicStructName }}) (int, error) {
+	if len(objs) == 0 {
+		return 0, nil
+	}
+
+	logger := activerecord.Logger()
+	metricTimer := activerecord.Metric().Timer("postgres", "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount("postgres", "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount("postgres", "{{ $PublicStructName }}")
+
+	metricStatCnt.Inc(ctx, "bulk_update_request", 1)
+	metricStatCnt.Inc(ctx, "bulk_update_objects", float64(len(objs)))
+
+	// Валидация объектов
+	validObjs := make([]*{{ $PublicStructName }}, 0, len(objs))
+	for i, obj := range objs {
+		if !obj.BaseField.Exists {
+			metricErrCnt.Inc(ctx, "bulk_update_notexists", 1)
+			return 0, fmt.Errorf("object %d: can't update not exists object (PK: %s)", i, obj.PrimaryString())
+		}
+
+		{{ if eq $mutatorLen 0 }}
+		if len(obj.BaseField.UpdateOps) == 0 {
+			metricStatCnt.Inc(ctx, "bulk_update_empty", 1)
+			logger.Debug(ctx, "{{ $PublicStructName }}", obj.PrimaryString(), "Empty update in bulk, skipping")
+			continue
+		}
+		{{ else }}
+		if len(obj.BaseField.UpdateOps) > 0 {
+			metricErrCnt.Inc(ctx, "bulk_update_mutator", 1)
+			return 0, fmt.Errorf("mutators not supported in bulk update")
+		}
+		{{ end }}
+
+		validObjs = append(validObjs, obj)
+	}
+
+	if len(validObjs) == 0 {
+		logger.Debug(ctx, "{{ $PublicStructName }}", "BulkUpdate", "No objects to update")
+		return 0, nil
+	}
+
+	// Собираем UpdateParams для всех объектов
+	updateParams := make([]postgres.UpdateParams, 0, len(validObjs))
+	for _, obj := range validObjs {
+		updateParams = append(updateParams, postgres.UpdateParams{
+			PK:  obj.PrimaryValues(),
+			Ops: obj.BaseField.UpdateOps,
+		})
+	}
+
+	// Генерируем bulk UPDATE query
+	// Примечание: idempotency keys не поддерживаются в bulk update
+	query, err := postgres.GenerateUpdate(tableName, pk, updateParams, []activerecord.FieldValue{})
+	if err != nil {
+		metricErrCnt.Inc(ctx, "bulk_update_gen", 1)
+		logger.Error(ctx, fmt.Sprintf("Error generate bulk update '%s'", err))
+		return 0, err
+	}
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", "BulkUpdate", query.QueryString)
+
+	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "bulk_update_preparedb", 1)
+		logger.Error(ctx, fmt.Sprintf("Error get db connection '%s'", err))
+		return 0, err
+	}
+
+	rows, errCall := connection.Call(ctx, query.QueryString, query.Params)
+	if errCall != nil {
+		metricErrCnt.Inc(ctx, "bulk_update_db", 1)
+		logger.Error(ctx, "Error bulk update db", query.QueryString, errCall, connection.Info())
+		return 0, errCall
+	}
+	defer rows.Close()
+
+	metricTimer.Timing(ctx, "bulk_update_db")
+
+	updatedCount := int(rows.CommandTag().RowsAffected())
+
+	// Очищаем UpdateOps для всех успешно обновленных объектов
+	for _, obj := range validObjs {
+		obj.BaseField.UpdateOps = []postgres.Operation{}
+		obj.BaseField.CheckFields = []activerecord.FieldValue{}
+		{{- if gt $mutatorLen 0 }}
+		obj.ClearMutatorUpdateOpts()
+		{{- end }}
+	}
+
+	metricStatCnt.Inc(ctx, "bulk_update_success", float64(updatedCount))
+
+	logger.Debug(ctx, "{{ $PublicStructName }}", "BulkUpdate", fmt.Sprintf("Successfully updated %d objects", updatedCount))
+
+	metricTimer.Finish(ctx, "bulk_update")
+
+	return updatedCount, nil
+}

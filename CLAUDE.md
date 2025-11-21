@@ -4,17 +4,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is **go-activerecord** - an Active Record ORM implementation for Go that generates database access code from declarative model definitions. It supports multiple backends (PostgreSQL, Octopus/Tarantool 1.5) and generates type-safe model packages with CRUD operations, selectors, and mutators.
+This is `go-activerecord` (v3), an Active Record ORM implementation for Go that generates type-safe database access code from declarative model definitions. It supports multiple database backends (PostgreSQL, Octopus, Tarantool 1.5).  and generates type-safe model packages with CRUD operations, selectors, and mutators.
+
+The project consists of two main components:
+
+1. **argen** - A code generator (`cmd/argen`) that transforms declarative model definitions into complete repository implementations
+2. **Runtime packages** - Libraries in `pkg/` that the generated code depends on for database operations
 
 ## Key Commands
 
 ### Build
+
 ```bash
 make build          # Build argen binary (output: bin/argen)
 make install        # Install argen to $GOPATH/bin
 ```
 
 ### Testing
+
 ```bash
 make test                    # Run all tests with 30s timeout
 make cover                   # Generate coverage report and open in browser
@@ -22,6 +29,7 @@ TEST_TIMEOUT=60s make test   # Run tests with custom timeout
 ```
 
 ### Code Quality
+
 ```bash
 make lint           # Run golangci-lint on changes from origin/main
 make full-lint      # Run golangci-lint on entire codebase
@@ -30,6 +38,7 @@ make generate       # Run go generate (required before commits)
 ```
 
 ### Development Tools
+
 ```bash
 make install-tool        # Install mockery for generating mocks
 make pre-commit-hook     # Install pre-commit hook (runs generate + lint)
@@ -37,6 +46,7 @@ make pre-push-hook       # Install pre-push hook (runs coverage tests)
 ```
 
 ### Running argen
+
 ```bash
 # Basic usage - generate models from declarations
 argen --path "model/repository" --declaration "decl" --destination "cmpl"
@@ -107,6 +117,7 @@ For each model declaration, argen generates:
 ### Configuration Architecture
 
 The system uses a hierarchical configuration structure:
+
 - **Cluster level**: Timeout, PoolSize for entire cluster
 - **Shard level**: Per-shard timeouts, pool sizes, and server lists
 - **Server level**: master (read-write) and replica (read-only) server lists
@@ -116,6 +127,7 @@ Configuration is accessed via the `ConfigInterface`, allowing integration with a
 ### Backend Implementations
 
 **Octopus/Tarantool 1.5**:
+
 - Uses custom iproto binary protocol
 - Namespaces identified by numeric ID
 - Field order matters (must match tuple order)
@@ -123,6 +135,7 @@ Configuration is accessed via the `ConfigInterface`, allowing integration with a
 - Extra fields beyond declaration stored in extraFields
 
 **PostgreSQL**:
+
 - Uses pgx/v5 driver
 - Table names specified via `//ar:namespace:table_name` comment
 - Supports conditional indexes (WHERE clauses)
@@ -148,6 +161,7 @@ Configuration is accessed via the `ConfigInterface`, allowing integration with a
 ### Common Patterns
 
 **Creating new records**:
+
 ```go
 obj := model.New(ctx)
 obj.SetField1(value)
@@ -155,6 +169,7 @@ obj.Insert(ctx)
 ```
 
 **Querying records**:
+
 ```go
 // Single record by unique index
 obj, err := model.SelectById(ctx, id)
@@ -164,6 +179,7 @@ objs, err := model.SelectByType(ctx, typeVal, activerecord.NewLimiter(100))
 ```
 
 **Atomic updates**:
+
 ```go
 obj.IncCounter(10)      // Increments counter by 10
 obj.SetBitFlags(0x04)   // Sets bit flag atomically
@@ -171,6 +187,7 @@ obj.Update(ctx)         // Sends atomic operations to database
 ```
 
 **Working with serializers**:
+
 ```go
 // Field with Json serializer appears as deserialized type
 jsonData := obj.GetJsonField()  // Returns map[string]interface{}
@@ -180,6 +197,7 @@ obj.SetJsonField(newData)       // Accepts map[string]interface{}
 ### Metrics and Observability
 
 The generated code collects metrics via `MetricInterface`:
+
 - Timing metrics: select_db, update_db, delete_db, insertreplace_db, call_proc
 - Statistical metrics: insert_success, update_success, select_tuples_res
 - Error metrics: select_db, update_db, delete_db with error suffixes
@@ -197,3 +215,40 @@ Metrics are namespace-specific and include operation details.
 
 - **Go 1.19.0+** (checked by scripts/goversioncheck.sh)
 - **golangci-lint 1.60.3** (auto-installed by make targets)
+
+## Common Development Tasks
+
+### Adding a new backend
+
+1. Create directory in `internal/pkg/backend/{newbackend}/`
+2. Implement `backend.Backend` interface
+3. Create checker implementing validation
+4. Add templates in `tmpl/pkg/`
+5. Register backend in `internal/pkg/backend/backend.go`
+
+### Modifying generated code
+
+1. Edit templates in `internal/pkg/backend/{backend}/tmpl/`
+2. Test with `make test`
+3. Regenerate test fixtures if needed
+
+### Adding a field tag option
+
+1. Update parser in `internal/pkg/parser/field.go`
+2. Update `ds.Field` in `internal/pkg/ds/`
+3. Add validation in appropriate backend checker
+4. Update templates to use the new option
+
+### Working with templates
+
+- Templates use Go's text/template package
+- Template functions are defined in `internal/pkg/generator/template.go`
+- The primary data structure passed to templates is `*ds.RecordPackage`
+
+## Important Notes
+
+- Generated code is identified by file patterns `*_gen.go` and `*_mock.go` (excluded from linting)
+- The project requires Go 1.19.0+ (enforced by `scripts/goversioncheck.sh`)
+- Tests use build tag `activerecord` - always run with this tag
+- Field order matters for Octopus backend (must match tuple structure)
+- Index order matters for Octopus backend (must match database configuration)

@@ -319,7 +319,7 @@ func TestGenerateUpdate(t *testing.T) {
 			expectedError:  nil,
 		},
 		{
-			name:      "Bulk update not implemented",
+			name:      "Bulk update with single field",
 			tableName: "users",
 			primaryIndex: postgres.Index{
 				Fields: postgres.OrderedFields{
@@ -353,8 +353,14 @@ func TestGenerateUpdate(t *testing.T) {
 				},
 			},
 			idempotencyKey: []activerecord.FieldValue{},
-			expectedQuery:  "",
-			expectedError:  fmt.Errorf("bulk update not implemented"),
+			expectedQuery: `UPDATE users AS t
+SET name = v.name
+FROM (VALUES
+    ($1, $2),
+    ($3, $4)
+) AS v(id, name)
+WHERE t.id = v.id`,
+			expectedError: nil,
 		},
 		{
 			name:      "Primary key length mismatch",

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
@@ -339,10 +340,10 @@ func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][
 // }
 
 func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams, idempotencyKey []activerecord.FieldValue) (*Query, error) {
-	// ToDo generate bulk update
 	isBulk := len(updates) > 1
+
 	if isBulk {
-		return nil, fmt.Errorf("bulk update not implemented")
+		return generateBulkUpdate(tableName, primaryIndex, updates, idempotencyKey)
 	}
 
 	q := NewUpdateQuery(tableName)
@@ -404,6 +405,126 @@ func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams
 			q.AddReturning(returning)
 		}
 	}
+
+	return q, nil
+}
+
+// generateBulkUpdate creates UPDATE ... FROM (VALUES ...) query for bulk updates
+func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdateParams, idempotencyKey []activerecord.FieldValue) (*Query, error) {
+	if len(updates) == 0 {
+		return nil, fmt.Errorf("empty updates")
+	}
+
+	if len(idempotencyKey) > 0 {
+		return nil, fmt.Errorf("idempotency keys not supported in bulk update")
+	}
+
+	// Собираем все уникальные поля из всех UpdateOps
+	allFields := make(map[string]bool)
+	for _, u := range updates {
+		for _, op := range u.Ops {
+			allFields[op.Field] = true
+		}
+	}
+
+	if len(allFields) == 0 {
+		return nil, fmt.Errorf("no fields to update")
+	}
+
+	// Проверяем что все PK одинаковой длины
+	pkLen := len(primaryIndex.Fields)
+	for i, u := range updates {
+		if len(u.PK) != pkLen {
+			return nil, fmt.Errorf("primary key length mismatch in update %d", i)
+		}
+	}
+
+	// Создаем упорядоченный список полей для обновления
+	fieldsList := make([]string, 0, len(allFields))
+	for field := range allFields {
+		fieldsList = append(fieldsList, field)
+	}
+
+	// Сортируем для стабильности
+	sort.Strings(fieldsList)
+
+	q := &Query{
+		QueryString: "",
+		Params:      []any{},
+	}
+
+	// UPDATE table_name AS t
+	q.QueryString = fmt.Sprintf("UPDATE %s AS t\nSET ", tableName)
+
+	// SET field1 = v.field1, field2 = v.field2, ...
+	setFields := make([]string, 0, len(fieldsList))
+	for _, field := range fieldsList {
+		setFields = append(setFields, fmt.Sprintf("%s = v.%s", field, field))
+	}
+	q.QueryString += strings.Join(setFields, ", ")
+
+	// FROM (VALUES ...)
+	q.QueryString += "\nFROM (VALUES\n"
+
+	// Генерируем строки VALUES
+	valueRows := make([]string, 0, len(updates))
+	for _, u := range updates {
+		// Создаем map для быстрого поиска значений
+		opsMap := make(map[string]Operation)
+		for _, op := range u.Ops {
+			opsMap[op.Field] = op
+		}
+
+		// Собираем значения: сначала PK, потом поля в порядке fieldsList
+		values := make([]string, 0, pkLen+len(fieldsList))
+
+		// PK values
+		for _, pkVal := range u.PK {
+			values = append(values, fmt.Sprintf("$%d", q.AddParams(pkVal)))
+		}
+
+		// Field values
+		for _, field := range fieldsList {
+			if op, exists := opsMap[field]; exists {
+				// Поле обновляется
+				switch op.Op {
+				case activerecord.OpSet:
+					values = append(values, fmt.Sprintf("$%d", q.AddParams(op.Value)))
+				default:
+					return nil, fmt.Errorf("bulk update supports only OpSet, got %d for field %s", op.Op, field)
+				}
+			} else {
+				// Поле не обновляется для этого объекта - используем NULL
+				values = append(values, "NULL")
+			}
+		}
+
+		valueRows = append(valueRows, "    ("+strings.Join(values, ", ")+")")
+	}
+
+	q.QueryString += strings.Join(valueRows, ",\n")
+
+	// AS v(pk_fields..., update_fields...)
+	q.QueryString += "\n) AS v("
+
+	// Имена колонок в VALUES: pk fields + update fields
+	columnNames := make([]string, 0, pkLen+len(fieldsList))
+	for _, pkField := range primaryIndex.Fields {
+		columnNames = append(columnNames, pkField.Field)
+	}
+	columnNames = append(columnNames, fieldsList...)
+
+	q.QueryString += strings.Join(columnNames, ", ")
+	q.QueryString += ")"
+
+	// WHERE condition для сопоставления по PK
+	q.QueryString += "\nWHERE "
+
+	pkConditions := make([]string, 0, len(primaryIndex.Fields))
+	for _, pkField := range primaryIndex.Fields {
+		pkConditions = append(pkConditions, fmt.Sprintf("t.%s = v.%s", pkField.Field, pkField.Field))
+	}
+	q.QueryString += strings.Join(pkConditions, " AND ")
 
 	return q, nil
 }

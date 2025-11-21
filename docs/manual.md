@@ -711,7 +711,7 @@ func sometest() {
     Build(context.TODO())
 
   // 2) fixture from reward_update.yaml:
-  //	  - code: primary-code-2
+  //   - code: primary-code-2
   //        update_options:
   //         - partner:
   //              set_value: sobakamiloru
