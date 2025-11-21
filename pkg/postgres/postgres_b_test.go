@@ -367,11 +367,11 @@ WHERE t.id = v.id`,
 			tableName: "users",
 			primaryIndex: postgres.Index{
 				Fields: postgres.OrderedFields{
-					{
+					postgres.OrderField{
 						Field: "id",
 						Order: postgres.ASC,
 					},
-					{
+					postgres.OrderField{
 						Field: "email",
 						Order: postgres.ASC,
 					},
@@ -393,6 +393,304 @@ WHERE t.id = v.id`,
 			idempotencyKey: []activerecord.FieldValue{},
 			expectedQuery:  "",
 			expectedError:  fmt.Errorf("primary key length ([1]) not equal to index fields in update 0"),
+		},
+		{
+			name:      "Bulk update with OpAdd - mutating operation",
+			tableName: "users",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					postgres.OrderField{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{1},
+					Ops: []postgres.Operation{
+						{
+							Field: "counter",
+							Op:    activerecord.OpAdd,
+							Value: 5,
+						},
+					},
+				},
+				{
+					PK: []any{2},
+					Ops: []postgres.Operation{
+						{
+							Field: "counter",
+							Op:    activerecord.OpAdd,
+							Value: 10,
+						},
+					},
+				},
+			},
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery: `UPDATE users AS t
+SET counter = t.counter + v.counter
+FROM (VALUES
+    ($1, $2),
+    ($3, $4)
+) AS v(id, counter)
+WHERE t.id = v.id
+RETURNING t.id, t.counter`,
+			expectedError: nil,
+		},
+		{
+			name:      "Bulk update with OpAnd - mutating operation",
+			tableName: "users",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					postgres.OrderField{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{1},
+					Ops: []postgres.Operation{
+						{
+							Field: "flags",
+							Op:    activerecord.OpAnd,
+							Value: 0xFF,
+						},
+					},
+				},
+				{
+					PK: []any{2},
+					Ops: []postgres.Operation{
+						{
+							Field: "flags",
+							Op:    activerecord.OpAnd,
+							Value: 0x0F,
+						},
+					},
+				},
+			},
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery: `UPDATE users AS t
+SET flags = t.flags & v.flags
+FROM (VALUES
+    ($1, $2),
+    ($3, $4)
+) AS v(id, flags)
+WHERE t.id = v.id
+RETURNING t.id, t.flags`,
+			expectedError: nil,
+		},
+		{
+			name:      "Bulk update with mixed operations should fail",
+			tableName: "users",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					postgres.OrderField{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{1},
+					Ops: []postgres.Operation{
+						{
+							Field: "counter",
+							Op:    activerecord.OpAdd,
+							Value: 5,
+						},
+					},
+				},
+				{
+					PK: []any{2},
+					Ops: []postgres.Operation{
+						{
+							Field: "counter",
+							Op:    activerecord.OpSet,
+							Value: 10,
+						},
+					},
+				},
+			},
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery:  "",
+			expectedError:  fmt.Errorf("field counter uses multiple operation types in bulk update, which is not supported"),
+		},
+		{
+			name:      "Bulk update with multiple fields including mutating op",
+			tableName: "users",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					postgres.OrderField{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{1},
+					Ops: []postgres.Operation{
+						{
+							Field: "counter",
+							Op:    activerecord.OpAdd,
+							Value: 5,
+						},
+						{
+							Field: "name",
+							Op:    activerecord.OpSet,
+							Value: "John",
+						},
+					},
+				},
+				{
+					PK: []any{2},
+					Ops: []postgres.Operation{
+						{
+							Field: "counter",
+							Op:    activerecord.OpAdd,
+							Value: 10,
+						},
+						{
+							Field: "name",
+							Op:    activerecord.OpSet,
+							Value: "Jane",
+						},
+					},
+				},
+			},
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery: `UPDATE users AS t
+SET counter = t.counter + v.counter, name = v.name
+FROM (VALUES
+    ($1, $2, $3),
+    ($4, $5, $6)
+) AS v(id, counter, name)
+WHERE t.id = v.id
+RETURNING t.id, t.counter`,
+			expectedError: nil,
+		},
+		{
+			name:      "Bulk update with only OpSet - no RETURNING needed",
+			tableName: "users",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					postgres.OrderField{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{1},
+					Ops: []postgres.Operation{
+						{
+							Field: "name",
+							Op:    activerecord.OpSet,
+							Value: "John",
+						},
+						{
+							Field: "email",
+							Op:    activerecord.OpSet,
+							Value: "john@example.com",
+						},
+					},
+				},
+				{
+					PK: []any{2},
+					Ops: []postgres.Operation{
+						{
+							Field: "name",
+							Op:    activerecord.OpSet,
+							Value: "Jane",
+						},
+						{
+							Field: "email",
+							Op:    activerecord.OpSet,
+							Value: "jane@example.com",
+						},
+					},
+				},
+			},
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery: `UPDATE users AS t
+SET email = v.email, name = v.name
+FROM (VALUES
+    ($1, $2, $3),
+    ($4, $5, $6)
+) AS v(id, email, name)
+WHERE t.id = v.id`,
+			expectedError: nil,
+		},
+		{
+			name:      "Bulk update with partial mutations - only some objects mutate field",
+			tableName: "users",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					postgres.OrderField{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{1},
+					Ops: []postgres.Operation{
+						{
+							Field: "counter",
+							Op:    activerecord.OpAdd,
+							Value: 5,
+						},
+					},
+				},
+				{
+					PK: []any{2},
+					Ops: []postgres.Operation{
+						{
+							Field: "name",
+							Op:    activerecord.OpSet,
+							Value: "Jane",
+						},
+					},
+				},
+				{
+					PK: []any{3},
+					Ops: []postgres.Operation{
+						{
+							Field: "counter",
+							Op:    activerecord.OpAdd,
+							Value: 10,
+						},
+						{
+							Field: "name",
+							Op:    activerecord.OpSet,
+							Value: "Bob",
+						},
+					},
+				},
+			},
+			idempotencyKey: []activerecord.FieldValue{},
+			expectedQuery: `UPDATE users AS t
+SET counter = t.counter + v.counter, name = v.name
+FROM (VALUES
+    ($1, $2, NULL),
+    ($3, NULL, $4),
+    ($5, $6, $7)
+) AS v(id, counter, name)
+WHERE t.id = v.id
+RETURNING t.id, t.counter`,
+			expectedError: nil,
 		},
 	}
 

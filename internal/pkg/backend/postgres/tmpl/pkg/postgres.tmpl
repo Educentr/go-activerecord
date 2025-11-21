@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -482,7 +483,7 @@ func (obj *{{ $PublicStructName }}) insertReplace(ctx context.Context, insertMod
 // Example:
 //   objs := []*{{ $PublicStructName }}{obj1, obj2, obj3}
 //   err := BulkInsertReplace(ctx, objs, OnConflict{{ (index .Indexes 0).Name }})
-func BulkInsertReplace(ctx context.Context, objs []*{{ $PublicStructName }}, conflictIndex postgres.Index) error {
+func BulkInsertReplace(ctx context.Context, objs []*{{ $PublicStructName }}, conflictIndex postgres.OnConflictIndex) error {
 	if len(objs) == 0 {
 		return nil
 	}
@@ -493,6 +494,9 @@ func BulkInsertReplace(ctx context.Context, objs []*{{ $PublicStructName }}, con
 	metricErrCnt := activerecord.Metric().ErrorCount("postgres", "{{ $PublicStructName }}")
 
 	metricStatCnt.Inc(ctx, "bulk_insertorreplace_request", 1)
+
+	// Преобразуем OnConflictIndex в postgres.Index
+	conflictKey := onConflictIndexMap[conflictIndex]
 
 	// Выбираем индекс для сопоставления результатов
 	// Приоритет: conflictIndex (если без InitByDB полей) -> любой другой уникальный индекс без InitByDB
@@ -505,11 +509,11 @@ func BulkInsertReplace(ctx context.Context, objs []*{{ $PublicStructName }}, con
 	{{ range $num, $ind := .Indexes -}}
 	{{ if $ind.Unique }}
 	if matchIndexName == "" {
-		// Проверяем совпадает ли conflictIndex с index{{ $ind.Name }}
-		if len(conflictIndex.Fields) == len(index{{ $ind.Name }}.Fields) {
+		// Проверяем совпадает ли conflictKey с index{{ $ind.Name }}
+		if len(conflictKey.Fields) == len(index{{ $ind.Name }}.Fields) {
 			fieldsMatch := true
-			for i := range conflictIndex.Fields {
-				if conflictIndex.Fields[i].Field != index{{ $ind.Name }}.Fields[i].Field {
+			for i := range conflictKey.Fields {
+				if conflictKey.Fields[i].Field != index{{ $ind.Name }}.Fields[i].Field {
 					fieldsMatch = false
 					break
 				}
@@ -620,7 +624,7 @@ func BulkInsertReplace(ctx context.Context, objs []*{{ $PublicStructName }}, con
 	{{ end }}
 	}
 
-	query, err := postgres.GenerateInsert(tableName, pk, columnNames, allValues, returningFields, postgres.Replace, conflictIndex)
+	query, err := postgres.GenerateInsert(tableName, pk, columnNames, allValues, returningFields, postgres.Replace, conflictKey)
 	if err != nil {
 		metricErrCnt.Inc(ctx, "bulk_insert_gen", 1)
 		logger.Error(ctx, fmt.Sprintf("Error generate bulk insert '%s'", err))
@@ -873,9 +877,143 @@ func BulkUpdate(ctx context.Context, objs []*{{ $PublicStructName }}) (int, erro
 
 	metricTimer.Timing(ctx, "bulk_update_db")
 
+	{{ $hasFieldsWithMutators := false }}
+	{{- range $ind, $fstruct := $fields }}
+		{{- if and (not $fstruct.PrimaryKey) (gt (len $fstruct.Mutators) 0) }}
+			{{ $hasFieldsWithMutators = true }}
+		{{- end }}
+	{{- end }}
+	{{ if $hasFieldsWithMutators }}
+	// Проверяем есть ли мутируемые поля (операции отличные от OpSet)
+	hasMutatingOps := false
+	mutatingFields := make(map[string]bool)
+	for _, obj := range validObjs {
+		for _, op := range obj.BaseField.UpdateOps {
+			if op.Op != activerecord.OpSet {
+				hasMutatingOps = true
+				mutatingFields[op.Field] = true
+			}
+		}
+	}
+
+	// Если есть мутируемые поля, читаем RETURNING и обновляем объекты
+	if hasMutatingOps {
+		// Создаём карту объектов по PK для быстрого доступа
+		objMap := make(map[string]*{{ $PublicStructName }}, len(validObjs))
+		for _, obj := range validObjs {
+			pkKey := ""
+			for i, pkVal := range obj.PrimaryValues() {
+				if i > 0 {
+					pkKey += "|"
+				}
+				pkKey += fmt.Sprintf("%v", pkVal)
+			}
+			objMap[pkKey] = obj
+		}
+
+		// Читаем результаты RETURNING
+		updatedCount := 0
+
+		// Создаём упорядоченный список мутируемых полей (в алфавитном порядке)
+		mutatedFieldsList := make([]string, 0, len(mutatingFields))
+		for field := range mutatingFields {
+			mutatedFieldsList = append(mutatedFieldsList, field)
+		}
+		sort.Strings(mutatedFieldsList)
+
+		for rows.Next() {
+			updatedCount++
+
+			// Создаём слайс для сканирования: сначала PK поля, затем мутируемые поля
+			scanDest := make([]any, 0)
+
+			{{ range $ind, $fstruct := $fields }}
+			{{ if $fstruct.PrimaryKey }}
+			var pk{{ $fstruct.Name }} {{ $fstruct.Format }}
+			scanDest = append(scanDest, &pk{{ $fstruct.Name }})
+			{{ end }}
+			{{ end }}
+
+			// Создаём map для хранения отсканированных значений мутируемых полей
+			mutatedValues := make(map[string]any)
+
+			// Добавляем переменные только для мутируемых полей (с мутаторами) в порядке mutatedFieldsList
+			for _, fieldName := range mutatedFieldsList {
+				{{ range $ind, $fstruct := $fields }}
+				{{ if and (not $fstruct.PrimaryKey) (gt (len $fstruct.Mutators) 0) }}
+				if fieldName == "{{ $fstruct.Name }}" {
+					var mutated{{ $fstruct.Name }} {{ $fstruct.Format }}
+					scanDest = append(scanDest, &mutated{{ $fstruct.Name }})
+					mutatedValues["{{ $fstruct.Name }}"] = &mutated{{ $fstruct.Name }}
+				}
+				{{ end }}
+				{{ end }}
+			}
+
+			err := rows.Scan(scanDest...)
+			if err != nil {
+				metricErrCnt.Inc(ctx, "bulk_update_scan", 1)
+				logger.Error(ctx, "Error scan bulk update result", err)
+				return 0, err
+			}
+
+			// Находим соответствующий объект по PK
+			pkKey := ""
+			{{ $first := true }}
+			{{ range $ind, $fstruct := $fields }}
+			{{ if $fstruct.PrimaryKey }}
+			{{ if not $first }}
+			pkKey += "|"
+			{{ end }}
+			pkKey += fmt.Sprintf("%v", pk{{ $fstruct.Name }})
+			{{ $first = false }}
+			{{ end }}
+			{{ end }}
+
+			obj, ok := objMap[pkKey]
+			if !ok {
+				metricErrCnt.Inc(ctx, "bulk_update_match", 1)
+				logger.Warn(ctx, "Could not match RETURNING row to original object", "key", pkKey)
+				continue
+			}
+
+			// Обновляем только поля с мутаторами в объекте
+			for _, fieldName := range mutatedFieldsList {
+				{{ range $ind, $fstruct := $fields }}
+				{{ if and (not $fstruct.PrimaryKey) (gt (len $fstruct.Mutators) 0) }}
+				if fieldName == "{{ $fstruct.Name }}" {
+					if valPtr, exists := mutatedValues["{{ $fstruct.Name }}"]; exists {
+						obj.Set{{ $fstruct.Name }}(*(valPtr.(*{{ $fstruct.Format }})))
+					}
+				}
+				{{ end }}
+				{{ end }}
+			}
+
+			// Очищаем UpdateOps для этого объекта
+			obj.BaseField.UpdateOps = []postgres.Operation{}
+			obj.BaseField.CheckFields = []activerecord.FieldValue{}
+			{{- if gt $mutatorLen 0 }}
+			obj.ClearMutatorUpdateOpts()
+			{{- end }}
+		}
+
+		if rows.Err() != nil {
+			metricErrCnt.Inc(ctx, "bulk_update_db", 1)
+			logger.Error(ctx, "Error bulk update db", query.QueryString, rows.Err(), connection.Info())
+			return 0, rows.Err()
+		}
+
+		metricStatCnt.Inc(ctx, "bulk_update_success", float64(updatedCount))
+		logger.Debug(ctx, "{{ $PublicStructName }}", "BulkUpdate", fmt.Sprintf("Successfully updated %d objects with mutating operations", updatedCount))
+		metricTimer.Finish(ctx, "bulk_update")
+		return updatedCount, nil
+	}
+	{{ end }}
+
+	// Если нет мутируемых полей, просто очищаем UpdateOps
 	updatedCount := int(rows.CommandTag().RowsAffected())
 
-	// Очищаем UpdateOps для всех успешно обновленных объектов
 	for _, obj := range validObjs {
 		obj.BaseField.UpdateOps = []postgres.Operation{}
 		obj.BaseField.CheckFields = []activerecord.FieldValue{}

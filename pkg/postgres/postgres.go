@@ -419,16 +419,32 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 		return nil, fmt.Errorf("idempotency keys not supported in bulk update")
 	}
 
-	// Собираем все уникальные поля из всех UpdateOps
-	allFields := make(map[string]bool)
+	// Собираем все уникальные поля из всех UpdateOps и определяем какие операции используются
+	type fieldInfo struct {
+		operations map[activerecord.OpCode]bool
+	}
+	allFieldsInfo := make(map[string]*fieldInfo)
+
 	for _, u := range updates {
 		for _, op := range u.Ops {
-			allFields[op.Field] = true
+			if allFieldsInfo[op.Field] == nil {
+				allFieldsInfo[op.Field] = &fieldInfo{
+					operations: make(map[activerecord.OpCode]bool),
+				}
+			}
+			allFieldsInfo[op.Field].operations[op.Op] = true
 		}
 	}
 
-	if len(allFields) == 0 {
+	if len(allFieldsInfo) == 0 {
 		return nil, fmt.Errorf("no fields to update")
+	}
+
+	// Проверяем что для каждого поля используется только одна операция
+	for field, info := range allFieldsInfo {
+		if len(info.operations) > 1 {
+			return nil, fmt.Errorf("field %s uses multiple operation types in bulk update, which is not supported", field)
+		}
 	}
 
 	// Проверяем что все PK одинаковой длины
@@ -439,14 +455,26 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 		}
 	}
 
-	// Создаем упорядоченный список полей для обновления
-	fieldsList := make([]string, 0, len(allFields))
-	for field := range allFields {
-		fieldsList = append(fieldsList, field)
+	// Создаем упорядоченный список полей для обновления и запоминаем операцию для каждого поля
+	type fieldWithOp struct {
+		name string
+		op   activerecord.OpCode
+	}
+	fieldsWithOps := make([]fieldWithOp, 0, len(allFieldsInfo))
+	for field, info := range allFieldsInfo {
+		// Получаем единственную операцию для этого поля
+		var op activerecord.OpCode
+		for opCode := range info.operations {
+			op = opCode
+			break
+		}
+		fieldsWithOps = append(fieldsWithOps, fieldWithOp{name: field, op: op})
 	}
 
 	// Сортируем для стабильности
-	sort.Strings(fieldsList)
+	sort.Slice(fieldsWithOps, func(i, j int) bool {
+		return fieldsWithOps[i].name < fieldsWithOps[j].name
+	})
 
 	q := &Query{
 		QueryString: "",
@@ -456,10 +484,38 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 	// UPDATE table_name AS t
 	q.QueryString = fmt.Sprintf("UPDATE %s AS t\nSET ", tableName)
 
-	// SET field1 = v.field1, field2 = v.field2, ...
-	setFields := make([]string, 0, len(fieldsList))
-	for _, field := range fieldsList {
-		setFields = append(setFields, fmt.Sprintf("%s = v.%s", field, field))
+	// SET field1 = <operation>, field2 = <operation>, ...
+	// Также собираем список полей для RETURNING (только мутирующие операции)
+	setFields := make([]string, 0, len(fieldsWithOps))
+	returningFields := []string{}
+
+	for _, fwo := range fieldsWithOps {
+		var setExpr string
+		needsReturning := false
+
+		switch fwo.op {
+		case activerecord.OpSet:
+			setExpr = fmt.Sprintf("%s = v.%s", fwo.name, fwo.name)
+		case activerecord.OpAdd:
+			setExpr = fmt.Sprintf("%s = t.%s + v.%s", fwo.name, fwo.name, fwo.name)
+			needsReturning = true
+		case activerecord.OpAnd:
+			setExpr = fmt.Sprintf("%s = t.%s & v.%s", fwo.name, fwo.name, fwo.name)
+			needsReturning = true
+		case activerecord.OpOr:
+			setExpr = fmt.Sprintf("%s = t.%s | v.%s", fwo.name, fwo.name, fwo.name)
+			needsReturning = true
+		case activerecord.OpXor:
+			setExpr = fmt.Sprintf("%s = t.%s # v.%s", fwo.name, fwo.name, fwo.name)
+			needsReturning = true
+		default:
+			return nil, fmt.Errorf("unsupported operation %d for field %s in bulk update", fwo.op, fwo.name)
+		}
+
+		setFields = append(setFields, setExpr)
+		if needsReturning {
+			returningFields = append(returningFields, "t."+fwo.name)
+		}
 	}
 	q.QueryString += strings.Join(setFields, ", ")
 
@@ -475,8 +531,8 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 			opsMap[op.Field] = op
 		}
 
-		// Собираем значения: сначала PK, потом поля в порядке fieldsList
-		values := make([]string, 0, pkLen+len(fieldsList))
+		// Собираем значения: сначала PK, потом поля в порядке fieldsWithOps
+		values := make([]string, 0, pkLen+len(fieldsWithOps))
 
 		// PK values
 		for _, pkVal := range u.PK {
@@ -484,15 +540,9 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 		}
 
 		// Field values
-		for _, field := range fieldsList {
-			if op, exists := opsMap[field]; exists {
-				// Поле обновляется
-				switch op.Op {
-				case activerecord.OpSet:
-					values = append(values, fmt.Sprintf("$%d", q.AddParams(op.Value)))
-				default:
-					return nil, fmt.Errorf("bulk update supports only OpSet, got %d for field %s", op.Op, field)
-				}
+		for _, fwo := range fieldsWithOps {
+			if op, exists := opsMap[fwo.name]; exists {
+				values = append(values, fmt.Sprintf("$%d", q.AddParams(op.Value)))
 			} else {
 				// Поле не обновляется для этого объекта - используем NULL
 				values = append(values, "NULL")
@@ -508,11 +558,13 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 	q.QueryString += "\n) AS v("
 
 	// Имена колонок в VALUES: pk fields + update fields
-	columnNames := make([]string, 0, pkLen+len(fieldsList))
+	columnNames := make([]string, 0, pkLen+len(fieldsWithOps))
 	for _, pkField := range primaryIndex.Fields {
 		columnNames = append(columnNames, pkField.Field)
 	}
-	columnNames = append(columnNames, fieldsList...)
+	for _, fwo := range fieldsWithOps {
+		columnNames = append(columnNames, fwo.name)
+	}
 
 	q.QueryString += strings.Join(columnNames, ", ")
 	q.QueryString += ")"
@@ -525,6 +577,17 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 		pkConditions = append(pkConditions, fmt.Sprintf("t.%s = v.%s", pkField.Field, pkField.Field))
 	}
 	q.QueryString += strings.Join(pkConditions, " AND ")
+
+	// Добавляем RETURNING для мутируемых полей и PK (для сопоставления с объектами)
+	if len(returningFields) > 0 {
+		// Добавляем PK поля для сопоставления результатов
+		pkReturningFields := make([]string, 0, len(primaryIndex.Fields))
+		for _, pkField := range primaryIndex.Fields {
+			pkReturningFields = append(pkReturningFields, "t."+pkField.Field)
+		}
+		allReturning := append(pkReturningFields, returningFields...)
+		q.QueryString += "\nRETURNING " + strings.Join(allReturning, ", ")
+	}
 
 	return q, nil
 }
