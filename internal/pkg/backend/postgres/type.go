@@ -143,6 +143,10 @@ func (p FormatType) MaxValue() string {
 	return "math.Max" + p.Name
 }
 
+func (p FormatType) DBType() string {
+	return p.DBTypeName
+}
+
 func (p FormatType) ToString() []string {
 	log.Fatal("ToString not implemented")
 

@@ -108,6 +108,11 @@ func (p FormatType) ToString() []string {
 	return strings.SplitN(p.tostr, `%%`, 2)
 }
 
+func (p FormatType) DBType() string {
+	// octopus не использует SQL типы, возвращаем пустую строку
+	return ""
+}
+
 func (p FormatType) MutatorTypeConv() string {
 	if p.UnpackConvFunc != "" {
 		return p.UnpackConvFunc

@@ -376,7 +376,8 @@ func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams
 	isBulk := len(updates) > 1
 
 	if isBulk {
-		return generateBulkUpdate(tableName, primaryIndex, updates, idempotencyKey)
+		// Без явных типов - будем полагаться на вывод типов PostgreSQL
+		return generateBulkUpdate(tableName, primaryIndex, updates, idempotencyKey, nil)
 	}
 
 	q := NewUpdateQuery(tableName)
@@ -449,9 +450,13 @@ type ClusteredUpdateResult struct {
 	ClusterFields [][]string // поля в каждом кластере для отладки
 }
 
+// FieldTypeMap содержит мапу имён полей к их PostgreSQL типам
+type FieldTypeMap map[string]string
+
 // GenerateBulkUpdateClustered группирует объекты по набору изменяемых полей
 // и создаёт отдельный UPDATE запрос для каждой группы
-func GenerateBulkUpdateClustered(tableName string, primaryIndex Index, updates []UpdateParams, idempotencyKey []activerecord.FieldValue) (*ClusteredUpdateResult, error) {
+// fieldTypes - мапа имён полей к их PostgreSQL типам для явного приведения в VALUES
+func GenerateBulkUpdateClustered(tableName string, primaryIndex Index, updates []UpdateParams, idempotencyKey []activerecord.FieldValue, fieldTypes FieldTypeMap) (*ClusteredUpdateResult, error) {
 	if len(updates) == 0 {
 		return nil, fmt.Errorf("empty updates")
 	}
@@ -505,7 +510,7 @@ func GenerateBulkUpdateClustered(tableName string, primaryIndex Index, updates [
 
 	for _, key := range keys {
 		clusterUpdates := clusters[key]
-		query, err := generateBulkUpdate(tableName, primaryIndex, clusterUpdates, idempotencyKey)
+		query, err := generateBulkUpdate(tableName, primaryIndex, clusterUpdates, idempotencyKey, fieldTypes)
 		if err != nil {
 			return nil, fmt.Errorf("cluster %s: %w", key, err)
 		}
@@ -520,7 +525,8 @@ func GenerateBulkUpdateClustered(tableName string, primaryIndex Index, updates [
 
 // generateBulkUpdate creates UPDATE ... FROM (VALUES ...) query for bulk updates
 // Все объекты в updates должны обновлять одинаковый набор полей
-func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdateParams, idempotencyKey []activerecord.FieldValue) (*Query, error) {
+// fieldTypes - мапа имён полей к их PostgreSQL типам для явного приведения в VALUES
+func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdateParams, idempotencyKey []activerecord.FieldValue, fieldTypes FieldTypeMap) (*Query, error) {
 	if len(updates) == 0 {
 		return nil, fmt.Errorf("empty updates")
 	}
@@ -633,8 +639,9 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 	q.QueryString += "\nFROM (VALUES\n"
 
 	// Генерируем строки VALUES
+	// Для первой строки добавляем явное приведение типов, если типы указаны
 	valueRows := make([]string, 0, len(updates))
-	for _, u := range updates {
+	for rowIdx, u := range updates {
 		// Создаем map для быстрого поиска значений
 		opsMap := make(map[string]Operation)
 		for _, op := range u.Ops {
@@ -644,9 +651,18 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 		// Собираем значения: сначала PK, потом поля в порядке fieldsWithOps
 		values := make([]string, 0, pkLen+len(fieldsWithOps))
 
-		// PK values
-		for _, pkVal := range u.PK {
-			values = append(values, fmt.Sprintf("$%d", q.AddParams(pkVal)))
+		// PK values с явным приведением типов для первой строки
+		for pkIdx, pkVal := range u.PK {
+			placeholder := fmt.Sprintf("$%d", q.AddParams(pkVal))
+
+			// Для первой строки VALUES добавляем ::type если известен тип
+			if rowIdx == 0 && fieldTypes != nil && pkIdx < len(primaryIndex.Fields) {
+				pkFieldName := primaryIndex.Fields[pkIdx].Field
+				if pgType, exists := fieldTypes[pkFieldName]; exists {
+					placeholder = fmt.Sprintf("%s::%s", placeholder, pgType)
+				}
+			}
+			values = append(values, placeholder)
 		}
 
 		// Field values - все объекты в кластере должны иметь одинаковый набор полей
@@ -655,7 +671,16 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 			if !exists {
 				return nil, fmt.Errorf("field %s not found in update operations (inconsistent cluster)", fwo.name)
 			}
-			values = append(values, fmt.Sprintf("$%d", q.AddParams(op.Value)))
+
+			placeholder := fmt.Sprintf("$%d", q.AddParams(op.Value))
+
+			// Для первой строки VALUES добавляем ::type если известен тип
+			if rowIdx == 0 && fieldTypes != nil {
+				if pgType, exists := fieldTypes[fwo.name]; exists {
+					placeholder = fmt.Sprintf("%s::%s", placeholder, pgType)
+				}
+			}
+			values = append(values, placeholder)
 		}
 
 		valueRows = append(valueRows, "    ("+strings.Join(values, ", ")+")")

@@ -1203,11 +1203,60 @@ func TestGenerateBulkUpdateClustered(t *testing.T) {
 			expectedParams:   [][]any{{2, 1}, {1, "alice@example.com", "Alice", 3, "bob@example.com", "Bob"}},
 			expectedError:    nil,
 		},
+		{
+			name:      "Type casting in VALUES - verify SQL structure",
+			tableName: "payments",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					postgres.OrderField{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{int64(100)},
+					Ops: []postgres.Operation{
+						{
+							Field: "status",
+							Op:    activerecord.OpSet,
+							Value: "completed",
+						},
+					},
+				},
+				{
+					PK: []any{int64(200)},
+					Ops: []postgres.Operation{
+						{
+							Field: "status",
+							Op:    activerecord.OpSet,
+							Value: "pending",
+						},
+					},
+				},
+			},
+			idempotencyKey:   []activerecord.FieldValue{},
+			expectedClusters: 1,
+			expectedSizes:    []int{2},
+			expectedFields:   [][]string{{"status"}},
+			expectedParams:   [][]any{{int64(100), "completed", int64(200), "pending"}},
+			expectedError:    nil,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := postgres.GenerateBulkUpdateClustered(tt.tableName, tt.primaryIndex, tt.updates, tt.idempotencyKey)
+			// Создаём мапу типов для тестов
+			fieldTypes := postgres.FieldTypeMap{
+				"id":      "BIGINT",
+				"name":    "VARCHAR(n)",
+				"email":   "VARCHAR(n)",
+				"counter": "INTEGER",
+				"status":  "VARCHAR(50)",
+			}
+			result, err := postgres.GenerateBulkUpdateClustered(tt.tableName, tt.primaryIndex, tt.updates, tt.idempotencyKey, fieldTypes)
 
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
@@ -1220,6 +1269,15 @@ func TestGenerateBulkUpdateClustered(t *testing.T) {
 				// Проверяем params для каждого кластера
 				for i, expectedParams := range tt.expectedParams {
 					assert.Equal(t, expectedParams, result.Queries[i].Params, "Params for cluster %d", i)
+				}
+
+				// Для теста с type casting проверяем что в первой строке VALUES есть ::type
+				if tt.name == "Type casting in VALUES - verify SQL structure" {
+					query := result.Queries[0].QueryString
+					assert.Contains(t, query, "$1::BIGINT", "First row should have type cast for id")
+					assert.Contains(t, query, "$2::VARCHAR(50)", "First row should have type cast for status")
+					// Вторая строка не должна иметь type casts
+					assert.Contains(t, query, "($3, $4)", "Second row should not have type casts")
 				}
 			}
 		})

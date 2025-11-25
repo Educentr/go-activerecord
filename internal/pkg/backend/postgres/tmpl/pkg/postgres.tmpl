@@ -849,9 +849,20 @@ func BulkUpdate(ctx context.Context, objs []*{{ $PublicStructName }}) (int, erro
 		})
 	}
 
+	// Создаём мапу типов полей для VALUES type casting
+	fieldTypes := postgres.FieldTypeMap{
+	{{- range $ind, $fstruct := $fields }}
+		{{ $packerparam := packerParam $fstruct.Format -}}
+		{{ $dbtype := $packerparam.DBType -}}
+		{{ if ne $dbtype "" -}}
+		"{{ $fstruct.Name }}": "{{ $dbtype }}",
+		{{ end -}}
+	{{ end }}
+	}
+
 	// Генерируем bulk UPDATE queries с кластеризацией по полям
 	// Примечание: idempotency keys не поддерживаются в bulk update
-	clusteredResult, err := postgres.GenerateBulkUpdateClustered(tableName, pk, updateParams, []activerecord.FieldValue{})
+	clusteredResult, err := postgres.GenerateBulkUpdateClustered(tableName, pk, updateParams, []activerecord.FieldValue{}, fieldTypes)
 	if err != nil {
 		metricErrCnt.Inc(ctx, "bulk_update_gen", 1)
 		logger.Error(ctx, fmt.Sprintf("Error generate bulk update '%s'", err))

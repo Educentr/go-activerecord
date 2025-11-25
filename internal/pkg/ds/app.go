@@ -397,4 +397,5 @@ type FormatParam interface {
 	ToString() []string
 	MutatorTypeConv() string
 	StringDeserializer() []string
+	DBType() string // PostgreSQL тип для VALUES type casting
 }
