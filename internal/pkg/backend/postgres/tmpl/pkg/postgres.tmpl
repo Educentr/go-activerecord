@@ -849,16 +849,16 @@ func BulkUpdate(ctx context.Context, objs []*{{ $PublicStructName }}) (int, erro
 		})
 	}
 
-	// Генерируем bulk UPDATE query
+	// Генерируем bulk UPDATE queries с кластеризацией по полям
 	// Примечание: idempotency keys не поддерживаются в bulk update
-	query, err := postgres.GenerateUpdate(tableName, pk, updateParams, []activerecord.FieldValue{})
+	clusteredResult, err := postgres.GenerateBulkUpdateClustered(tableName, pk, updateParams, []activerecord.FieldValue{})
 	if err != nil {
 		metricErrCnt.Inc(ctx, "bulk_update_gen", 1)
 		logger.Error(ctx, fmt.Sprintf("Error generate bulk update '%s'", err))
 		return 0, err
 	}
 
-	logger.Debug(ctx, "{{ $PublicStructName }}", "BulkUpdate", query.QueryString)
+	logger.Debug(ctx, "{{ $PublicStructName }}", "BulkUpdate", fmt.Sprintf("Generated %d clustered queries", len(clusteredResult.Queries)))
 
 	connection, err := getConnection(ctx, activerecord.MasterInstanceType)
 	if err != nil {
@@ -866,16 +866,6 @@ func BulkUpdate(ctx context.Context, objs []*{{ $PublicStructName }}) (int, erro
 		logger.Error(ctx, fmt.Sprintf("Error get db connection '%s'", err))
 		return 0, err
 	}
-
-	rows, errCall := connection.Call(ctx, query.QueryString, query.Params)
-	if errCall != nil {
-		metricErrCnt.Inc(ctx, "bulk_update_db", 1)
-		logger.Error(ctx, "Error bulk update db", query.QueryString, errCall, connection.Info())
-		return 0, errCall
-	}
-	defer rows.Close()
-
-	metricTimer.Timing(ctx, "bulk_update_db")
 
 	{{ $hasFieldsWithMutators := false }}
 	{{- range $ind, $fstruct := $fields }}
@@ -896,10 +886,9 @@ func BulkUpdate(ctx context.Context, objs []*{{ $PublicStructName }}) (int, erro
 		}
 	}
 
-	// Если есть мутируемые поля, читаем RETURNING и обновляем объекты
+	// Создаём карту объектов по PK для быстрого доступа (если нужно для RETURNING)
+	objMap := make(map[string]*{{ $PublicStructName }}, len(validObjs))
 	if hasMutatingOps {
-		// Создаём карту объектов по PK для быстрого доступа
-		objMap := make(map[string]*{{ $PublicStructName }}, len(validObjs))
 		for _, obj := range validObjs {
 			pkKey := ""
 			for i, pkVal := range obj.PrimaryValues() {
@@ -910,110 +899,128 @@ func BulkUpdate(ctx context.Context, objs []*{{ $PublicStructName }}) (int, erro
 			}
 			objMap[pkKey] = obj
 		}
+	}
 
-		// Читаем результаты RETURNING
-		updatedCount := 0
-
-		// Создаём упорядоченный список мутируемых полей (в алфавитном порядке)
-		mutatedFieldsList := make([]string, 0, len(mutatingFields))
+	// Создаём упорядоченный список мутируемых полей (в алфавитном порядке)
+	mutatedFieldsList := make([]string, 0, len(mutatingFields))
+	if hasMutatingOps {
 		for field := range mutatingFields {
 			mutatedFieldsList = append(mutatedFieldsList, field)
 		}
 		sort.Strings(mutatedFieldsList)
-
-		for rows.Next() {
-			updatedCount++
-
-			// Создаём слайс для сканирования: сначала PK поля, затем мутируемые поля
-			scanDest := make([]any, 0)
-
-			{{ range $ind, $fstruct := $fields }}
-			{{ if $fstruct.PrimaryKey }}
-			var pk{{ $fstruct.Name }} {{ $fstruct.Format }}
-			scanDest = append(scanDest, &pk{{ $fstruct.Name }})
-			{{ end }}
-			{{ end }}
-
-			// Создаём map для хранения отсканированных значений мутируемых полей
-			mutatedValues := make(map[string]any)
-
-			// Добавляем переменные только для мутируемых полей (с мутаторами) в порядке mutatedFieldsList
-			for _, fieldName := range mutatedFieldsList {
-				{{ range $ind, $fstruct := $fields }}
-				{{ if and (not $fstruct.PrimaryKey) (gt (len $fstruct.Mutators) 0) }}
-				if fieldName == "{{ $fstruct.Name }}" {
-					var mutated{{ $fstruct.Name }} {{ $fstruct.Format }}
-					scanDest = append(scanDest, &mutated{{ $fstruct.Name }})
-					mutatedValues["{{ $fstruct.Name }}"] = &mutated{{ $fstruct.Name }}
-				}
-				{{ end }}
-				{{ end }}
-			}
-
-			err := rows.Scan(scanDest...)
-			if err != nil {
-				metricErrCnt.Inc(ctx, "bulk_update_scan", 1)
-				logger.Error(ctx, "Error scan bulk update result", err)
-				return 0, err
-			}
-
-			// Находим соответствующий объект по PK
-			pkKey := ""
-			{{ $first := true }}
-			{{ range $ind, $fstruct := $fields }}
-			{{ if $fstruct.PrimaryKey }}
-			{{ if not $first }}
-			pkKey += "|"
-			{{ end }}
-			pkKey += fmt.Sprintf("%v", pk{{ $fstruct.Name }})
-			{{ $first = false }}
-			{{ end }}
-			{{ end }}
-
-			obj, ok := objMap[pkKey]
-			if !ok {
-				metricErrCnt.Inc(ctx, "bulk_update_match", 1)
-				logger.Warn(ctx, "Could not match RETURNING row to original object", "key", pkKey)
-				continue
-			}
-
-			// Обновляем только поля с мутаторами в объекте
-			for _, fieldName := range mutatedFieldsList {
-				{{ range $ind, $fstruct := $fields }}
-				{{ if and (not $fstruct.PrimaryKey) (gt (len $fstruct.Mutators) 0) }}
-				if fieldName == "{{ $fstruct.Name }}" {
-					if valPtr, exists := mutatedValues["{{ $fstruct.Name }}"]; exists {
-						obj.Set{{ $fstruct.Name }}(*(valPtr.(*{{ $fstruct.Format }})))
-					}
-				}
-				{{ end }}
-				{{ end }}
-			}
-
-			// Очищаем UpdateOps для этого объекта
-			obj.BaseField.UpdateOps = []postgres.Operation{}
-			obj.BaseField.CheckFields = []activerecord.FieldValue{}
-			{{- if gt $mutatorLen 0 }}
-			obj.ClearMutatorUpdateOpts()
-			{{- end }}
-		}
-
-		if rows.Err() != nil {
-			metricErrCnt.Inc(ctx, "bulk_update_db", 1)
-			logger.Error(ctx, "Error bulk update db", query.QueryString, rows.Err(), connection.Info())
-			return 0, rows.Err()
-		}
-
-		metricStatCnt.Inc(ctx, "bulk_update_success", float64(updatedCount))
-		logger.Debug(ctx, "{{ $PublicStructName }}", "BulkUpdate", fmt.Sprintf("Successfully updated %d objects with mutating operations", updatedCount))
-		metricTimer.Finish(ctx, "bulk_update")
-		return updatedCount, nil
 	}
 	{{ end }}
 
-	// Если нет мутируемых полей, просто очищаем UpdateOps
-	updatedCount := int(rows.CommandTag().RowsAffected())
+	// Выполняем все запросы кластеров
+	totalUpdated := 0
+	for i, query := range clusteredResult.Queries {
+		logger.Debug(ctx, "{{ $PublicStructName }}", "BulkUpdate cluster", i, "fields:", clusteredResult.ClusterFields[i], "size:", clusteredResult.ClusterSizes[i], "query:", query.QueryString)
 
+		rows, errCall := connection.Call(ctx, query.QueryString, query.Params)
+		if errCall != nil {
+			metricErrCnt.Inc(ctx, "bulk_update_db", 1)
+			logger.Error(ctx, "Error bulk update db cluster", i, query.QueryString, errCall, connection.Info())
+			return totalUpdated, errCall
+		}
+		defer rows.Close()
+
+		metricTimer.Timing(ctx, "bulk_update_db")
+
+	{{ if $hasFieldsWithMutators }}
+		// Если есть мутируемые поля, читаем RETURNING и обновляем объекты
+		if hasMutatingOps {
+			for rows.Next() {
+				totalUpdated++
+
+				// Создаём слайс для сканирования: сначала PK поля, затем мутируемые поля
+				scanDest := make([]any, 0)
+
+				{{ range $ind, $fstruct := $fields }}
+				{{ if $fstruct.PrimaryKey }}
+				var pk{{ $fstruct.Name }} {{ $fstruct.Format }}
+				scanDest = append(scanDest, &pk{{ $fstruct.Name }})
+				{{ end }}
+				{{ end }}
+
+				// Создаём map для хранения отсканированных значений мутируемых полей
+				mutatedValues := make(map[string]any)
+
+				// Добавляем переменные только для мутируемых полей (с мутаторами) в порядке mutatedFieldsList
+				for _, fieldName := range mutatedFieldsList {
+					{{ range $ind, $fstruct := $fields }}
+					{{ if and (not $fstruct.PrimaryKey) (gt (len $fstruct.Mutators) 0) }}
+					if fieldName == "{{ $fstruct.Name }}" {
+						var mutated{{ $fstruct.Name }} {{ $fstruct.Format }}
+						scanDest = append(scanDest, &mutated{{ $fstruct.Name }})
+						mutatedValues["{{ $fstruct.Name }}"] = &mutated{{ $fstruct.Name }}
+					}
+					{{ end }}
+					{{ end }}
+				}
+
+				err := rows.Scan(scanDest...)
+				if err != nil {
+					metricErrCnt.Inc(ctx, "bulk_update_scan", 1)
+					logger.Error(ctx, "Error scan bulk update result", err)
+					return totalUpdated, err
+				}
+
+				// Находим соответствующий объект по PK
+				pkKey := ""
+				{{ $first := true }}
+				{{ range $ind, $fstruct := $fields }}
+				{{ if $fstruct.PrimaryKey }}
+				{{ if not $first }}
+				pkKey += "|"
+				{{ end }}
+				pkKey += fmt.Sprintf("%v", pk{{ $fstruct.Name }})
+				{{ $first = false }}
+				{{ end }}
+				{{ end }}
+
+				obj, ok := objMap[pkKey]
+				if !ok {
+					metricErrCnt.Inc(ctx, "bulk_update_match", 1)
+					logger.Warn(ctx, "Could not match RETURNING row to original object", "key", pkKey)
+					continue
+				}
+
+				// Обновляем только поля с мутаторами в объекте
+				for _, fieldName := range mutatedFieldsList {
+					{{ range $ind, $fstruct := $fields }}
+					{{ if and (not $fstruct.PrimaryKey) (gt (len $fstruct.Mutators) 0) }}
+					if fieldName == "{{ $fstruct.Name }}" {
+						if valPtr, exists := mutatedValues["{{ $fstruct.Name }}"]; exists {
+							obj.Set{{ $fstruct.Name }}(*(valPtr.(*{{ $fstruct.Format }})))
+						}
+					}
+					{{ end }}
+					{{ end }}
+				}
+
+				// Очищаем UpdateOps для этого объекта
+				obj.BaseField.UpdateOps = []postgres.Operation{}
+				obj.BaseField.CheckFields = []activerecord.FieldValue{}
+				{{- if gt $mutatorLen 0 }}
+				obj.ClearMutatorUpdateOpts()
+				{{- end }}
+			}
+
+			if rows.Err() != nil {
+				metricErrCnt.Inc(ctx, "bulk_update_db", 1)
+				logger.Error(ctx, "Error bulk update db cluster", i, query.QueryString, rows.Err(), connection.Info())
+				return totalUpdated, rows.Err()
+			}
+		} else {
+	{{ end }}
+			// Если нет мутируемых полей, просто считаем обновлённые строки
+			totalUpdated += int(rows.CommandTag().RowsAffected())
+	{{ if $hasFieldsWithMutators }}
+		}
+	{{ end }}
+	}
+
+	// Очищаем UpdateOps для всех объектов
 	for _, obj := range validObjs {
 		obj.BaseField.UpdateOps = []postgres.Operation{}
 		obj.BaseField.CheckFields = []activerecord.FieldValue{}
@@ -1022,11 +1029,11 @@ func BulkUpdate(ctx context.Context, objs []*{{ $PublicStructName }}) (int, erro
 		{{- end }}
 	}
 
-	metricStatCnt.Inc(ctx, "bulk_update_success", float64(updatedCount))
+	metricStatCnt.Inc(ctx, "bulk_update_success", float64(totalUpdated))
 
-	logger.Debug(ctx, "{{ $PublicStructName }}", "BulkUpdate", fmt.Sprintf("Successfully updated %d objects", updatedCount))
+	logger.Debug(ctx, "{{ $PublicStructName }}", "BulkUpdate", fmt.Sprintf("Successfully updated %d objects in %d clusters", totalUpdated, len(clusteredResult.Queries)))
 
 	metricTimer.Finish(ctx, "bulk_update")
 
-	return updatedCount, nil
+	return totalUpdated, nil
 }

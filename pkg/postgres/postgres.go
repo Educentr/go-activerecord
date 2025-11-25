@@ -442,7 +442,84 @@ func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams
 	return q, nil
 }
 
+// ClusteredUpdateResult содержит результат кластеризованного обновления
+type ClusteredUpdateResult struct {
+	Queries       []*Query
+	ClusterSizes  []int // размер каждого кластера
+	ClusterFields [][]string // поля в каждом кластере для отладки
+}
+
+// GenerateBulkUpdateClustered группирует объекты по набору изменяемых полей
+// и создаёт отдельный UPDATE запрос для каждой группы
+func GenerateBulkUpdateClustered(tableName string, primaryIndex Index, updates []UpdateParams, idempotencyKey []activerecord.FieldValue) (*ClusteredUpdateResult, error) {
+	if len(updates) == 0 {
+		return nil, fmt.Errorf("empty updates")
+	}
+
+	if len(idempotencyKey) > 0 {
+		return nil, fmt.Errorf("idempotency keys not supported in bulk update")
+	}
+
+	// Группируем объекты по набору изменяемых полей
+	type clusterKey string
+	clusters := make(map[clusterKey][]UpdateParams)
+	clusterFieldSets := make(map[clusterKey][]string)
+
+	for _, u := range updates {
+		// Создаём ключ кластера из отсортированного списка имён полей и их операций
+		fieldOps := make([]string, 0, len(u.Ops))
+		for _, op := range u.Ops {
+			fieldOps = append(fieldOps, fmt.Sprintf("%s:%d", op.Field, op.Op))
+		}
+		sort.Strings(fieldOps)
+		key := clusterKey(strings.Join(fieldOps, ","))
+
+		if clusters[key] == nil {
+			// Сохраняем список полей для отладки
+			fieldNames := make([]string, 0, len(u.Ops))
+			for _, op := range u.Ops {
+				fieldNames = append(fieldNames, op.Field)
+			}
+			sort.Strings(fieldNames)
+			clusterFieldSets[key] = fieldNames
+		}
+
+		clusters[key] = append(clusters[key], u)
+	}
+
+	// Генерируем запрос для каждого кластера
+	result := &ClusteredUpdateResult{
+		Queries:       make([]*Query, 0, len(clusters)),
+		ClusterSizes:  make([]int, 0, len(clusters)),
+		ClusterFields: make([][]string, 0, len(clusters)),
+	}
+
+	// Сортируем ключи для стабильности
+	keys := make([]clusterKey, 0, len(clusters))
+	for k := range clusters {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return string(keys[i]) < string(keys[j])
+	})
+
+	for _, key := range keys {
+		clusterUpdates := clusters[key]
+		query, err := generateBulkUpdate(tableName, primaryIndex, clusterUpdates, idempotencyKey)
+		if err != nil {
+			return nil, fmt.Errorf("cluster %s: %w", key, err)
+		}
+
+		result.Queries = append(result.Queries, query)
+		result.ClusterSizes = append(result.ClusterSizes, len(clusterUpdates))
+		result.ClusterFields = append(result.ClusterFields, clusterFieldSets[key])
+	}
+
+	return result, nil
+}
+
 // generateBulkUpdate creates UPDATE ... FROM (VALUES ...) query for bulk updates
+// Все объекты в updates должны обновлять одинаковый набор полей
 func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdateParams, idempotencyKey []activerecord.FieldValue) (*Query, error) {
 	if len(updates) == 0 {
 		return nil, fmt.Errorf("empty updates")
@@ -572,14 +649,13 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 			values = append(values, fmt.Sprintf("$%d", q.AddParams(pkVal)))
 		}
 
-		// Field values
+		// Field values - все объекты в кластере должны иметь одинаковый набор полей
 		for _, fwo := range fieldsWithOps {
-			if op, exists := opsMap[fwo.name]; exists {
-				values = append(values, fmt.Sprintf("$%d", q.AddParams(op.Value)))
-			} else {
-				// Поле не обновляется для этого объекта - используем NULL
-				values = append(values, "NULL")
+			op, exists := opsMap[fwo.name]
+			if !exists {
+				return nil, fmt.Errorf("field %s not found in update operations (inconsistent cluster)", fwo.name)
 			}
+			values = append(values, fmt.Sprintf("$%d", q.AddParams(op.Value)))
 		}
 
 		valueRows = append(valueRows, "    ("+strings.Join(values, ", ")+")")

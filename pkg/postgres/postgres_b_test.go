@@ -500,6 +500,7 @@ func TestGenerateUpdate(t *testing.T) {
 		updates        []postgres.UpdateParams
 		idempotencyKey []activerecord.FieldValue
 		expectedQuery  string
+		expectedParams []any
 		expectedError  error
 	}{
 		{
@@ -507,7 +508,7 @@ func TestGenerateUpdate(t *testing.T) {
 			tableName: "users",
 			primaryIndex: postgres.Index{
 				Fields: postgres.OrderedFields{
-					{
+					postgres.OrderField{
 						Field: "id",
 						Order: postgres.ASC,
 					},
@@ -528,6 +529,7 @@ func TestGenerateUpdate(t *testing.T) {
 			},
 			idempotencyKey: []activerecord.FieldValue{},
 			expectedQuery:  `UPDATE "users" SET name = $1 WHERE id = $2`,
+			expectedParams: []any{"John Doe", 1},
 			expectedError:  nil,
 		},
 		{
@@ -535,7 +537,7 @@ func TestGenerateUpdate(t *testing.T) {
 			tableName: "users",
 			primaryIndex: postgres.Index{
 				Fields: postgres.OrderedFields{
-					{
+					postgres.OrderField{
 						Field: "id",
 						Order: postgres.ASC,
 					},
@@ -563,7 +565,7 @@ func TestGenerateUpdate(t *testing.T) {
 			tableName: "users",
 			primaryIndex: postgres.Index{
 				Fields: postgres.OrderedFields{
-					{
+					postgres.OrderField{
 						Field: "id",
 						Order: postgres.ASC,
 					},
@@ -591,7 +593,7 @@ func TestGenerateUpdate(t *testing.T) {
 			tableName: "users",
 			primaryIndex: postgres.Index{
 				Fields: postgres.OrderedFields{
-					{
+					postgres.OrderField{
 						Field: "id",
 						Order: postgres.ASC,
 					},
@@ -619,7 +621,7 @@ func TestGenerateUpdate(t *testing.T) {
 			tableName: "users",
 			primaryIndex: postgres.Index{
 				Fields: postgres.OrderedFields{
-					{
+					postgres.OrderField{
 						Field: "id",
 						Order: postgres.ASC,
 					},
@@ -656,6 +658,7 @@ FROM (VALUES
     ($3, $4)
 ) AS v(id, name)
 WHERE t.id = v.id`,
+			expectedParams: []any{1, "John Doe", 2, "Jane Doe"},
 			expectedError: nil,
 		},
 		{
@@ -927,8 +930,81 @@ FROM (VALUES
 WHERE t.id = v.id`,
 			expectedError: nil,
 		},
+	}
+
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q, err := postgres.GenerateUpdate(tt.tableName, tt.primaryIndex, tt.updates, tt.idempotencyKey)
+			if tt.expectedError != nil {
+				assert.EqualError(t, err, tt.expectedError.Error())
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expectedQuery, q.QueryString)
+				if tt.expectedParams != nil {
+					assert.Equal(t, tt.expectedParams, q.Params, "Query params")
+				}
+			}
+		})
+	}
+}
+
+func TestGenerateBulkUpdateClustered(t *testing.T) {
+	tests := []struct {
+		name             string
+		tableName        string
+		primaryIndex     postgres.Index
+		updates          []postgres.UpdateParams
+		idempotencyKey   []activerecord.FieldValue
+		expectedClusters int
+		expectedSizes    []int
+		expectedFields   [][]string
+		expectedParams   [][]any // Ожидаемые params для каждого кластера
+		expectedError    error
+	}{
 		{
-			name:      "Bulk update with partial mutations - only some objects mutate field",
+			name:      "Single cluster - all objects update same fields",
+			tableName: "users",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					postgres.OrderField{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{1},
+					Ops: []postgres.Operation{
+						{
+							Field: "name",
+							Op:    activerecord.OpSet,
+							Value: "John",
+						},
+					},
+				},
+				{
+					PK: []any{2},
+					Ops: []postgres.Operation{
+						{
+							Field: "name",
+							Op:    activerecord.OpSet,
+							Value: "Jane",
+						},
+					},
+				},
+			},
+			idempotencyKey:   []activerecord.FieldValue{},
+			expectedClusters: 1,
+			expectedSizes:    []int{2},
+			expectedFields:   [][]string{{"name"}},
+			expectedParams:   [][]any{{1, "John", 2, "Jane"}},
+			expectedError:    nil,
+		},
+		{
+			name:      "Multiple clusters - objects update different fields",
 			tableName: "users",
 			primaryIndex: postgres.Index{
 				Fields: postgres.OrderedFields{
@@ -968,36 +1044,95 @@ WHERE t.id = v.id`,
 							Op:    activerecord.OpAdd,
 							Value: 10,
 						},
+					},
+				},
+			},
+			idempotencyKey:   []activerecord.FieldValue{},
+			expectedClusters: 2,
+			expectedSizes:    []int{2, 1},
+			expectedFields:   [][]string{{"counter"}, {"name"}},
+			expectedParams:   [][]any{{1, 5, 3, 10}, {2, "Jane"}},
+			expectedError:    nil,
+		},
+		{
+			name:      "Multiple clusters - different field sets",
+			tableName: "users",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					postgres.OrderField{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{1},
+					Ops: []postgres.Operation{
+						{
+							Field: "name",
+							Op:    activerecord.OpSet,
+							Value: "Alice",
+						},
+						{
+							Field: "email",
+							Op:    activerecord.OpSet,
+							Value: "alice@example.com",
+						},
+					},
+				},
+				{
+					PK: []any{2},
+					Ops: []postgres.Operation{
+						{
+							Field: "counter",
+							Op:    activerecord.OpAdd,
+							Value: 1,
+						},
+					},
+				},
+				{
+					PK: []any{3},
+					Ops: []postgres.Operation{
 						{
 							Field: "name",
 							Op:    activerecord.OpSet,
 							Value: "Bob",
 						},
+						{
+							Field: "email",
+							Op:    activerecord.OpSet,
+							Value: "bob@example.com",
+						},
 					},
 				},
 			},
-			idempotencyKey: []activerecord.FieldValue{},
-			expectedQuery: `UPDATE users AS t
-SET counter = t.counter + v.counter, name = v.name
-FROM (VALUES
-    ($1, $2, NULL),
-    ($3, NULL, $4),
-    ($5, $6, $7)
-) AS v(id, counter, name)
-WHERE t.id = v.id
-RETURNING t.id, t.counter`,
-			expectedError: nil,
+			idempotencyKey:   []activerecord.FieldValue{},
+			expectedClusters: 2,
+			expectedSizes:    []int{1, 2},
+			expectedFields:   [][]string{{"counter"}, {"email", "name"}},
+			expectedParams:   [][]any{{2, 1}, {1, "alice@example.com", "Alice", 3, "bob@example.com", "Bob"}},
+			expectedError:    nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			q, err := postgres.GenerateUpdate(tt.tableName, tt.primaryIndex, tt.updates, tt.idempotencyKey)
+			result, err := postgres.GenerateBulkUpdateClustered(tt.tableName, tt.primaryIndex, tt.updates, tt.idempotencyKey)
+
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedQuery, q.QueryString)
+				assert.Equal(t, tt.expectedClusters, len(result.Queries), "Number of clusters")
+				assert.Equal(t, tt.expectedSizes, result.ClusterSizes, "Cluster sizes")
+				assert.Equal(t, tt.expectedFields, result.ClusterFields, "Cluster fields")
+
+				// Проверяем params для каждого кластера
+				for i, expectedParams := range tt.expectedParams {
+					assert.Equal(t, expectedParams, result.Queries[i].Params, "Params for cluster %d", i)
+				}
 			}
 		})
 	}
