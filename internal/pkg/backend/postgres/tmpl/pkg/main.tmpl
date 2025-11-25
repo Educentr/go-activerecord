@@ -85,8 +85,8 @@ type {{ $PublicStructName }}List []*{{ $PublicStructName }}
     const (
         tableName string = "{{ .Container.ObjectName }}"
     {{- range $fieldname, $flag := .Flags -}}
-        {{ range $i, $flagname := $flag.Flags }}
-        {{ $fieldname }}{{ $flagname }}Flag = 1 << {{ $i -}}
+        {{ range $flagItem := $flag.Flags }}
+        {{ $fieldname }}{{ $flagItem.Name }}Flag = 1 << {{ $flagItem.Position -}}
         {{ end -}}
     {{ end }}
     )

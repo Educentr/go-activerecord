@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 
@@ -138,6 +139,52 @@ func (b BackendGenerator) CheckIndexes(cl *ds.RecordPackage) error {
 			if len(deserializers) == 0 && len(cond.Value) > 0 {
 				// Если нет десериализатора, значения будут использоваться как строки напрямую
 				// Это нормально для строковых типов
+			}
+		}
+	}
+
+	return nil
+}
+
+func (b BackendGenerator) CheckFlags(cl *ds.RecordPackage) error {
+	for fieldName, flagDecl := range cl.FlagMap {
+		fieldNum, ok := cl.FieldsMap[fieldName]
+		if !ok {
+			continue
+		}
+
+		field := cl.Fields[fieldNum]
+
+		// PostgreSQL поддерживает ТОЛЬКО signed типы
+		var bitCapacity int
+		switch field.Format {
+		case "int8":
+			bitCapacity = 8
+		case "int16":
+			bitCapacity = 16
+		case "int32":
+			bitCapacity = 32
+		case "int64":
+			bitCapacity = 64
+		case "uint8", "uint16", "uint32", "uint64":
+			return &arerror.ErrCheckPackageFieldDecl{
+				Pkg:   cl.Namespace.PackageName,
+				Field: fieldName,
+				Err:   fmt.Errorf("PostgreSQL не поддерживает unsigned типы. Используйте signed типы (int8, int16, int32, int64) для флагов. Тип поля: %s", field.Format),
+			}
+		default:
+			return &arerror.ErrCheckPackageFieldDecl{
+				Pkg:   cl.Namespace.PackageName,
+				Field: fieldName,
+				Err:   errors.New("флаги могут быть объявлены только на целочисленных типах (int8, int16, int32, int64)"),
+			}
+		}
+
+		if flagDecl.BitCount > bitCapacity {
+			return &arerror.ErrCheckPackageFieldDecl{
+				Pkg:   cl.Namespace.PackageName,
+				Field: fieldName,
+				Err:   fmt.Errorf("количество флагов (%d) превышает битовую емкость (%d) для типа %s", flagDecl.BitCount, bitCapacity, field.Format),
 			}
 		}
 	}

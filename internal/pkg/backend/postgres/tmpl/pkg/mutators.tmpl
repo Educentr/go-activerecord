@@ -44,7 +44,7 @@ func (obj *{{ $PublicStructName }}) {{ $mutatorparam.Name }}{{ $fstruct.Name }}(
 
 	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpAdd, Value: mutArg})
 	obj.field{{ $fstruct.Name }} += {{ $packerparam.TypeName }}(mutArg)
-			
+
 		{{- else if eq $mutatorparam.Name "Dec" }}
 	if mutArg == 0 {
 		return nil
@@ -56,32 +56,29 @@ func (obj *{{ $PublicStructName }}) {{ $mutatorparam.Name }}{{ $fstruct.Name }}(
 
 	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpAdd, Value: -mutArg})
 	obj.field{{ $fstruct.Name }} -= {{ $packerparam.TypeName }}(mutArg)
-		
+
 		{{- else if eq $mutatorparam.Name "And" }}
-ToDo Unimplemented
 	if obj.field{{ $fstruct.Name }} == 0 || obj.field{{ $fstruct.Name }} & mutArg == obj.field{{ $fstruct.Name }} {
 		return nil
 	}
 
-	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpAnd, Value: uint32(mutArg)})
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpAnd, Value: mutArg})
 	obj.field{{ $fstruct.Name }} &= mutArg
-		
+
 		{{- else if eq $mutatorparam.Name "Or" "SetBit" }}
-ToDo Unimplemented 
 	if mutArg == 0 || obj.field{{ $fstruct.Name }} | mutArg == obj.field{{ $fstruct.Name }} {
 		return nil
 	}
 
-	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpOr, Value: uint32(mutArg)})
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpOr, Value: mutArg})
 	obj.field{{ $fstruct.Name }} |= mutArg
 
 		{{- else if eq $mutatorparam.Name "ClearBit" }}
-ToDo Unimplemented
 	if mutArg == 0 || obj.field{{ $fstruct.Name }} & ^mutArg == obj.field{{ $fstruct.Name }} {
 		return nil
 	}
 
-	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpAnd, Value: uint32(^mutArg)})
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpAnd, Value: ^mutArg})
 	obj.field{{ $fstruct.Name }} &= ^mutArg
 
 		{{- else if eq $mutatorparam.Name "Xor" }}
@@ -89,7 +86,7 @@ ToDo Unimplemented
 		return nil
 	}
 
-	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpXor, Value: uint32(mutArg)})
+	obj.BaseField.UpdateOps = append(obj.BaseField.UpdateOps, postgres.Operation{Field: "{{ $fstruct.Name }}", Op: activerecord.OpXor, Value: mutArg})
 	obj.field{{ $fstruct.Name }} ^= mutArg
 
 		{{- else }}

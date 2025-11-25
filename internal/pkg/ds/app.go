@@ -356,10 +356,17 @@ type TriggerDeclaration struct {
 	Params     map[string]bool // Параметры передаваемые в функцию
 }
 
+// Структура описывающая один флаг
+type FlagItem struct {
+	Name     string // Имя флага (пустая строка для _)
+	Position int    // Битовая позиция (0, 1, 2, ...)
+}
+
 // Структура описывающая флаги для поля
 type FlagDeclaration struct {
-	Name  string   // Имя
-	Flags []string // Список имён флагов
+	Name     string     // Имя поля
+	Flags    []FlagItem // Список флагов с позициями
+	BitCount int        // Общее количество позиций включая underscore
 }
 
 type PartialFieldDeclaration struct {

@@ -2,6 +2,7 @@ package checker
 
 import (
 	"errors"
+	"fmt"
 	"log"
 
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
@@ -144,6 +145,26 @@ func checkFields(cl *ds.RecordPackage) error {
 	return nil
 }
 
+// checkFlags проверяет что имена флагов не пересекаются между полями
+func checkFlags(cl *ds.RecordPackage) error {
+	// Проверить что имена флагов не пересекаются между полями
+	allFlags := make(map[string]string) // flagName -> fieldName
+	for fieldName, flagDecl := range cl.FlagMap {
+		for _, flagItem := range flagDecl.Flags {
+			if existingField, exists := allFlags[flagItem.Name]; exists {
+				return &arerror.ErrCheckPackageFieldDecl{
+					Pkg:   cl.Namespace.PackageName,
+					Field: fieldName,
+					Err:   fmt.Errorf("имя флага '%s' уже используется в поле '%s'", flagItem.Name, existingField),
+				}
+			}
+			allFlags[flagItem.Name] = fieldName
+		}
+	}
+
+	return nil
+}
+
 // Check основная функция, которая запускает процесс проверки
 // Должна вызываться только после окончания процесса парсинга всех деклараций
 func Check(files map[string]*ds.RecordPackage, linkedObjects map[string]string) error {
@@ -164,6 +185,10 @@ func Check(files map[string]*ds.RecordPackage, linkedObjects map[string]string) 
 			return err
 		}
 
+		if err := checkFlags(cl); err != nil {
+			return err
+		}
+
 		// ToDo почему берётся только нулевой бекенд? Надо учесть, когда будет делаться больше чем один бекенд
 		backendChecker, err := backend.GetBackendByName(cl.Backends[0])
 		if err != nil {
@@ -178,6 +203,10 @@ func Check(files map[string]*ds.RecordPackage, linkedObjects map[string]string) 
 		}
 
 		if err := backendChecker.CheckFields(cl); err != nil {
+			return err
+		}
+
+		if err := backendChecker.CheckFlags(cl); err != nil {
 			return err
 		}
 

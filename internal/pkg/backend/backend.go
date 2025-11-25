@@ -16,6 +16,7 @@ type BackendDriver interface {
 	CheckFields(cl *ds.RecordPackage) error
 	CheckIndexes(cl *ds.RecordPackage) error
 	CheckNamespace(cl *ds.RecordPackage) error
+	CheckFlags(cl *ds.RecordPackage) error
 	Name() ds.Backend
 	Aliases() []ds.Backend
 	Templates() embed.FS

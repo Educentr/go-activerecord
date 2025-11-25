@@ -78,8 +78,8 @@ type {{ $PublicStructName }}List []*{{ $PublicStructName }}
         namespace uint32 = {{ .Container.ObjectName }}
         cntFields uint32 = {{ len .FieldList }}
     {{- range $fieldname, $flag := .Flags -}}
-        {{ range $i, $flagname := $flag.Flags }}
-        {{ $fieldname }}{{ $flagname }}Flag = 1 << {{ $i -}}
+        {{ range $flagItem := $flag.Flags }}
+        {{ $fieldname }}{{ $flagItem.Name }}Flag = 1 << {{ $flagItem.Position -}}
         {{ end -}}
     {{ end }}
     )

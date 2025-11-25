@@ -96,8 +96,8 @@ var MutatorMapper = map[string]MutatorParam{
 	ds.AndMutator:      {Name: "And", AvailableType: UnsignedFormatT},
 	ds.OrMutator:       {Name: "Or", AvailableType: UnsignedFormatT},
 	ds.XorMutator:      {Name: "Xor", AvailableType: UnsignedFormatT},
-	ds.ClearBitMutator: {Name: "ClearBit", AvailableType: UnsignedFormatT},
-	ds.SetBitMutator:   {Name: "SetBit", AvailableType: UnsignedFormatT},
+	ds.ClearBitMutator: {Name: "ClearBit", AvailableType: NumericFormatT},
+	ds.SetBitMutator:   {Name: "SetBit", AvailableType: NumericFormatT},
 }
 
 var UnsignedFormatT = []FormatType{

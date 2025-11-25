@@ -133,18 +133,18 @@ func (obj *{{ $PublicStructName }}) Set{{ $fstruct.Name }}({{ $fstruct.Name }} {
 }
 	{{ $fl := index $flags $fstruct.Name }}
 	{{- if $fl }}
-		{{- range $i, $flag := $fl.Flags }}
+		{{- range $flagItem := $fl.Flags }}
 
-func (obj *{{ $PublicStructName }}) Set{{ $fstruct.Name }}{{ $flag }}() error {
-	return obj.SetBit{{ $fstruct.Name }}( {{ $fstruct.Name }}{{ $flag }}Flag )
+func (obj *{{ $PublicStructName }}) SetFlag{{ $flagItem.Name }}() error {
+	return obj.SetBit{{ $fstruct.Name }}( {{ $fstruct.Name }}{{ $flagItem.Name }}Flag )
 }
 
-func (obj *{{ $PublicStructName }}) Clear{{ $fstruct.Name }}{{ $flag }}() error {
-	return obj.ClearBit{{ $fstruct.Name }}( {{ $fstruct.Name }}{{ $flag }}Flag )
+func (obj *{{ $PublicStructName }}) ResetFlag{{ $flagItem.Name }}() error {
+	return obj.ClearBit{{ $fstruct.Name }}( {{ $fstruct.Name }}{{ $flagItem.Name }}Flag )
 }
 
-func (obj *{{ $PublicStructName }}) Is{{ $fstruct.Name }}{{ $flag }}() bool {
-	return obj.Get{{ $fstruct.Name }}() & {{ $fstruct.Name }}{{ $flag }}Flag == {{ $fstruct.Name }}{{ $flag }}Flag
+func (obj *{{ $PublicStructName }}) IsFlag{{ $flagItem.Name }}() bool {
+	return obj.Get{{ $fstruct.Name }}() & {{ $fstruct.Name }}{{ $flagItem.Name }}Flag == {{ $fstruct.Name }}{{ $flagItem.Name }}Flag
 }
 		{{ end }}
 	{{ end }}

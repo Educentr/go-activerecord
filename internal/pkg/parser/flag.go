@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"go/ast"
 	"strings"
 
@@ -18,7 +19,7 @@ func ParseFlags(dst *ds.RecordPackage, fields []*ast.Field) error {
 
 		newflag := ds.FlagDeclaration{
 			Name:  field.Names[0].Name,
-			Flags: []string{},
+			Flags: []ds.FlagItem{},
 		}
 
 		tagParam, err := splitTag(field, CheckFlagEmpty, map[TagNameType]ParamValueRule{})
@@ -29,7 +30,34 @@ func ParseFlags(dst *ds.RecordPackage, fields []*ast.Field) error {
 		for _, kv := range tagParam {
 			switch kv[0] {
 			case "flags":
-				newflag.Flags = strings.Split(kv[1], ",")
+				rawFlags := strings.Split(kv[1], ",")
+				newflag.BitCount = len(rawFlags)
+				newflag.Flags = make([]ds.FlagItem, 0, len(rawFlags))
+
+				// Проверка на дубликаты имен
+				seenNames := make(map[string]bool)
+
+				for i, flag := range rawFlags {
+					trimmed := strings.TrimSpace(flag)
+					if trimmed == "" || trimmed == "_" {
+						// Пропускаем пустые и underscore флаги
+						continue
+					}
+
+					// Проверка на дубликат
+					if seenNames[trimmed] {
+						return &arerror.ErrParseFlagDecl{
+							Name: newflag.Name,
+							Err:  fmt.Errorf("дублирующееся имя флага: %s", trimmed),
+						}
+					}
+					seenNames[trimmed] = true
+
+					newflag.Flags = append(newflag.Flags, ds.FlagItem{
+						Name:     trimmed,
+						Position: i,
+					})
+				}
 			default:
 				return &arerror.ErrParseFlagTagDecl{Name: newflag.Name, TagName: kv[0], TagValue: kv[1], Err: arerror.ErrParseTagUnknown}
 			}
@@ -47,7 +75,8 @@ func ParseFlags(dst *ds.RecordPackage, fields []*ast.Field) error {
 				foundSet = true
 			}
 
-			if mut == ds.SetBitMutator {
+			// Bug fix: проверяем ClearBitMutator вместо SetBitMutator
+			if mut == ds.ClearBitMutator {
 				foundClear = true
 			}
 		}

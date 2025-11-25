@@ -29,8 +29,13 @@ type MutatorParam struct {
 
 // ToDo перенести в описание форматов (type.go)
 var MutatorMapper = map[string]MutatorParam{
-	ds.IncMutator: {Name: "Inc", AvailableType: NumericFormatT},
-	ds.DecMutator: {Name: "Dec", AvailableType: NumericFormatT},
+	ds.IncMutator:      {Name: "Inc", AvailableType: NumericFormatT},
+	ds.DecMutator:      {Name: "Dec", AvailableType: NumericFormatT},
+	ds.SetBitMutator:   {Name: "SetBit", AvailableType: NumericFormatT},
+	ds.ClearBitMutator: {Name: "ClearBit", AvailableType: NumericFormatT},
+	ds.AndMutator:      {Name: "And", AvailableType: NumericFormatT},
+	ds.OrMutator:       {Name: "Or", AvailableType: NumericFormatT},
+	ds.XorMutator:      {Name: "Xor", AvailableType: NumericFormatT},
 }
 
 type FormatType struct {
