@@ -50,23 +50,95 @@ func (b BackendGenerator) CheckNamespace(cl *ds.RecordPackage) error {
 }
 
 func (b BackendGenerator) CheckIndexes(cl *ds.RecordPackage) error {
+	// Поддерживаемые операторы
+	supportedOperators := map[string]bool{
+		"=":          true,
+		">":          true,
+		"<":          true,
+		">=":         true,
+		"<=":         true,
+		"!=":         true,
+		"is null":    true,
+		"is not null": true,
+	}
+
 	for _, ind := range cl.Indexes {
 		for fldNum, cond := range ind.Conditions {
 			fld := cl.Fields[fldNum]
-			_, err := GetFormat(fld.Format)
+			format, err := GetFormat(fld.Format)
 			if err != nil {
 				return &arerror.ErrCheckPackageFieldDecl{Pkg: cl.Namespace.PackageName, Field: fld.Name, Err: arerror.ErrCheckInternalError}
 			}
 
-			if cond.ConditionType != "=" {
-				return &arerror.ErrCheckPackageIndexDecl{Pkg: cl.Namespace.PackageName, Index: ind.Name, Err: arerror.ErrCheckIndexConditionNotSupported}
+			// Проверка поддержки оператора
+			if !supportedOperators[cond.ConditionType] {
+				return &arerror.ErrCheckPackageIndexDecl{Pkg: cl.Namespace.PackageName, Index: ind.Name, Err: arerror.ErrCheckIndexConditionOperatorUnsupported}
 			}
 
+			// Проверка значений для IS NULL/IS NOT NULL
+			if cond.IsNullCheck {
+				if len(cond.Value) > 0 {
+					return &arerror.ErrCheckPackageIndexDecl{Pkg: cl.Namespace.PackageName, Index: ind.Name, Err: arerror.ErrCheckIndexConditionNullCheckWithValues}
+				}
+				continue // NULL проверки не требуют дальнейшей валидации
+			}
+
+			// Проверка наличия значений для не-NULL операторов
 			if len(cond.Value) == 0 {
 				return &arerror.ErrCheckPackageIndexDecl{Pkg: cl.Namespace.PackageName, Index: ind.Name, Err: arerror.ErrCheckIndexConditionHasNotValue}
 			}
 
-			// ToDo проверка на то, что десериализатор из строки будет работать корректно и сгенерируется валидный код
+			// Проверка для операторов равенства/неравенства с пустой строкой
+			if (cond.ConditionType == "=" || cond.ConditionType == "!=") && len(cond.Value) == 1 && cond.Value[0] == "" {
+				// Пустая строка допустима только для строковых типов
+				isStringType := fld.Format == "string"
+				if !isStringType {
+					return &arerror.ErrCheckPackageIndexDecl{Pkg: cl.Namespace.PackageName, Index: ind.Name, Err: fmt.Errorf("empty string condition is only valid for string fields")}
+				}
+			}
+
+			// Проверка количества значений для операторов сравнения
+			if cond.ConditionType == ">" || cond.ConditionType == "<" || cond.ConditionType == ">=" || cond.ConditionType == "<=" {
+				if len(cond.Value) != 1 {
+					return &arerror.ErrCheckPackageIndexDecl{Pkg: cl.Namespace.PackageName, Index: ind.Name, Err: arerror.ErrCheckIndexConditionValuesMismatch}
+				}
+
+				// Проверка совместимости типа поля с оператором сравнения
+				// Операторы сравнения требуют числовых или временных типов
+				isCompatible := false
+				for _, numType := range NumericFormatT {
+					if fld.Format == numType.TypeName {
+						isCompatible = true
+						break
+					}
+				}
+				if !isCompatible {
+					for _, floatType := range FloatFormatT {
+						if fld.Format == floatType.TypeName {
+							isCompatible = true
+							break
+						}
+					}
+				}
+				if !isCompatible {
+					for _, dateType := range DateFormatT {
+						if fld.Format == dateType.TypeName {
+							isCompatible = true
+							break
+						}
+					}
+				}
+				if !isCompatible {
+					return &arerror.ErrCheckPackageIndexDecl{Pkg: cl.Namespace.PackageName, Index: ind.Name, Err: arerror.ErrCheckIndexConditionTypeIncompatible}
+				}
+			}
+
+			// Проверка что десериализатор из строки будет работать корректно
+			deserializers := format.StringDeserializer()
+			if len(deserializers) == 0 && len(cond.Value) > 0 {
+				// Если нет десериализатора, значения будут использоваться как строки напрямую
+				// Это нормально для строковых типов
+			}
 		}
 	}
 

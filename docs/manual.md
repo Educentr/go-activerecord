@@ -36,12 +36,14 @@ type FieldsFoo struct {
     Type      string `ar:"selector:SelectByType;size:64"`
     Product   uint64 `ar:"serializer:Product"`
     Flags     uint32 `ar:"mutators:set_bit,clear_bit"`
+    Status    string `ar:"size:32"`
 }
 
 type (
     IndexesFoo struct {
         TypeId bool `ar:"fields:Type,Id;unique"`
         AnotherIdId bool `ar:"fields:AnotherId,Id;condition:Flags&1=1,Type is not null;order:AnotherId desc,Id asc"`
+        StatusEmpty bool `ar:"fields:Status,Id;condition:Status[=]''"`  // Индекс для пустых строк
     }
     IndexPartsFoo struct {
         TypePart bool `ar:"index:TypeId;fieldnum:1;selector:SelectByTypePart"`
@@ -137,8 +139,7 @@ type TriggersFoo struct {
 - `primary_key` - индекс является первичным ключом;
 - `selector` - имя метода-селектора, который нужно создать для индекса;
 - `orderdesc` - поля отсортированные в индексе в обратном направлении. Необходимо только для генерации конфига для `octopus`; `deprecated! use order`
-- `condition` - описание условного индексов. Условия через запятую (поддерживаются частью СУБД, при сложных условиях синтаксис может от СУБД к СУБД меняться). Необходимо для того, что бы во все запросы добавлять эти условия.
-- `order` - порядок сортировки полей внутри индекса. По умолчанию `asc` если нужен обратный порядок то надо указать `desc`
+- `condition` - описание условного индексов. Условия через запятую (поддерживаются частью СУБД, при сложных условиях синтаксис может от СУБД к СУБД меняться). Необходимо для того, что бы во все запросы добавлять эти условия. Поддерживает сравнение с пустой строкой через кавычки: `Status[=]''` или `Status[=]""`.
 - `shard_by` - функция (или имя метода), используемая для вычисления шарда на основании данных полей индекса (!Не реализовано);
 
 !!!_Для octopus_

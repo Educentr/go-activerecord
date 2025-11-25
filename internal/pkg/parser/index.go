@@ -102,31 +102,140 @@ func ParseIndexPart(dst *ds.RecordPackage, fields []*ast.Field) error {
 	return nil
 }
 
+// extractBaseFieldName извлекает базовое имя поля из выражения с битовыми операторами
+// Например: "Flags&1" → "Flags"
+func extractBaseFieldName(fieldPart string) string {
+	for _, op := range []string{"&", "|", "^"} {
+		if idx := strings.Index(fieldPart, op); idx != -1 {
+			return strings.TrimSpace(fieldPart[:idx])
+		}
+	}
+	return strings.TrimSpace(fieldPart)
+}
+
+// isComplexFieldExpression проверяет, содержит ли поле битовые операторы
+func isComplexFieldExpression(fieldPart string) bool {
+	return strings.ContainsAny(fieldPart, "&|^")
+}
+
+// isNullOperator проверяет, является ли оператор проверкой на NULL
+func isNullOperator(op string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(op))
+	return normalized == "is null" || normalized == "is not null"
+}
+
+// parseConditionValues парсит значения условий, обрабатывая кавычки и пустые строки
+// Поддерживает одинарные ('') и двойные ("") кавычки для пустых строк
+func parseConditionValues(rawValues string) []string {
+	parts := strings.Split(rawValues, ",")
+	result := make([]string, 0, len(parts))
+
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+
+		// Проверка на пустую строку в одинарных кавычках
+		if trimmed == "''" {
+			result = append(result, "")
+			continue
+		}
+
+		// Проверка на пустую строку в двойных кавычках
+		if trimmed == `""` {
+			result = append(result, "")
+			continue
+		}
+
+		// Удаление одинарных кавычек, если они есть
+		if len(trimmed) >= 2 && trimmed[0] == '\'' && trimmed[len(trimmed)-1] == '\'' {
+			result = append(result, trimmed[1:len(trimmed)-1])
+			continue
+		}
+
+		// Удаление двойных кавычек, если они есть
+		if len(trimmed) >= 2 && trimmed[0] == '"' && trimmed[len(trimmed)-1] == '"' {
+			result = append(result, trimmed[1:len(trimmed)-1])
+			continue
+		}
+
+		// Если нет кавычек, оставляем как есть
+		result = append(result, trimmed)
+	}
+
+	return result
+}
+
 func parseIndexConditionTag(condTag string, fieldsMap map[string]int) (map[int]ds.IndexCondition, *arerror.ErrParseTypeIndexTagDecl) {
 	ret := map[int]ds.IndexCondition{}
+
 	for _, cond := range strings.Split(condTag, ";") {
+		cond = strings.TrimSpace(cond)
+		if cond == "" {
+			continue
+		}
+
+		// Найти начало оператора
 		start_cond := strings.Index(cond, "[")
 		if start_cond == -1 {
 			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrParseTagValueInvalid}
 		}
 
+		// Найти конец оператора
 		end_cond := strings.Index(cond[start_cond+1:], "]")
 		if end_cond == -1 {
 			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrParseTagValueInvalid}
 		}
 
-		if len(cond) == start_cond+end_cond+2 {
-			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrParseTagValueInvalid}
+		// Извлечь части
+		fieldExpr := cond[:start_cond]
+		operator := cond[start_cond+1 : start_cond+end_cond+1]
+		var values []string
+
+		// Для операторов, не требующих значений (IS NULL, IS NOT NULL)
+		if isNullOperator(operator) {
+			// Проверка что после ] ничего нет или только пробелы
+			if len(cond) > start_cond+end_cond+2 {
+				remainder := strings.TrimSpace(cond[start_cond+end_cond+2:])
+				if remainder != "" {
+					return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrParseTagValueInvalid}
+				}
+			}
+			values = []string{}
+		} else {
+			// Для операторов, требующих значений
+			if len(cond) == start_cond+end_cond+2 {
+				return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrParseTagValueInvalid}
+			}
+			rawValues := cond[start_cond+end_cond+2:]
+			values = parseConditionValues(rawValues)
 		}
 
-		fieldName := cond[:start_cond]
-		if fldNum, ex := fieldsMap[fieldName]; !ex {
+		// Определить базовое имя поля (без битовых операторов)
+		baseFieldName := extractBaseFieldName(fieldExpr)
+
+		// Проверить существование поля
+		fldNum, exists := fieldsMap[baseFieldName]
+		if !exists {
 			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrFieldNotExist}
-		} else if _, ex := ret[fldNum]; ex {
-			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrDuplicate}
-		} else {
-			ret[fldNum] = ds.IndexCondition{ConditionType: cond[start_cond+1 : start_cond+end_cond+1], Value: strings.Split(cond[start_cond+end_cond+2:], ",")}
 		}
+
+		// Проверить дубликаты
+		if _, exists := ret[fldNum]; exists {
+			return nil, &arerror.ErrParseTypeIndexTagDecl{IndexType: "index", TagValue: condTag, Err: arerror.ErrDuplicate}
+		}
+
+		// Создать IndexCondition
+		condition := ds.IndexCondition{
+			ConditionType: strings.ToLower(strings.TrimSpace(operator)),
+			Value:         values,
+			IsNullCheck:   isNullOperator(operator),
+		}
+
+		// Если поле содержит битовые операторы, сохранить полное выражение
+		if isComplexFieldExpression(fieldExpr) {
+			condition.FieldExpression = strings.TrimSpace(fieldExpr)
+		}
+
+		ret[fldNum] = condition
 	}
 
 	return ret, nil

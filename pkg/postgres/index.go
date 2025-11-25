@@ -53,19 +53,11 @@ func (ofs OrderedFields) GetFieldNames() []string {
 	return retFields
 }
 
-// ToDo добавить поддержку разных условий. Больше меньше, не равно и т.д.
 type Condition struct {
-	Field  string
-	Values []any
-}
-
-func (c Condition) GetValues() [][]any {
-	retValues := make([][]any, 0, len(c.Values))
-	for _, f := range c.Values {
-		retValues = append(retValues, []any{f})
-	}
-
-	return retValues
+	Field           string // Простое имя поля
+	FieldExpression string // Выражение для сложных условий (например, "Flags & 1")
+	Operator        string // SQL оператор: "=", ">", "<", ">=", "<=", "!=", "IS NULL", "IS NOT NULL"
+	Values          []any  // Значения (пустой для IS NULL/IS NOT NULL)
 }
 
 type Index struct {

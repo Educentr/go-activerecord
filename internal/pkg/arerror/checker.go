@@ -27,10 +27,14 @@ var (
 	ErrCheckFieldsManyDecl                 = errors.New("few declarations of fields not supported")
 	ErrCheckFieldsProcNotImpl              = errors.New("proc fields not implemented")
 	ErrCheckFieldsOrderDecl                = errors.New("incorrect order of fields")
-	ErrCheckIndexConditionNotSupported     = errors.New("index condition not supported")
-	ErrCheckIndexCountNotSupported         = errors.New("count by index not supported")
-	ErrCheckIndexConditionHasNotValue      = errors.New("index condition without value")
-	ErrCheckInternalError                  = errors.New("internal error")
+	ErrCheckIndexConditionNotSupported        = errors.New("index condition not supported")
+	ErrCheckIndexCountNotSupported            = errors.New("count by index not supported")
+	ErrCheckIndexConditionHasNotValue         = errors.New("index condition without value")
+	ErrCheckIndexConditionOperatorUnsupported = errors.New("operator not supported")
+	ErrCheckIndexConditionValuesMismatch      = errors.New("operator value count mismatch")
+	ErrCheckIndexConditionTypeIncompatible    = errors.New("field type incompatible with operator")
+	ErrCheckIndexConditionNullCheckWithValues = errors.New("IS NULL/IS NOT NULL cannot have values")
+	ErrCheckInternalError                     = errors.New("internal error")
 )
 
 // Описание ошибки декларации пакета

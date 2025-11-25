@@ -142,8 +142,10 @@ type IndexField struct {
 }
 
 type IndexCondition struct {
-	ConditionType string   // Тип условия "=", ">", "<", ">=", "<=", "!=", "IN"
-	Value         []string // Значение условия
+	ConditionType   string   // Тип условия "=", ">", "<", ">=", "<=", "!=", "is null", "is not null"
+	Value           []string // Значение условия (пустой для IS NULL/IS NOT NULL)
+	IsNullCheck     bool     // Признак IS NULL/IS NOT NULL (не требует значений)
+	FieldExpression string   // Выражение поля с операторами (например, "Flags&1")
 }
 
 // Тип для описания индекса

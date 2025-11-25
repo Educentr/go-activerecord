@@ -144,17 +144,29 @@ var index{{ $ind.Name }} = postgres.Index{
 	Condition: []postgres.Condition{
 	{{ range $fieldNum, $c := $ind.Conditions }}
 		{{- $ifield := index $fields $fieldNum }}
-		{Field: "{{ $ifield.Name }}", Values: []any{
-		{{ range $_, $v := $c.Value }}
-			{{ $packerparam := packerParam $ifield.Format -}}
-			{{ $des := $packerparam.StringDeserializer }}
-			{{ if ne (len $des) 0 }}
-				{{ index $des 0 }}"{{ $v }}"{{ index $des 1 }},
-			{{ else }}
-				"{{ $v }}",				
+		{
+			{{ if ne $c.FieldExpression "" -}}
+			FieldExpression: "{{ $c.FieldExpression }}",
+			{{ else -}}
+			Field: "{{ $ifield.Name }}",
+			{{ end -}}
+			Operator: "{{ operatorToSQL $c.ConditionType }}",
+			{{ if not $c.IsNullCheck -}}
+			Values: []any{
+			{{ range $_, $v := $c.Value }}
+				{{ $packerparam := packerParam $ifield.Format -}}
+				{{ $des := $packerparam.StringDeserializer }}
+				{{ if ne (len $des) 0 }}
+					{{ index $des 0 }}"{{ $v }}"{{ index $des 1 }},
+				{{ else }}
+					"{{ $v }}",
+				{{ end }}
 			{{ end }}
-		{{ end }}
-		}},
+			},
+			{{ else -}}
+			Values: []any{},
+			{{ end -}}
+		},
 	{{ end }}
 	},
 	DefaultLimit:	1000,   // ToDo defaultlimit

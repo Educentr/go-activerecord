@@ -51,8 +51,7 @@ func NewSelectQuery(tableName string, fieldNames []string, i Index) *Query {
 
 	if len(i.Condition) > 0 {
 		for _, c := range i.Condition {
-			q.AddWhereQuery(c.Field)
-			q.GenerateWhereKeys(false, c.GetValues())
+			q.AddCondition(c)
 		}
 	}
 
@@ -218,6 +217,40 @@ func (q *Query) AddWhereBlock(cond ...string) {
 	q.QueryString += " WHERE "
 	for _, c := range cond {
 		q.AddWhereQuery(c)
+	}
+}
+
+// AddCondition добавляет условие из индекса в WHERE clause
+func (q *Query) AddCondition(c Condition) {
+	// Использовать FieldExpression если присутствует, иначе Field
+	fieldName := c.Field
+	if c.FieldExpression != "" {
+		fieldName = c.FieldExpression
+	}
+
+	// NULL проверки: без placeholders
+	if c.Operator == "IS NULL" || c.Operator == "IS NOT NULL" {
+		q.AddWhereQuery(fmt.Sprintf("%s %s", fieldName, c.Operator))
+		return
+	}
+
+	// Несколько значений: IN clause (только для равенства)
+	if len(c.Values) > 1 {
+		if c.Operator == "=" {
+			placeholders := make([]string, 0, len(c.Values))
+			for _, val := range c.Values {
+				placeholders = append(placeholders, fmt.Sprintf("$%d", q.AddParams(val)))
+			}
+			q.AddWhereQuery(fmt.Sprintf("%s IN (%s)", fieldName, strings.Join(placeholders, ", ")))
+		} else {
+			panic(fmt.Sprintf("operator '%s' does not support multiple values", c.Operator))
+		}
+		return
+	}
+
+	// Одно значение: field <operator> $N
+	if len(c.Values) > 0 {
+		q.AddWhereQuery(fmt.Sprintf("%s %s $%d", fieldName, c.Operator, q.AddParams(c.Values[0])))
 	}
 }
 
