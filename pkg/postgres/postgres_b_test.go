@@ -475,6 +475,94 @@ func TestGenerateSelect(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name: "condition_with_boolean_true",
+			args: args{
+				tableName:  "users",
+				fieldNames: []string{"id", "name", "is_active"},
+				index: postgres.Index{
+					Unique:    false,
+					Fields:    postgres.OrderedFields{postgres.OrderField{Field: "id", Order: postgres.ASC}},
+					Condition: []postgres.Condition{{Field: "is_active", Operator: "=", Values: []any{true}}},
+				},
+				keys:   [][]any{{1}},
+				offset: 0,
+				limit:  0,
+				cursor: postgres.CursorPosition{},
+			},
+			want: &postgres.Query{
+				QueryString:     `SELECT id, name, is_active FROM "users" WHERE is_active = $1 AND id = $2 ORDER BY id ASC`,
+				ConditionExists: true,
+				Params:          []any{true, 1},
+			},
+			wantErr: false,
+		},
+		{
+			name: "condition_with_boolean_false",
+			args: args{
+				tableName:  "users",
+				fieldNames: []string{"id", "name", "is_deleted"},
+				index: postgres.Index{
+					Unique:    false,
+					Fields:    postgres.OrderedFields{postgres.OrderField{Field: "id", Order: postgres.ASC}},
+					Condition: []postgres.Condition{{Field: "is_deleted", Operator: "=", Values: []any{false}}},
+				},
+				keys:   [][]any{{2}},
+				offset: 0,
+				limit:  0,
+				cursor: postgres.CursorPosition{},
+			},
+			want: &postgres.Query{
+				QueryString:     `SELECT id, name, is_deleted FROM "users" WHERE is_deleted = $1 AND id = $2 ORDER BY id ASC`,
+				ConditionExists: true,
+				Params:          []any{false, 2},
+			},
+			wantErr: false,
+		},
+		{
+			name: "condition_with_boolean_not_equal",
+			args: args{
+				tableName:  "users",
+				fieldNames: []string{"id", "name", "is_verified"},
+				index: postgres.Index{
+					Unique:    false,
+					Fields:    postgres.OrderedFields{postgres.OrderField{Field: "id", Order: postgres.ASC}},
+					Condition: []postgres.Condition{{Field: "is_verified", Operator: "!=", Values: []any{false}}},
+				},
+				keys:   [][]any{{3}},
+				offset: 0,
+				limit:  0,
+				cursor: postgres.CursorPosition{},
+			},
+			want: &postgres.Query{
+				QueryString:     `SELECT id, name, is_verified FROM "users" WHERE is_verified != $1 AND id = $2 ORDER BY id ASC`,
+				ConditionExists: true,
+				Params:          []any{false, 3},
+			},
+			wantErr: false,
+		},
+		{
+			name: "bulk_query_with_boolean_condition",
+			args: args{
+				tableName:  "users",
+				fieldNames: []string{"id", "name", "is_active"},
+				index: postgres.Index{
+					Unique:    false,
+					Fields:    postgres.OrderedFields{postgres.OrderField{Field: "id", Order: postgres.ASC}},
+					Condition: []postgres.Condition{{Field: "is_active", Operator: "=", Values: []any{true}}},
+				},
+				keys:   [][]any{{1}, {2}, {3}},
+				offset: 0,
+				limit:  10,
+				cursor: postgres.CursorPosition{},
+			},
+			want: &postgres.Query{
+				QueryString:     `SELECT id, name, is_active FROM "users" WHERE is_active = $1 AND id IN ($2, $3, $4) ORDER BY id ASC LIMIT 10`,
+				ConditionExists: true,
+				Params:          []any{true, 1, 2, 3},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

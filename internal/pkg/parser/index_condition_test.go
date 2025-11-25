@@ -170,6 +170,45 @@ func TestParseIndexConditionTag(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name:      "boolean true condition",
+			condTag:   "IsActive[=]true",
+			fieldsMap: map[string]int{"IsActive": 0},
+			want: map[int]ds.IndexCondition{
+				0: {
+					ConditionType: "=",
+					Value:         []string{"true"},
+					IsNullCheck:   false,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:      "boolean false condition",
+			condTag:   "IsActive[=]false",
+			fieldsMap: map[string]int{"IsActive": 0},
+			want: map[int]ds.IndexCondition{
+				0: {
+					ConditionType: "=",
+					Value:         []string{"false"},
+					IsNullCheck:   false,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:      "boolean not equal true",
+			condTag:   "IsActive[!=]true",
+			fieldsMap: map[string]int{"IsActive": 0},
+			want: map[int]ds.IndexCondition{
+				0: {
+					ConditionType: "!=",
+					Value:         []string{"true"},
+					IsNullCheck:   false,
+				},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

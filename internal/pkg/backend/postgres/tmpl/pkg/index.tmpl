@@ -158,6 +158,8 @@ var index{{ $ind.Name }} = postgres.Index{
 				{{ $des := $packerparam.StringDeserializer }}
 				{{ if ne (len $des) 0 }}
 					{{ index $des 0 }}"{{ $v }}"{{ index $des 1 }},
+				{{ else if eq $ifield.Format "bool" }}
+					{{ $v }},
 				{{ else }}
 					"{{ $v }}",
 				{{ end }}
