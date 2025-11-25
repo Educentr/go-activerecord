@@ -855,7 +855,13 @@ func BulkUpdate(ctx context.Context, objs []*{{ $PublicStructName }}) (int, erro
 		{{ $packerparam := packerParam $fstruct.Format -}}
 		{{ $dbtype := $packerparam.DBType -}}
 		{{ if ne $dbtype "" -}}
+			{{ if eq $fstruct.Format "string" -}}
+				{{ if gt $fstruct.Size 0 -}}
+		"{{ $fstruct.Name }}": "VARCHAR({{ $fstruct.Size }})",
+				{{ end -}}
+			{{ else -}}
 		"{{ $fstruct.Name }}": "{{ $dbtype }}",
+			{{ end -}}
 		{{ end -}}
 	{{ end }}
 	}

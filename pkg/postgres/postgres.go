@@ -658,9 +658,11 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 			// Для первой строки VALUES добавляем ::type если известен тип
 			if rowIdx == 0 && fieldTypes != nil && pkIdx < len(primaryIndex.Fields) {
 				pkFieldName := primaryIndex.Fields[pkIdx].Field
-				if pgType, exists := fieldTypes[pkFieldName]; exists {
-					placeholder = fmt.Sprintf("%s::%s", placeholder, pgType)
+				pgType, exists := fieldTypes[pkFieldName]
+				if !exists {
+					return nil, fmt.Errorf("field '%s' (PK) cannot be used in BulkUpdate: missing type information (string fields require size specification via ar:size tag)", pkFieldName)
 				}
+				placeholder = fmt.Sprintf("%s::%s", placeholder, pgType)
 			}
 			values = append(values, placeholder)
 		}
@@ -676,9 +678,11 @@ func generateBulkUpdate(tableName string, primaryIndex Index, updates []UpdatePa
 
 			// Для первой строки VALUES добавляем ::type если известен тип
 			if rowIdx == 0 && fieldTypes != nil {
-				if pgType, exists := fieldTypes[fwo.name]; exists {
-					placeholder = fmt.Sprintf("%s::%s", placeholder, pgType)
+				pgType, exists := fieldTypes[fwo.name]
+				if !exists {
+					return nil, fmt.Errorf("field '%s' cannot be used in BulkUpdate: missing type information (string fields require size specification via ar:size tag)", fwo.name)
 				}
+				placeholder = fmt.Sprintf("%s::%s", placeholder, pgType)
 			}
 			values = append(values, placeholder)
 		}

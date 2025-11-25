@@ -1244,6 +1244,37 @@ func TestGenerateBulkUpdateClustered(t *testing.T) {
 			expectedParams:   [][]any{{int64(100), "completed", int64(200), "pending"}},
 			expectedError:    nil,
 		},
+		{
+			name:      "Missing size for string field - should fail",
+			tableName: "users",
+			primaryIndex: postgres.Index{
+				Fields: postgres.OrderedFields{
+					postgres.OrderField{
+						Field: "id",
+						Order: postgres.ASC,
+					},
+				},
+				Unique: true,
+			},
+			updates: []postgres.UpdateParams{
+				{
+					PK: []any{1},
+					Ops: []postgres.Operation{
+						{
+							Field: "description", // поле без size
+							Op:    activerecord.OpSet,
+							Value: "some text",
+						},
+					},
+				},
+			},
+			idempotencyKey:   []activerecord.FieldValue{},
+			expectedClusters: 0,
+			expectedSizes:    nil,
+			expectedFields:   nil,
+			expectedParams:   nil,
+			expectedError:    fmt.Errorf("cluster description:0: field 'description' cannot be used in BulkUpdate: missing type information (string fields require size specification via ar:size tag)"),
+		},
 	}
 
 	for _, tt := range tests {
@@ -1251,10 +1282,11 @@ func TestGenerateBulkUpdateClustered(t *testing.T) {
 			// Создаём мапу типов для тестов
 			fieldTypes := postgres.FieldTypeMap{
 				"id":      "BIGINT",
-				"name":    "VARCHAR(n)",
-				"email":   "VARCHAR(n)",
+				"name":    "VARCHAR(100)",
+				"email":   "VARCHAR(255)",
 				"counter": "INTEGER",
 				"status":  "VARCHAR(50)",
+				// "description" намеренно отсутствует для теста валидации
 			}
 			result, err := postgres.GenerateBulkUpdateClustered(tt.tableName, tt.primaryIndex, tt.updates, tt.idempotencyKey, fieldTypes)
 
