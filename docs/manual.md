@@ -35,7 +35,7 @@ type FieldsFoo struct {
     AnotherId int32  `ar:""`
     Type      string `ar:"selector:SelectByType;size:64"`
     Product   uint64 `ar:"serializer:Product"`
-    Flags     uint32 `ar:"mutators:set_bit,clear_bit"`
+    Flags     uint32 `ar:""`  // мутаторы set_bit,clear_bit добавляются автоматически через FlagsFoo
     Status    string `ar:"size:32"`
 }
 
@@ -57,6 +57,10 @@ type SerializersFoo struct {
 
 type TriggersFoo struct {
     RepairTuple bool `ar:"pkg:......../test/model/repair;func:RepairTuple"`
+}
+
+type FlagsFoo struct {
+    Flags string `ar:"flags:Active,Verified,Premium,_,Admin"`
 }
 ```
 
@@ -272,6 +276,59 @@ func FooBarPart(bar *ds.Bar, partBar map[string]any) ([]string, error) {
 | TupleRepair | `func(tuple *octopus.TupleData) error` | Вызывается в случае проблем с десериализацией данных полученных из БД. Например, неверное число полей в тупле по отношению к описанию или неверный формат поля. |
 
 В случае если запись была исправлена то поле `Repaired` у структуры принимает значение `true`.
+
+### Flags\*
+
+Структура для объявления именованных битовых флагов для целочисленных полей. Позволяет создавать читаемые константы для битовых операций вместо использования магических чисел.
+
+При объявлении флагов автоматически добавляются мутаторы `set_bit` и `clear_bit` для соответствующего поля.
+
+**Формат тега:**
+
+- `flags` - список имён флагов через запятую. Каждое имя соответствует позиции бита (начиная с 0). Для пропуска позиции используйте `_`.
+
+**Пример объявления:**
+
+```golang
+type FieldsUser struct {
+    Id     int64  `ar:"primary_key"`
+    Status uint32 `ar:""`
+}
+
+type FlagsUser struct {
+    Status string `ar:"flags:Active,Verified,Premium,_,Banned"`
+}
+```
+
+**Генерируемые константы:**
+
+```go
+const (
+    StatusActiveFlag   = 1 << 0  // 0x01
+    StatusVerifiedFlag = 1 << 1  // 0x02
+    StatusPremiumFlag  = 1 << 2  // 0x04
+    // позиция 3 пропущена (underscore)
+    StatusBannedFlag   = 1 << 4  // 0x10
+)
+```
+
+**Использование в коде:**
+
+```go
+user := user.New(ctx)
+user.SetStatus(user.StatusActiveFlag | user.StatusVerifiedFlag)
+user.Insert(ctx)
+
+// Атомарные битовые операции
+user.SetBitStatus(user.StatusPremiumFlag)   // Установить бит Premium
+user.ClearBitStatus(user.StatusActiveFlag)  // Очистить бит Active
+user.Update(ctx)
+
+// Проверка флагов
+if user.GetStatus() & user.StatusVerifiedFlag != 0 {
+    // пользователь верифицирован
+}
+```
 
 ## Использование конфига
 

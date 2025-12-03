@@ -39,9 +39,9 @@ user, _ := user.SelectById(ctx, 123)
 // Increment executed atomically in DB, not in application
 user.IncLoginCount(1)    // UPDATE users SET login_count = login_count + 1
 
-// Bitwise operations without race conditions
-user.SetBitFlags(0x04)   // UPDATE users SET flags = flags | 4
-user.ClearBitFlags(0x02) // UPDATE users SET flags = flags & ~2
+// Bitwise operations with named flags (no magic numbers!)
+user.SetBitFlags(user.FlagsPremiumFlag)   // UPDATE users SET flags = flags | 4
+user.ClearBitFlags(user.FlagsActiveFlag)  // UPDATE users SET flags = flags & ~1
 
 user.Update(ctx)
 ```
@@ -235,12 +235,17 @@ type FieldsUser struct {
     Email     string `ar:"unique;size:256;selector:SelectByEmail"`
     Name      string `ar:"size:256"`
     LoginCount uint32 `ar:"mutators:inc,dec"`
-    Flags     uint32 `ar:"mutators:set_bit,clear_bit"`
+    Flags     uint32 `ar:""`  // mutators added via FlagsUser
     CreatedAt uint32 `ar:""`
 }
 
 type IndexesUser struct {
     EmailCreated bool `ar:"fields:Email,CreatedAt;unique"`
+}
+
+// Named bit flags - generates constants FlagsActiveFlag, FlagsVerifiedFlag, etc.
+type FlagsUser struct {
+    Flags string `ar:"flags:Active,Verified,Premium,_,Admin"`
 }
 ```
 
@@ -283,6 +288,9 @@ func main() {
 
     // Atomic increment
     found.IncLoginCount(1)
+
+    // Set flags using named constants
+    found.SetBitFlags(user.FlagsVerifiedFlag)
     found.Update(ctx)
 
     fmt.Printf("User %s logged in %d times\n",

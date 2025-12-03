@@ -410,6 +410,12 @@ func GenerateUpdate(tableName string, primaryIndex Index, updates []UpdateParams
 			case activerecord.OpAnd:
 				operation += op.Field + " & " + fmt.Sprintf(sql, q.AddParams(op.Value))
 				returning = append(returning, ret)
+			case activerecord.OpXor:
+				operation += op.Field + " # " + fmt.Sprintf(sql, q.AddParams(op.Value))
+				returning = append(returning, ret)
+			case activerecord.OpOr:
+				operation += op.Field + " | " + fmt.Sprintf(sql, q.AddParams(op.Value))
+				returning = append(returning, ret)
 			default:
 				return nil, fmt.Errorf("unknown operation %d or not implemented", op.Op)
 			}

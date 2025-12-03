@@ -93,7 +93,7 @@ cmd/argen/            # CLI entry point for code generator
 
 ### Model Declaration System
 
-Models are declared using special comments (`//ar:`) and struct tags. Four main struct types:
+Models are declared using special comments (`//ar:`) and struct tags. Main struct types:
 
 - **Fields\*** - Database fields/columns with tags for primary keys, indexes, serializers, mutators
 - **Indexes\*** - Multi-column indexes with uniqueness, ordering, conditional clauses
@@ -101,6 +101,7 @@ Models are declared using special comments (`//ar:`) and struct tags. Four main 
 - **Serializers\*** - Custom serialization for complex field types
 - **Mutators\*** - Atomic database operations (increment, bit operations, custom procedures)
 - **Triggers\*** - Handlers for exceptional cases (e.g., tuple repair)
+- **Flags\*** - Named bit flags for integer fields (generates constants and auto-adds set_bit/clear_bit mutators)
 - **ProcFields\*** - For stored procedure/function calls (octopus backend)
 
 ### Generated Code Features
@@ -112,6 +113,7 @@ For each model declaration, argen generates:
 - **Selectors**: SelectBy{Index} for each index (singular and plural variants)
 - **Accessors**: Get{Field}/Set{Field} pairs with primary key protection
 - **Mutators**: Inc{Field}, Dec{Field}, SetBit{Field}, ClearBit{Field}, And/Or/Xor{Field}
+- **Flag constants**: {FieldName}{FlagName}Flag for each named flag (e.g., `FlagsActiveFlag = 1 << 0`)
 - **Backend-specific code**: Connection handling, query building, serialization
 
 ### Configuration Architecture
@@ -181,9 +183,9 @@ objs, err := model.SelectByType(ctx, typeVal, activerecord.NewLimiter(100))
 **Atomic updates**:
 
 ```go
-obj.IncCounter(10)      // Increments counter by 10
-obj.SetBitFlags(0x04)   // Sets bit flag atomically
-obj.Update(ctx)         // Sends atomic operations to database
+obj.IncCounter(10)                       // Increments counter by 10
+obj.SetBitFlags(model.FlagsPremiumFlag)  // Sets bit flag using named constant
+obj.Update(ctx)                          // Sends atomic operations to database
 ```
 
 **Working with serializers**:
@@ -252,3 +254,41 @@ Metrics are namespace-specific and include operation details.
 - Tests use build tag `activerecord` - always run with this tag
 - Field order matters for Octopus backend (must match tuple structure)
 - Index order matters for Octopus backend (must match database configuration)
+
+## Release Process
+
+Steps for creating a new release:
+
+1. **Verify all changes are committed**
+   ```bash
+   git status  # Should show clean working tree
+   ```
+
+2. **Run linters and verify no new issues since last release**
+   ```bash
+   make lint      # Check changes from origin/main
+   make full-lint # Full codebase check
+   ```
+
+3. **Check test coverage**
+   ```bash
+   make cover
+   ```
+   Coverage should not decrease compared to previous release.
+
+4. **Run all tests**
+   ```bash
+   make test
+   ```
+   All tests must pass.
+
+5. **Update documentation**
+   - Update docs/ for all changes made
+   - Update README.md if public API changed
+   - Update CLAUDE.md if development workflow changed
+
+6. **Create and push tag**
+   ```bash
+   git tag v3.X.Y
+   git push origin v3.X.Y
+   ```

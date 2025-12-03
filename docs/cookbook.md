@@ -49,11 +49,27 @@ type FieldsProduct struct {
 
     // Поле с мутаторами для атомарных операций
     Counter uint32 `ar:"mutators:inc,dec"`
-    Flags   uint32 `ar:"mutators:set_bit,clear_bit"`
+    Flags   uint32 `ar:""`  // мутаторы set_bit,clear_bit добавляются через FlagsProduct
 
     // Обычное поле
     CreatedAt uint32 `ar:""`
 }
+
+// Именованные флаги для поля Flags
+type FlagsProduct struct {
+    Flags string `ar:"flags:Active,Featured,OnSale,_,Archived"`
+}
+```
+
+Структура `Flags*` генерирует константы для битовых флагов:
+```go
+const (
+    FlagsActiveFlag   = 1 << 0  // 0x01
+    FlagsFeaturedFlag = 1 << 1  // 0x02
+    FlagsOnSaleFlag   = 1 << 2  // 0x04
+    // позиция 3 пропущена
+    FlagsArchivedFlag = 1 << 4  // 0x10
+)
 ```
 
 ### Декларирование связанных сущностей
@@ -443,35 +459,49 @@ if err := user.Update(ctx); err != nil {
 fmt.Println("New count:", user.GetLoginCount())
 ```
 
-**Битовые операции:**
+**Битовые операции с именованными флагами:**
+
+Декларируем именованные флаги:
 ```go
-user, err := user.SelectById(ctx, 123)
+type FlagsUser struct {
+    Flags string `ar:"flags:Active,Verified,Premium,_,Admin"`
+}
+```
+
+Использование сгенерированных констант:
+```go
+u, err := user.SelectById(ctx, 123)
 if err != nil {
     return err
 }
 
-// Устанавливаем биты флагов (атомарно)
-user.SetBitFlags(0x04)  // Установить бит
-user.ClearBitFlags(0x02) // Очистить бит
+// Устанавливаем биты флагов используя константы (атомарно)
+u.SetBitFlags(user.FlagsPremiumFlag)   // Установить Premium
+u.ClearBitFlags(user.FlagsActiveFlag)  // Очистить Active
 
-if err := user.Update(ctx); err != nil {
+if err := u.Update(ctx); err != nil {
     return err
+}
+
+// Проверка флагов
+if u.GetFlags() & user.FlagsVerifiedFlag != 0 {
+    fmt.Println("Пользователь верифицирован")
 }
 ```
 
-**Другие операции:**
+**Другие битовые операции:**
 ```go
-// Побитовое ИЛИ
-user.OrFlags(0x10)
+// Побитовое ИЛИ (установить несколько флагов)
+u.OrFlags(user.FlagsActiveFlag | user.FlagsVerifiedFlag)
 
-// Побитовое И
-user.AndFlags(0xFF)
+// Побитовое И (оставить только указанные флаги)
+u.AndFlags(user.FlagsActiveFlag | user.FlagsPremiumFlag)
 
-// Побитовое XOR
-user.XorFlags(0x20)
+// Побитовое XOR (переключить флаг)
+u.XorFlags(user.FlagsAdminFlag)
 
 // Все операции применяются при вызове Update
-user.Update(ctx)
+u.Update(ctx)
 ```
 
 ## Архитектурное построение
