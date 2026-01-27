@@ -167,7 +167,7 @@ func parseConditionValues(rawValues string) []string {
 func parseIndexConditionTag(condTag string, fieldsMap map[string]int) (map[int]ds.IndexCondition, *arerror.ErrParseTypeIndexTagDecl) {
 	ret := map[int]ds.IndexCondition{}
 
-	for _, cond := range strings.Split(condTag, ";") {
+	for _, cond := range strings.Split(condTag, "&&") {
 		cond = strings.TrimSpace(cond)
 		if cond == "" {
 			continue

@@ -42,7 +42,7 @@ type FieldsFoo struct {
 type (
     IndexesFoo struct {
         TypeId bool `ar:"fields:Type,Id;unique"`
-        AnotherIdId bool `ar:"fields:AnotherId,Id;condition:Flags&1=1,Type is not null;order:AnotherId desc,Id asc"`
+        AnotherIdId bool `ar:"fields:AnotherId,Id;condition:Flags&1[=]1&&Type[is not null];order:AnotherId desc,Id asc"`
         StatusEmpty bool `ar:"fields:Status,Id;condition:Status[=]''"`  // Индекс для пустых строк
     }
     IndexPartsFoo struct {

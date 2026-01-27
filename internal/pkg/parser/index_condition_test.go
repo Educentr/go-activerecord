@@ -128,7 +128,7 @@ func TestParseIndexConditionTag(t *testing.T) {
 		},
 		{
 			name:      "multiple conditions including empty string",
-			condTag:   "Status[=]'';Type[!=]''",
+			condTag:   "Status[=]''&&Type[!=]''",
 			fieldsMap: map[string]int{"Status": 0, "Type": 1},
 			want: map[int]ds.IndexCondition{
 				0: {
@@ -141,6 +141,37 @@ func TestParseIndexConditionTag(t *testing.T) {
 					Value:         []string{""},
 					IsNullCheck:   false,
 				},
+			},
+			wantErr: false,
+		},
+		{
+			name:      "multiple conditions with values",
+			condTag:   "Status[=]'active','pending'&&Type[!=]'deleted'",
+			fieldsMap: map[string]int{"Status": 0, "Type": 1},
+			want: map[int]ds.IndexCondition{
+				0: {ConditionType: "=", Value: []string{"active", "pending"}, IsNullCheck: false},
+				1: {ConditionType: "!=", Value: []string{"deleted"}, IsNullCheck: false},
+			},
+			wantErr: false,
+		},
+		{
+			name:      "three conditions with null check",
+			condTag:   "Status[=]1&&Type[is not null]&&Priority[>]5",
+			fieldsMap: map[string]int{"Status": 0, "Type": 1, "Priority": 2},
+			want: map[int]ds.IndexCondition{
+				0: {ConditionType: "=", Value: []string{"1"}, IsNullCheck: false},
+				1: {ConditionType: "is not null", Value: []string{}, IsNullCheck: true},
+				2: {ConditionType: ">", Value: []string{"5"}, IsNullCheck: false},
+			},
+			wantErr: false,
+		},
+		{
+			name:      "bitwise with multiple conditions",
+			condTag:   "Flags&1[=]1&&DeletedAt[is null]",
+			fieldsMap: map[string]int{"Flags": 0, "DeletedAt": 1},
+			want: map[int]ds.IndexCondition{
+				0: {ConditionType: "=", Value: []string{"1"}, IsNullCheck: false, FieldExpression: "Flags&1"},
+				1: {ConditionType: "is null", Value: []string{}, IsNullCheck: true},
 			},
 			wantErr: false,
 		},

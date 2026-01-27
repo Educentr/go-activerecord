@@ -95,7 +95,7 @@ type IndexesProduct struct {
 **Индекс с условием (PostgreSQL):**
 ```go
 type IndexesProduct struct {
-    ActiveProducts bool `ar:"fields:Status,CreatedAt;condition:Status=1,DeletedAt is null"`
+    ActiveProducts bool `ar:"fields:Status,CreatedAt;condition:Status[=]1&&DeletedAt[is null]"`
 }
 ```
 
