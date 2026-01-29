@@ -61,6 +61,8 @@ func ParseIndexPartTag(field *ast.Field, ind *ds.IndexDeclaration, indexMap map[
 		ind.FieldsMap[fields[exInd.Fields[f]].Name] = exInd.FieldsMap[fields[exInd.Fields[f]].Name]
 	}
 
+	ind.Conditions = exInd.Conditions
+
 	return nil
 }
 

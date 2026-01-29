@@ -193,6 +193,52 @@ func TestParseIndexWithConditions(t *testing.T) {
 	}
 }
 
+func TestParseIndexPartWithConditions(t *testing.T) {
+	rp := ds.NewRecordPackage()
+	_ = rp.AddField(ds.FieldDeclaration{Name: "Status", Format: "string"})
+	_ = rp.AddField(ds.FieldDeclaration{Name: "CreatedAt", Format: "time.Time"})
+	_ = rp.AddField(ds.FieldDeclaration{Name: "Error", Format: "string"})
+
+	conditions := map[int]ds.IndexCondition{
+		0: {ConditionType: "=", Value: []string{"active"}, IsNullCheck: false},
+		2: {ConditionType: "is null", Value: []string{}, IsNullCheck: true},
+	}
+
+	_ = rp.AddIndex(ds.IndexDeclaration{
+		Name:     "StatusCreated",
+		Num:      0,
+		Selector: "SelectByStatusCreated",
+		Fields:   []int{0, 1},
+		FieldsMap: map[string]ds.IndexField{
+			"Status":    {IndField: 0, Order: ds.IndexOrderAsc},
+			"CreatedAt": {IndField: 1, Order: ds.IndexOrderAsc},
+		},
+		Conditions: conditions,
+	})
+
+	fields := []*ast.Field{
+		{
+			Names: []*ast.Ident{{Name: "StatusPart"}},
+			Type:  &ast.Ident{Name: "bool"},
+			Tag:   &ast.BasicLit{Value: "`" + `ar:"index:StatusCreated;fieldnum:1;selector:SelectByStatus"` + "`"},
+		},
+	}
+
+	err := parser.ParseIndexPart(rp, fields)
+	if err != nil {
+		t.Fatalf("ParseIndexPart() unexpected error: %v", err)
+	}
+
+	if len(rp.Indexes) != 2 {
+		t.Fatalf("expected 2 indexes, got %d", len(rp.Indexes))
+	}
+
+	partIndex := rp.Indexes[1]
+	assert.Check(t, cmp.DeepEqual(conditions, partIndex.Conditions), "IndexPart should inherit Conditions from parent index")
+	assert.Check(t, partIndex.Partial, "IndexPart should have Partial=true")
+	assert.Check(t, cmp.Equal(1, len(partIndex.Fields)), "IndexPart should have 1 field")
+}
+
 func TestParseIndexPart(t *testing.T) {
 	type args struct {
 		dst    *ds.RecordPackage

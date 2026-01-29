@@ -701,9 +701,10 @@ type TriggersFoo struct {
 							FieldsMap: map[string]ds.IndexField{
 								"Field1": {IndField: 0, Order: 0},
 							},
-							Primary: false,
-							Unique:  false,
-							Partial: true,
+							Primary:    false,
+							Unique:     false,
+							Partial:    true,
+							Conditions: map[int]ds.IndexCondition{},
 						},
 					},
 					IndexMap:      map[string]int{"Field1Field2": 0, "Field1Part": 1},
