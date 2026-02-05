@@ -36,6 +36,8 @@ func main() {
 	declarationDir := flag.String("declaration", "declaration", "declaration subdir")
 	destinationDir := flag.String("destination", "generated", "generation subdir")
 	moduleName := flag.String("module", "", "module name from go.mod")
+	schemaPath := flag.String("schema_path", "", "Path for DDL schema and migrations (e.g. etc/database)")
+	skipMigration := flag.Bool("skip_migration", false, "Skip migration generation")
 	version := flag.Bool("version", false, "print version")
 	flag.Parse()
 
@@ -59,7 +61,12 @@ func main() {
 		}
 	}
 
-	gen, err := argen.Init(ctx, getAppInfo(), srcDir, dstDir, *fixturePath, *moduleName)
+	opts := argen.Options{
+		SchemaPath:    *schemaPath,
+		SkipMigration: *skipMigration,
+	}
+
+	gen, err := argen.Init(ctx, getAppInfo(), srcDir, dstDir, *fixturePath, *moduleName, opts)
 	if err != nil {
 		log.Fatalf("error initialization: %s", err)
 	}

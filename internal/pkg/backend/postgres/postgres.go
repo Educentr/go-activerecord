@@ -6,6 +6,7 @@ import (
 	"text/template"
 
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/schema"
 	postgresPkg "github.com/Educentr/go-activerecord/v3/pkg/postgres"
 )
 
@@ -80,4 +81,9 @@ func (b BackendGenerator) TemplateFuncs() template.FuncMap {
 			return MutatorParam{}
 		},
 	}
+}
+
+// SchemaGenerator возвращает генератор схемы для PostgreSQL
+func (b BackendGenerator) SchemaGenerator() schema.Generator {
+	return NewSchemaGenerator()
 }

@@ -34,7 +34,7 @@ func TestArGen_addRecordPackage(t *testing.T) {
 		return
 	}
 
-	argen, err := Init(context.Background(), &testutil.TestAppInfo, src, dst, "", "github.com/Educentr/go-activerecord")
+	argen, err := Init(context.Background(), &testutil.TestAppInfo, src, dst, "", "github.com/Educentr/go-activerecord", Options{})
 	if err != nil {
 		t.Errorf("ArGen.Init() error = %v", err)
 		return
@@ -165,7 +165,7 @@ func TestInternalInit(t *testing.T) {
 				tt.want.ctx = ctx
 			}
 
-			got, err := Init(ctx, &tt.args.appInfo, tt.args.srcDir, tt.args.dstDir, tt.args.dstFixture, tt.args.modName)
+			got, err := Init(ctx, &tt.args.appInfo, tt.args.srcDir, tt.args.dstDir, tt.args.dstFixture, tt.args.modName, Options{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Init() error = %v, res = %+v, wantErr %v", err, got, tt.wantErr)
 				return
@@ -253,7 +253,7 @@ func TestArGen_prepareDir(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			got, err := Init(ctx, &tt.args.appInfo, tt.args.srcDir, tt.args.dstDir, tt.args.dstFixture, tt.args.modName)
+			got, err := Init(ctx, &tt.args.appInfo, tt.args.srcDir, tt.args.dstDir, tt.args.dstFixture, tt.args.modName, Options{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Init() error = %v, res = %+v, wantErr %v", err, got, tt.wantErr)
 				return
@@ -330,7 +330,7 @@ func TestArGen_getExists(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
-			got, err := Init(ctx, &tt.args.appInfo, tt.args.srcDir, tt.args.dstDir, tt.args.dstFixture, tt.args.modName)
+			got, err := Init(ctx, &tt.args.appInfo, tt.args.srcDir, tt.args.dstDir, tt.args.dstFixture, tt.args.modName, Options{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Init() error = %v, res = %+v, wantErr %v", err, got, tt.wantErr)
 				return
@@ -739,7 +739,7 @@ type TriggersFoo struct {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := Init(context.Background(), &ds.AppInfo{}, tt.fields.srcDir, tt.fields.dstDir, tt.fields.dstFixture, "testmod")
+			a, err := Init(context.Background(), &ds.AppInfo{}, tt.fields.srcDir, tt.fields.dstDir, tt.fields.dstFixture, "testmod", Options{})
 			if err != nil {
 				t.Errorf("can't init argen: %s", err)
 				return

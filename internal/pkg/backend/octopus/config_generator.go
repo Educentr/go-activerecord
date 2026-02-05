@@ -1,0 +1,220 @@
+package octopus
+
+import (
+	"bytes"
+	"fmt"
+	"strconv"
+	"strings"
+	"text/template"
+
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/schema"
+)
+
+// OctopusConfigGenerator генератор конфигурации для Octopus/Tarantool 1.5
+type OctopusConfigGenerator struct{}
+
+// NewConfigGenerator создаёт новый генератор конфигурации Octopus
+func NewConfigGenerator() *OctopusConfigGenerator {
+	return &OctopusConfigGenerator{}
+}
+
+// SupportsMigrations возвращает false - Octopus не поддерживает миграции в том же формате, что и SQL БД
+func (g *OctopusConfigGenerator) SupportsMigrations() bool {
+	return false
+}
+
+// SchemaFileExtension возвращает расширение файла конфига
+func (g *OctopusConfigGenerator) SchemaFileExtension() string {
+	return ".cfg"
+}
+
+// SchemaFileName возвращает имя файла схемы
+func (g *OctopusConfigGenerator) SchemaFileName() string {
+	return "space.cfg"
+}
+
+// GenerateSchemaJSON генерирует JSON представление спейса
+func (g *OctopusConfigGenerator) GenerateSchemaJSON(pkgInterface any) (*schema.Table, error) {
+	pkg, ok := pkgInterface.(*ds.RecordPackage)
+	if !ok {
+		return nil, fmt.Errorf("expected *ds.RecordPackage, got %T", pkgInterface)
+	}
+
+	// Получаем номер спейса из ServerConfKey (формат namespace:ID или просто namespace)
+	spaceID := g.extractSpaceID(pkg.ServerConfKey)
+
+	table := &schema.Table{
+		Name:    pkg.Namespace.PublicName,
+		Backend: "octopus",
+		SpaceID: spaceID,
+		Columns: make([]schema.Column, 0, len(pkg.Fields)),
+		Indexes: make([]schema.Index, 0, len(pkg.Indexes)),
+	}
+
+	// Конвертируем поля в колонки
+	for i, field := range pkg.Fields {
+		col := g.fieldToColumn(field, i)
+		table.Columns = append(table.Columns, col)
+
+		if field.PrimaryKey {
+			table.PrimaryKey = append(table.PrimaryKey, field.Name)
+		}
+	}
+
+	// Конвертируем индексы
+	for _, idx := range pkg.Indexes {
+		schemaIdx := g.indexToSchemaIndex(idx, pkg)
+		table.Indexes = append(table.Indexes, schemaIdx)
+	}
+
+	return table, nil
+}
+
+// extractSpaceID извлекает ID спейса из ServerConfKey
+func (g *OctopusConfigGenerator) extractSpaceID(confKey string) uint {
+	// Пытаемся найти число в конце строки
+	parts := strings.Split(confKey, ":")
+	if len(parts) > 1 {
+		if id, err := strconv.ParseUint(parts[len(parts)-1], 10, 32); err == nil {
+			return uint(id)
+		}
+	}
+	return 0
+}
+
+// fieldToColumn конвертирует FieldDeclaration в schema.Column
+func (g *OctopusConfigGenerator) fieldToColumn(field ds.FieldDeclaration, position int) schema.Column {
+	col := schema.Column{
+		Name:       field.Name,
+		GoType:     string(field.Format),
+		Type:       g.goTypeToOctopusType(field.Format),
+		PrimaryKey: field.PrimaryKey,
+		Size:       field.Size,
+		Position:   position,
+	}
+
+	return col
+}
+
+// goTypeToOctopusType конвертирует Go тип в тип Octopus
+func (g *OctopusConfigGenerator) goTypeToOctopusType(format ds.Format) string {
+	switch format {
+	case "uint8", "int8":
+		return "NUM8"
+	case "uint16", "int16":
+		return "NUM16"
+	case "uint32", "int32", "int", "uint":
+		return "NUM32"
+	case "uint64", "int64":
+		return "NUM64"
+	case "float32":
+		return "NUM32"
+	case "float64":
+		return "NUM64"
+	case "string":
+		return "STR"
+	case "bool":
+		return "NUM8"
+	default:
+		return "STR"
+	}
+}
+
+// indexToSchemaIndex конвертирует IndexDeclaration в schema.Index
+func (g *OctopusConfigGenerator) indexToSchemaIndex(idx ds.IndexDeclaration, pkg *ds.RecordPackage) schema.Index {
+	schemaIdx := schema.Index{
+		Name:    idx.Name,
+		Num:     idx.Num,
+		Columns: make([]string, 0, len(idx.Fields)),
+		Unique:  idx.Unique,
+		Primary: idx.Primary,
+		Type:    g.getIndexType(idx),
+	}
+
+	// Добавляем колонки индекса
+	for _, fieldNum := range idx.Fields {
+		if fieldNum < len(pkg.Fields) {
+			fieldName := pkg.Fields[fieldNum].Name
+			schemaIdx.Columns = append(schemaIdx.Columns, fieldName)
+		}
+	}
+
+	return schemaIdx
+}
+
+// getIndexType определяет тип индекса для Octopus
+func (g *OctopusConfigGenerator) getIndexType(idx ds.IndexDeclaration) string {
+	// HASH используется для Primary Key и уникальных индексов по одному полю
+	// TREE используется для составных индексов и индексов с сортировкой
+	if idx.Primary && len(idx.Fields) == 1 {
+		return "HASH"
+	}
+	return "TREE"
+}
+
+// GenerateFullSchema генерирует полный конфиг Octopus
+func (g *OctopusConfigGenerator) GenerateFullSchema(pkgInterface any) ([]byte, error) {
+	table, err := g.GenerateSchemaJSON(pkgInterface)
+	if err != nil {
+		return nil, err
+	}
+
+	pkg, ok := pkgInterface.(*ds.RecordPackage)
+	if !ok {
+		return nil, fmt.Errorf("expected *ds.RecordPackage, got %T", pkgInterface)
+	}
+
+	return g.generateConfig(table, pkg)
+}
+
+// generateConfig генерирует конфигурацию Octopus из schema.Table
+func (g *OctopusConfigGenerator) generateConfig(table *schema.Table, pkg *ds.RecordPackage) ([]byte, error) {
+	tmpl := `# Octopus space configuration for {{ .Table.Name }}
+# Generated by argen
+# Space ID: {{ .Table.SpaceID }}
+
+object_space[{{ .Table.SpaceID }}] = { enabled = 1
+{{ range $i, $idx := .Table.Indexes }}
+  index[{{ $idx.Num }}] = { type = "{{ $idx.Type }}"
+    unique = {{ if $idx.Unique }}1{{ else }}0{{ end }}
+{{ range $j, $col := $idx.Columns }}    key_field[{{ $j }}] = { fieldno = {{ index $.FieldPositions $col }}, type = "{{ index $.FieldTypes $col }}" }
+{{ end }}  }
+{{ end }}}
+`
+
+	// Подготавливаем данные для шаблона
+	fieldPositions := make(map[string]int)
+	fieldTypes := make(map[string]string)
+	for i, field := range pkg.Fields {
+		fieldPositions[field.Name] = i
+		fieldTypes[field.Name] = g.goTypeToOctopusType(field.Format)
+	}
+
+	data := struct {
+		Table          *schema.Table
+		FieldPositions map[string]int
+		FieldTypes     map[string]string
+	}{
+		Table:          table,
+		FieldPositions: fieldPositions,
+		FieldTypes:     fieldTypes,
+	}
+
+	t, err := template.New("config").Parse(tmpl)
+	if err != nil {
+		return nil, fmt.Errorf("parse config template: %w", err)
+	}
+
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		return nil, fmt.Errorf("execute config template: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+// GenerateMigration возвращает nil - Octopus не поддерживает миграции
+func (g *OctopusConfigGenerator) GenerateMigration(diff *schema.TableDiff, tableName string) (*schema.Migration, error) {
+	return nil, nil
+}

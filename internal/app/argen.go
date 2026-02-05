@@ -23,7 +23,14 @@ import (
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/generator"
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/parser"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/schema"
 )
+
+// Options дополнительные опции для ArGen
+type Options struct {
+	SchemaPath    string // Путь для DDL схемы и миграций (e.g. etc/database)
+	SkipMigration bool   // Пропустить генерацию миграций
+}
 
 // Структура приложения
 // src и dst - исходная и конечная папки используетмые для генерации репозиториеа
@@ -47,6 +54,9 @@ type ArGen struct {
 	modName            string
 	fileToRemove       map[string]bool
 	dstFixture         string
+	// Опции генерации схемы
+	schemaPath    string
+	skipMigration bool
 }
 
 // Пропускает этап генерации сторов фикстур,
@@ -57,7 +67,7 @@ func (a *ArGen) skipGenerateFixture() bool {
 
 // Инициализация приложения
 // информацию по параметрам см. в описании структуры ArGen
-func Init(ctx context.Context, appInfo *ds.AppInfo, srcDir, dstDir, fixtureDir, modName string) (*ArGen, error) {
+func Init(ctx context.Context, appInfo *ds.AppInfo, srcDir, dstDir, fixtureDir, modName string, opts Options) (*ArGen, error) {
 	argen := ArGen{
 		ctx:            ctx,
 		src:            srcDir,
@@ -71,6 +81,8 @@ func Init(ctx context.Context, appInfo *ds.AppInfo, srcDir, dstDir, fixtureDir, 
 		appInfo:        appInfo,
 		modName:        modName,
 		fileToRemove:   map[string]bool{},
+		schemaPath:     opts.SchemaPath,
+		skipMigration:  opts.SkipMigration,
 	}
 
 	backend.RegisterBackend()
@@ -290,6 +302,7 @@ func (a *ArGen) generate() error {
 // - Проверка
 // - сбор существующих файлов
 // - генерация
+// - генерация схемы БД (если указан schema_path)
 // - очистка "лишних" файлов
 func (a *ArGen) Run() error {
 	// парсим декларацию сущностей
@@ -312,6 +325,13 @@ func (a *ArGen) Run() error {
 		return fmt.Errorf("error generate: %w", err)
 	}
 
+	// Генерация DDL схемы и миграций
+	if a.schemaPath != "" {
+		if err := a.generateSchemaArtifacts(); err != nil {
+			return fmt.Errorf("schema generation: %w", err)
+		}
+	}
+
 	// Очищаем лишние файлы
 	for name := range a.fileToRemove {
 		log.Printf("Drop file `%s`\n", name)
@@ -319,6 +339,164 @@ func (a *ArGen) Run() error {
 	}
 
 	return nil
+}
+
+// schemaKey используется для группировки таблиц по backend + serverConfKey
+type schemaKey struct {
+	backend       ds.Backend
+	serverConfKey string
+}
+
+// generateSchemaArtifacts генерирует DDL схемы и миграции для всех пакетов
+// Таблицы группируются по backend и serverConfKey (база данных)
+func (a *ArGen) generateSchemaArtifacts() error {
+	// Группируем пакеты по бэкенду и serverConfKey
+	groupedPackages := make(map[schemaKey][]*ds.RecordPackage)
+	for _, pkg := range a.packagesParsed {
+		if len(pkg.Backends) == 0 {
+			continue
+		}
+		key := schemaKey{
+			backend:       pkg.Backends[0],
+			serverConfKey: pkg.ServerConfKey,
+		}
+		groupedPackages[key] = append(groupedPackages[key], pkg)
+	}
+
+	// Генерируем схему для каждой группы (backend + serverConfKey)
+	for key, packages := range groupedPackages {
+		be, err := backend.GetBackendByName(key.backend)
+		if err != nil {
+			return fmt.Errorf("get backend %s: %w", key.backend, err)
+		}
+
+		schemaGen := be.SchemaGenerator()
+		if schemaGen == nil {
+			log.Printf("Backend %s does not support schema generation", key.backend)
+			continue
+		}
+
+		// Путь для схемы: etc/database/{backend}/{serverConfKey_sanitized}/
+		// Преобразуем serverConfKey: убираем начальный "/" и заменяем "/" на "_"
+		sanitizedConfKey := strings.TrimPrefix(key.serverConfKey, "/")
+		sanitizedConfKey = strings.ReplaceAll(sanitizedConfKey, "/", "_")
+		if sanitizedConfKey == "" {
+			sanitizedConfKey = "default"
+		}
+		schemaDir := filepath.Join(a.schemaPath, string(key.backend), sanitizedConfKey)
+		schemaJSONPath := filepath.Join(schemaDir, "schema.json")
+
+		// Загружаем предыдущую схему
+		oldSchema, err := schema.LoadSchema(schemaJSONPath)
+		if err != nil {
+			return fmt.Errorf("load old schema for %s/%s: %w", key.backend, sanitizedConfKey, err)
+		}
+
+		// Создаём новую схему со всеми таблицами
+		newSchema := schema.NewSchema(string(key.backend))
+
+		for _, pkg := range packages {
+			newTable, err := schemaGen.GenerateSchemaJSON(pkg)
+			if err != nil {
+				return fmt.Errorf("generate schema JSON for %s: %w", pkg.Namespace.PublicName, err)
+			}
+			newSchema.Tables[newTable.Name] = *newTable
+		}
+
+		// Генерируем миграцию если есть изменения и backend поддерживает миграции
+		if !a.skipMigration && schemaGen.SupportsMigrations() && oldSchema != nil {
+			diff := schema.ComputeDiff(oldSchema, newSchema)
+			if !diff.IsEmpty() {
+				// Получаем следующий номер миграции
+				nextNum, err := schema.GetNextMigrationNumber(schemaDir)
+				if err != nil {
+					return fmt.Errorf("get next migration number: %w", err)
+				}
+
+				// Генерируем миграции для каждой изменённой/добавленной таблицы
+				var allUp, allDown []string
+				var descriptions []string
+
+				for _, tableName := range diff.AddedTables {
+					table := newSchema.Tables[tableName]
+					tableDiff := schema.TableDiff{
+						AddedColumns: table.Columns,
+						AddedIndexes: table.Indexes,
+					}
+					migration, err := schemaGen.GenerateMigration(&tableDiff, tableName)
+					if err != nil {
+						return fmt.Errorf("generate migration for new table %s: %w", tableName, err)
+					}
+					if migration != nil {
+						allUp = append(allUp, migration.Up...)
+						allDown = append(allDown, migration.Down...)
+						descriptions = append(descriptions, "add table "+tableName)
+					}
+				}
+
+				for tableName, tableDiff := range diff.ModifiedTables {
+					migration, err := schemaGen.GenerateMigration(&tableDiff, tableName)
+					if err != nil {
+						return fmt.Errorf("generate migration for %s: %w", tableName, err)
+					}
+					if migration != nil {
+						allUp = append(allUp, migration.Up...)
+						allDown = append(allDown, migration.Down...)
+						descriptions = append(descriptions, migration.Description)
+					}
+				}
+
+				if len(allUp) > 0 {
+					migration := &schema.Migration{
+						Number:      nextNum,
+						Description: strings.Join(descriptions, "; "),
+						Up:          allUp,
+						Down:        allDown,
+					}
+					if err := schema.SaveMigration(migration, schemaDir); err != nil {
+						return fmt.Errorf("save migration: %w", err)
+					}
+					log.Printf("Created migration: %s", migration.Filename())
+				}
+			}
+		}
+
+		// Генерируем полную DDL схему со всеми таблицами
+		ddl, err := a.generateFullSchemaForBackend(schemaGen, packages)
+		if err != nil {
+			return fmt.Errorf("generate full schema for %s/%s: %w", key.backend, sanitizedConfKey, err)
+		}
+
+		// Сохраняем DDL
+		schemaFilePath := filepath.Join(schemaDir, schemaGen.SchemaFileName())
+		if err := schema.SaveDDL(ddl, schemaFilePath); err != nil {
+			return fmt.Errorf("save DDL for %s/%s: %w", key.backend, sanitizedConfKey, err)
+		}
+		log.Printf("Generated schema: %s", schemaFilePath)
+
+		// Сохраняем schema.json
+		if err := schema.SaveSchema(newSchema, schemaJSONPath); err != nil {
+			return fmt.Errorf("save schema JSON for %s/%s: %w", key.backend, sanitizedConfKey, err)
+		}
+	}
+
+	return nil
+}
+
+// generateFullSchemaForBackend генерирует полную DDL схему для всех таблиц одного бэкенда
+func (a *ArGen) generateFullSchemaForBackend(schemaGen schema.Generator, packages []*ds.RecordPackage) ([]byte, error) {
+	var allDDL []byte
+
+	for _, pkg := range packages {
+		ddl, err := schemaGen.GenerateFullSchema(pkg)
+		if err != nil {
+			return nil, fmt.Errorf("generate schema for %s: %w", pkg.Namespace.PublicName, err)
+		}
+		allDDL = append(allDDL, ddl...)
+		allDDL = append(allDDL, '\n')
+	}
+
+	return allDDL, nil
 }
 
 // Создание директории для пакета и запись пакета на диск

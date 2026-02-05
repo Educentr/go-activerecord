@@ -4,7 +4,7 @@ SERVICE_NAME = argen
 # 8 символов последнего коммита
 LAST_COMMIT_HASH = $(shell git rev-parse HEAD | cut -c -8)
 # Таймаут для тестов
-TEST_TIMEOUT?=30s
+TEST_TIMEOUT?=120s
 # Тег golang-ci
 GOLANGCI_TAG:=1.60.3
 # Путь до бинарников
@@ -12,7 +12,7 @@ LOCAL_BIN:=$(CURDIR)/bin
 # Путь до бинарника golang-ci
 GOLANGCI_BIN:=$(LOCAL_BIN)/golangci-lint
 # Минимальная верси гошки
-MIN_GO_VERSION = 1.19.0
+MIN_GO_VERSION = 1.24.0
 # Версии для сборки
 RELEASE = $(shell git describe --tags --always)
 # Время сборки

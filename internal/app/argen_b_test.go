@@ -82,7 +82,7 @@ func TestInit(t *testing.T) {
 				return
 			}
 
-			got, err := app.Init(tt.args.ctx, &tt.args.appInfo, srcDir, dstDir, "", tt.args.modName)
+			got, err := app.Init(tt.args.ctx, &tt.args.appInfo, srcDir, dstDir, "", tt.args.modName, app.Options{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Init() error = %v, res = %+v, wantErr %v", err, got, tt.wantErr)
 				return
@@ -260,7 +260,7 @@ func TestArGen_Run(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := app.Init(tt.initArgs.ctx, &tt.initArgs.appInfo, tt.initArgs.srcDir, tt.initArgs.dstDir, tt.initArgs.dstFixture, tt.initArgs.modName)
+			got, err := app.Init(tt.initArgs.ctx, &tt.initArgs.appInfo, tt.initArgs.srcDir, tt.initArgs.dstDir, tt.initArgs.dstFixture, tt.initArgs.modName, app.Options{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ArGen.Init() error = %v, wantErr %v", err, tt.wantErr)
 				return

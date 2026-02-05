@@ -6,6 +6,7 @@ import (
 	"text/template"
 
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/schema"
 	octopusPkg "github.com/Educentr/go-activerecord/v3/pkg/octopus"
 
 	"golang.org/x/text/cases"
@@ -76,6 +77,11 @@ func (b BackendGenerator) TemplateFuncs() template.FuncMap {
 			return MutatorParam{}
 		},
 	}
+}
+
+// SchemaGenerator возвращает генератор конфигурации для Octopus
+func (b BackendGenerator) SchemaGenerator() schema.Generator {
+	return NewConfigGenerator()
 }
 
 //go:embed tmpl/pkg/*

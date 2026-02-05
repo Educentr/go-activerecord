@@ -8,6 +8,7 @@ import (
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend/octopus"
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend/postgres"
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/schema"
 )
 
 type BackendDriver interface {
@@ -22,6 +23,8 @@ type BackendDriver interface {
 	Templates() embed.FS
 	TemplatePath() string
 	TemplateFuncs() template.FuncMap
+	// SchemaGenerator возвращает генератор схемы (nil если не поддерживается)
+	SchemaGenerator() schema.Generator
 }
 
 var registeredBackend = map[ds.Backend]BackendDriver{}

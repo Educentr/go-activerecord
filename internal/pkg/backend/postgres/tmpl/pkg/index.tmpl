@@ -70,7 +70,6 @@ func SelectAll(ctx context.Context, limit uint32, cursor postgres.CursorPosition
 
 	columnNames := []string{
 	{{- range $_, $fstruct := $fields }}
-		{{ $packerparam := packerParam $fstruct.Format -}}
 		"{{ $fstruct.Name }}",
 	{{ end }}
 	}
