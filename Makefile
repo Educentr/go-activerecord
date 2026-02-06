@@ -128,3 +128,13 @@ pre-push-hook:
 	echo 'make cover' >> ./.git/hooks/pre-push
 	chmod +x ./.git/hooks/pre-push
 
+# Запуск MkDocs сервера для документации
+.PHONY: run-mkdoc
+run-mkdoc: ## Run MkDocs dev server for documentation
+	docker run --rm -p 8000:8000 -v $(PWD):/docs squidfunk/mkdocs-material serve --dev-addr=0.0.0.0:8000 --watch-theme
+
+# Сборка документации
+.PHONY: build-docs
+build-docs: ## Build documentation
+	docker run --rm -v $(PWD):/docs squidfunk/mkdocs-material build --strict
+
