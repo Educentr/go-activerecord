@@ -321,7 +321,7 @@ func (p *PacketServer) reader() {
 					_ = p.send(bg, addr, shutdownPacket)
 				}
 			default:
-				// TODO(s.kamardin): peer escapes to the heap here.
+				// See docs/roadmap.md — "Escape to heap в dgram"
 				if handler != nil {
 					handler.ServeIProto(bg, peer{p, addr}, pkt)
 				}

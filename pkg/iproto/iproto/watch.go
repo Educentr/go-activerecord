@@ -178,8 +178,7 @@ type MultiWatcher struct {
 
 func (w *MultiWatcher) Init() {
 	w.once.Do(func() {
-		// TODO(s.kamardin): maybe guess more accurate buffer size for
-		//					 these channels?
+		// See docs/roadmap.md — "Размер буфера MultiWatcher"
 		w.change = make(chan PoolChange, 1)
 		w.handle = NotifyPoolChange(w.change)
 

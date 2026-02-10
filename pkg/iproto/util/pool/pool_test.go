@@ -477,7 +477,7 @@ func TestPoolNew(t *testing.T) {
 	}
 }
 
-// TODO: fix error /usr/bin/ld: go.go:(.text+0x11f9f3): неопределённая ссылка на «sync.(*WaitGroup).state»
+// See docs/roadmap.md — "Фикс pool_test linker error"
 func _TestPoolSchedule(t *testing.T) {
 	for i, test := range []struct {
 		config      *Config

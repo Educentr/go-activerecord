@@ -376,7 +376,7 @@ func (g *PostgresSchemaGenerator) GenerateMigration(diff *schema.TableDiff, tabl
 	for _, colName := range diff.DroppedColumns {
 		migration.Up = append(migration.Up, fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", tableName, colName))
 		// Для down нужны данные о типе - оставляем комментарий
-		migration.Down = append(migration.Down, fmt.Sprintf("-- TODO: Restore column %s (type unknown)", colName))
+		migration.Down = append(migration.Down, fmt.Sprintf("-- FIXME: Restore column %s (see docs/roadmap.md)", colName))
 		descriptions = append(descriptions, fmt.Sprintf("drop column %s", colName))
 	}
 
@@ -433,7 +433,7 @@ func (g *PostgresSchemaGenerator) GenerateMigration(diff *schema.TableDiff, tabl
 	// Удалённые индексы
 	for _, idxName := range diff.DroppedIndexes {
 		migration.Up = append(migration.Up, fmt.Sprintf("DROP INDEX IF EXISTS %s", idxName))
-		migration.Down = append(migration.Down, fmt.Sprintf("-- TODO: Restore index %s", idxName))
+		migration.Down = append(migration.Down, fmt.Sprintf("-- FIXME: Restore index %s (see docs/roadmap.md)", idxName))
 		descriptions = append(descriptions, fmt.Sprintf("drop index %s", idxName))
 	}
 

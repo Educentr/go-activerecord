@@ -195,12 +195,12 @@ type Migration struct {
 | Изменение | Up | Down |
 |-----------|-----|------|
 | Добавление колонки | ADD COLUMN | DROP COLUMN |
-| Удаление колонки | DROP COLUMN | -- TODO |
+| Удаление колонки | DROP COLUMN | -- комментарий (см. [roadmap](../roadmap.md)) |
 | Изменение типа | ALTER TYPE | ALTER TYPE |
 | Изменение NOT NULL | SET/DROP NOT NULL | DROP/SET NOT NULL |
 | Изменение DEFAULT | SET/DROP DEFAULT | SET/DROP DEFAULT |
 | Добавление индекса | CREATE INDEX | DROP INDEX |
-| Удаление индекса | DROP INDEX | -- TODO |
+| Удаление индекса | DROP INDEX | -- комментарий (см. [roadmap](../roadmap.md)) |
 
 ## Ограничения
 

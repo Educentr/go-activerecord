@@ -340,7 +340,7 @@ func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][
 	// }
 	// confess 'Wrong order for response count' if $opts{order} && !$opts{condition} && $request->{limit} && $request->{limit} == $response_count;
 
-	// $pg_request->{use_replica} = delete $opts{use_replica} if exists $opts{use_replica}; #TODO up replica flag on object
+	// See docs/roadmap.md — "Replica flag (Perl legacy)"
 	// my ($response_count, $response) = $db_class->selectall_arrayref($db, $pg_request);
 
 	// my $result = $class->$select_response($response, %resp_opts);

@@ -66,9 +66,7 @@ func (o *BaseConnectionOptions) UpdateHash(data ...interface{}) error {
 	return nil
 }
 
-// TODO при долгом неиспользовании какого то пула надо закрывать его. Это для случаев когда в конфиге поменялась конфигурация
-// надо зачищать старые пулы, что бы освободить конекты.
-// если будут колбеки о том, что сменилась конфигурация то можно подчищать по этим колбекам.
+// See docs/roadmap.md — "Закрытие неиспользуемых пулов"
 func (cp *connectionPool) add(shard ShardInstance, connector func(interface{}) (ConnectionInterface, error)) (ConnectionInterface, error) {
 	if _, ex := cp.container[shard.ParamsID]; ex {
 		return nil, fmt.Errorf("attempt to add duplicate connID: %s", shard.ParamsID)
@@ -129,9 +127,7 @@ func (cp *connectionPool) CloseConnection(ctx context.Context) {
 	cp.lock.Unlock()
 }
 
-// TODO
-// - сделать статистику по используемым инстансам
-// - прикрутить локальный пингер и исключать недоступные инстансы
+// See docs/roadmap.md — "Статистика инстансов", "Локальный пингер"
 func GetConnection(
 	ctx context.Context,
 	configPath string,
