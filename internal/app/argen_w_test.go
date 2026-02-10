@@ -2,15 +2,18 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/backend/octopus"
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	"github.com/Educentr/go-activerecord/v3/internal/pkg/schema"
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/testutil"
 	"gotest.tools/assert"
 	"gotest.tools/assert/cmp"
@@ -758,5 +761,589 @@ type TriggersFoo struct {
 				assert.Check(t, cmp.DeepEqual(tt.want[key], pkg), "Invalid response, test `%s`", key)
 			}
 		})
+	}
+}
+
+func TestArGen_generateSchemaArtifacts_DroppedTable(t *testing.T) {
+	tempDirs := testutil.InitTmps()
+	defer tempDirs.Defer()
+
+	src, dst, err := tempDirs.CreateDirs(testutil.EmptyDstDir)
+	if err != nil {
+		t.Fatalf("CreateDirs error: %v", err)
+	}
+
+	schemaDir, err := tempDirs.AddTempDir()
+	if err != nil {
+		t.Fatalf("AddTempDir error: %v", err)
+	}
+
+	argen, err := Init(context.Background(), &testutil.TestAppInfo, src, dst, "", "github.com/Educentr/go-activerecord", Options{
+		SchemaPath: schemaDir,
+	})
+	if err != nil {
+		t.Fatalf("Init error: %v", err)
+	}
+
+	// Подготавливаем "старую" схему с двумя таблицами (users и products)
+	oldSchema := &schema.Schema{
+		Version: "1.0",
+		Backend: "postgres",
+		Tables: map[string]schema.Table{
+			"users": {
+				Name:    "users",
+				Backend: "postgres",
+				Columns: []schema.Column{
+					{Name: "id", Type: "BIGINT", GoType: "int64", PrimaryKey: true, NotNull: true, Default: "0", Position: 0},
+					{Name: "email", Type: "VARCHAR(255)", GoType: "string", NotNull: true, Default: "''", Size: 255, Position: 1},
+				},
+				Indexes: []schema.Index{
+					{Name: "pk", Columns: []string{"id"}, Primary: true, Unique: true},
+				},
+				PrimaryKey: []string{"id"},
+			},
+			"products": {
+				Name:    "products",
+				Backend: "postgres",
+				Columns: []schema.Column{
+					{Name: "id", Type: "BIGINT", GoType: "int64", PrimaryKey: true, NotNull: true, Default: "0", Position: 0},
+					{Name: "name", Type: "VARCHAR(100)", GoType: "string", NotNull: true, Default: "''", Size: 100, Position: 1},
+				},
+				Indexes: []schema.Index{
+					{Name: "pk", Columns: []string{"id"}, Primary: true, Unique: true},
+				},
+				PrimaryKey: []string{"id"},
+			},
+		},
+	}
+
+	// Записываем старую схему в schema.json
+	pgSchemaDir := filepath.Join(schemaDir, "postgres", "testconf")
+	if err := os.MkdirAll(pgSchemaDir, 0755); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+
+	schemaJSON, err := json.MarshalIndent(oldSchema, "", "  ")
+	if err != nil {
+		t.Fatalf("MarshalIndent error: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(pgSchemaDir, "schema.json"), schemaJSON, 0644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	// Устанавливаем packagesParsed с одной postgres-таблицей (users) — products "удалена"
+	rpUsers := ds.NewRecordPackage()
+	rpUsers.Backends = []ds.Backend{"postgres"}
+	rpUsers.ServerConfKey = "testconf"
+	rpUsers.Namespace = ds.NamespaceDeclaration{
+		ObjectName:  "users",
+		PackageName: "users",
+		PublicName:  "Users",
+	}
+
+	if err := rpUsers.AddField(ds.FieldDeclaration{
+		Name:       "Id",
+		Format:     "int64",
+		PrimaryKey: true,
+		Mutators:   []string{},
+		Serializer: []string{},
+	}); err != nil {
+		t.Fatalf("AddField error: %v", err)
+	}
+
+	if err := rpUsers.AddField(ds.FieldDeclaration{
+		Name:       "Email",
+		Format:     "string",
+		Size:       255,
+		Mutators:   []string{},
+		Serializer: []string{},
+	}); err != nil {
+		t.Fatalf("AddField error: %v", err)
+	}
+
+	rpUsers.Indexes = []ds.IndexDeclaration{
+		{
+			Name:      "PK",
+			Fields:    []int{0},
+			FieldsMap: map[string]ds.IndexField{"Id": {IndField: 0}},
+			Primary:   true,
+			Unique:    true,
+		},
+	}
+
+	argen.packagesParsed = map[string]*ds.RecordPackage{
+		"users": rpUsers,
+	}
+
+	// Вызываем generateSchemaArtifacts
+	if err := argen.generateSchemaArtifacts(); err != nil {
+		t.Fatalf("generateSchemaArtifacts error: %v", err)
+	}
+
+	// Проверяем: миграция создана
+	migrationsDir := filepath.Join(pgSchemaDir, "migrations")
+
+	entries, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		t.Fatalf("ReadDir migrations error: %v", err)
+	}
+
+	if len(entries) == 0 {
+		t.Fatal("expected migration file to be created, but migrations dir is empty")
+	}
+
+	// Читаем содержимое миграции
+	migrationContent, err := os.ReadFile(filepath.Join(migrationsDir, entries[0].Name()))
+	if err != nil {
+		t.Fatalf("ReadFile migration error: %v", err)
+	}
+
+	migrationStr := string(migrationContent)
+
+	// Up должен содержать RENAME TO dropped_products
+	if !strings.Contains(migrationStr, "ALTER TABLE products RENAME TO dropped_products") {
+		t.Errorf("migration Up should contain 'ALTER TABLE products RENAME TO dropped_products', got:\n%s", migrationStr)
+	}
+
+	// Down должен содержать обратный RENAME
+	if !strings.Contains(migrationStr, "ALTER TABLE dropped_products RENAME TO products") {
+		t.Errorf("migration Down should contain 'ALTER TABLE dropped_products RENAME TO products', got:\n%s", migrationStr)
+	}
+
+	// Description должен содержать "drop table products"
+	if !strings.Contains(migrationStr, "drop table products") {
+		t.Errorf("migration should contain 'drop table products' in description, got:\n%s", migrationStr)
+	}
+
+	// schema.sql НЕ должен содержать таблицу products
+	schemaSQLContent, err := os.ReadFile(filepath.Join(pgSchemaDir, "schema.sql"))
+	if err != nil {
+		t.Fatalf("ReadFile schema.sql error: %v", err)
+	}
+
+	if strings.Contains(string(schemaSQLContent), "products") {
+		t.Errorf("schema.sql should not contain 'products', got:\n%s", string(schemaSQLContent))
+	}
+
+	// schema.json НЕ должен содержать таблицу products
+	newSchemaJSON, err := os.ReadFile(filepath.Join(pgSchemaDir, "schema.json"))
+	if err != nil {
+		t.Fatalf("ReadFile schema.json error: %v", err)
+	}
+
+	var newSchema schema.Schema
+	if err := json.Unmarshal(newSchemaJSON, &newSchema); err != nil {
+		t.Fatalf("Unmarshal schema.json error: %v", err)
+	}
+
+	if _, exists := newSchema.Tables["products"]; exists {
+		t.Error("schema.json should not contain 'products' table")
+	}
+
+	if _, exists := newSchema.Tables["users"]; !exists {
+		t.Error("schema.json should contain 'users' table")
+	}
+}
+
+func TestArGen_generateSchemaArtifacts_SkipMigration(t *testing.T) {
+	tempDirs := testutil.InitTmps()
+	defer tempDirs.Defer()
+
+	src, dst, err := tempDirs.CreateDirs(testutil.EmptyDstDir)
+	if err != nil {
+		t.Fatalf("CreateDirs error: %v", err)
+	}
+
+	schemaDir, err := tempDirs.AddTempDir()
+	if err != nil {
+		t.Fatalf("AddTempDir error: %v", err)
+	}
+
+	argen, err := Init(context.Background(), &testutil.TestAppInfo, src, dst, "", "github.com/Educentr/go-activerecord", Options{
+		SchemaPath:    schemaDir,
+		SkipMigration: true,
+	})
+	if err != nil {
+		t.Fatalf("Init error: %v", err)
+	}
+
+	oldSchema := &schema.Schema{
+		Version: "1.0",
+		Backend: "postgres",
+		Tables: map[string]schema.Table{
+			"users":    {Name: "users", Backend: "postgres", Columns: []schema.Column{{Name: "id", Type: "BIGINT", GoType: "int64", NotNull: true, Default: "0"}}},
+			"products": {Name: "products", Backend: "postgres", Columns: []schema.Column{{Name: "id", Type: "BIGINT", GoType: "int64", NotNull: true, Default: "0"}}},
+		},
+	}
+
+	pgSchemaDir := filepath.Join(schemaDir, "postgres", "testconf")
+
+	if err := os.MkdirAll(pgSchemaDir, 0755); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+
+	schemaJSON, errJSON := json.MarshalIndent(oldSchema, "", "  ")
+	if errJSON != nil {
+		t.Fatalf("MarshalIndent error: %v", errJSON)
+	}
+
+	if err := os.WriteFile(filepath.Join(pgSchemaDir, "schema.json"), schemaJSON, 0644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	rpUsers := ds.NewRecordPackage()
+	rpUsers.Backends = []ds.Backend{"postgres"}
+	rpUsers.ServerConfKey = "testconf"
+	rpUsers.Namespace = ds.NamespaceDeclaration{ObjectName: "users", PackageName: "users", PublicName: "Users"}
+
+	if err := rpUsers.AddField(ds.FieldDeclaration{Name: "Id", Format: "int64", PrimaryKey: true, Mutators: []string{}, Serializer: []string{}}); err != nil {
+		t.Fatalf("AddField error: %v", err)
+	}
+
+	rpUsers.Indexes = []ds.IndexDeclaration{{
+		Name: "PK", Fields: []int{0}, FieldsMap: map[string]ds.IndexField{"Id": {IndField: 0}}, Primary: true, Unique: true,
+	}}
+
+	argen.packagesParsed = map[string]*ds.RecordPackage{"users": rpUsers}
+
+	if err := argen.generateSchemaArtifacts(); err != nil {
+		t.Fatalf("generateSchemaArtifacts error: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(pgSchemaDir, "schema.sql")); err != nil {
+		t.Error("schema.sql should be created")
+	}
+
+	if _, err := os.Stat(filepath.Join(pgSchemaDir, "schema.json")); err != nil {
+		t.Error("schema.json should be created")
+	}
+
+	migrDir := filepath.Join(pgSchemaDir, "migrations")
+	if _, err := os.Stat(migrDir); !os.IsNotExist(err) {
+		t.Error("migrations/ directory should NOT exist when SkipMigration is true")
+	}
+}
+
+func TestArGen_generateSchemaArtifacts_FirstRun(t *testing.T) {
+	tempDirs := testutil.InitTmps()
+	defer tempDirs.Defer()
+
+	src, dst, err := tempDirs.CreateDirs(testutil.EmptyDstDir)
+	if err != nil {
+		t.Fatalf("CreateDirs error: %v", err)
+	}
+
+	schemaDir, err := tempDirs.AddTempDir()
+	if err != nil {
+		t.Fatalf("AddTempDir error: %v", err)
+	}
+
+	argen, err := Init(context.Background(), &testutil.TestAppInfo, src, dst, "", "github.com/Educentr/go-activerecord", Options{
+		SchemaPath: schemaDir,
+	})
+	if err != nil {
+		t.Fatalf("Init error: %v", err)
+	}
+
+	rpUsers := ds.NewRecordPackage()
+	rpUsers.Backends = []ds.Backend{"postgres"}
+	rpUsers.ServerConfKey = "mydb"
+	rpUsers.Namespace = ds.NamespaceDeclaration{ObjectName: "users", PackageName: "users", PublicName: "Users"}
+
+	if err := rpUsers.AddField(ds.FieldDeclaration{Name: "Id", Format: "int64", PrimaryKey: true, Mutators: []string{}, Serializer: []string{}}); err != nil {
+		t.Fatalf("AddField error: %v", err)
+	}
+
+	rpUsers.Indexes = []ds.IndexDeclaration{{
+		Name: "PK", Fields: []int{0}, FieldsMap: map[string]ds.IndexField{"Id": {IndField: 0}}, Primary: true, Unique: true,
+	}}
+
+	argen.packagesParsed = map[string]*ds.RecordPackage{"users": rpUsers}
+
+	if err := argen.generateSchemaArtifacts(); err != nil {
+		t.Fatalf("generateSchemaArtifacts error: %v", err)
+	}
+
+	pgSchemaDir := filepath.Join(schemaDir, "postgres", "mydb")
+
+	if _, err := os.Stat(filepath.Join(pgSchemaDir, "schema.sql")); err != nil {
+		t.Error("schema.sql should be created on first run")
+	}
+
+	if _, err := os.Stat(filepath.Join(pgSchemaDir, "schema.json")); err != nil {
+		t.Error("schema.json should be created on first run")
+	}
+
+	migrDir := filepath.Join(pgSchemaDir, "migrations")
+	if _, err := os.Stat(migrDir); !os.IsNotExist(err) {
+		t.Error("migrations/ directory should NOT exist on first run")
+	}
+}
+
+func TestArGen_generateSchemaArtifacts_CorruptedSchemaJSON(t *testing.T) {
+	tempDirs := testutil.InitTmps()
+	defer tempDirs.Defer()
+
+	src, dst, err := tempDirs.CreateDirs(testutil.EmptyDstDir)
+	if err != nil {
+		t.Fatalf("CreateDirs error: %v", err)
+	}
+
+	schemaDir, err := tempDirs.AddTempDir()
+	if err != nil {
+		t.Fatalf("AddTempDir error: %v", err)
+	}
+
+	argen, err := Init(context.Background(), &testutil.TestAppInfo, src, dst, "", "github.com/Educentr/go-activerecord", Options{
+		SchemaPath: schemaDir,
+	})
+	if err != nil {
+		t.Fatalf("Init error: %v", err)
+	}
+
+	pgSchemaDir := filepath.Join(schemaDir, "postgres", "corruptdb")
+
+	if err := os.MkdirAll(pgSchemaDir, 0755); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(pgSchemaDir, "schema.json"), []byte("{invalid}"), 0644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	rpUsers := ds.NewRecordPackage()
+	rpUsers.Backends = []ds.Backend{"postgres"}
+	rpUsers.ServerConfKey = "corruptdb"
+	rpUsers.Namespace = ds.NamespaceDeclaration{ObjectName: "users", PackageName: "users", PublicName: "Users"}
+
+	if err := rpUsers.AddField(ds.FieldDeclaration{Name: "Id", Format: "int64", PrimaryKey: true, Mutators: []string{}, Serializer: []string{}}); err != nil {
+		t.Fatalf("AddField error: %v", err)
+	}
+
+	rpUsers.Indexes = []ds.IndexDeclaration{{
+		Name: "PK", Fields: []int{0}, FieldsMap: map[string]ds.IndexField{"Id": {IndField: 0}}, Primary: true, Unique: true,
+	}}
+
+	argen.packagesParsed = map[string]*ds.RecordPackage{"users": rpUsers}
+
+	err = argen.generateSchemaArtifacts()
+	if err == nil {
+		t.Fatal("expected error for corrupted schema.json")
+	}
+
+	if !strings.Contains(err.Error(), "load old schema") {
+		t.Errorf("error %q should contain 'load old schema'", err.Error())
+	}
+}
+
+func TestArGen_generateSchemaArtifacts_MultipleDroppedTables(t *testing.T) {
+	tempDirs := testutil.InitTmps()
+	defer tempDirs.Defer()
+
+	src, dst, err := tempDirs.CreateDirs(testutil.EmptyDstDir)
+	if err != nil {
+		t.Fatalf("CreateDirs error: %v", err)
+	}
+
+	schemaDir, err := tempDirs.AddTempDir()
+	if err != nil {
+		t.Fatalf("AddTempDir error: %v", err)
+	}
+
+	argen, err := Init(context.Background(), &testutil.TestAppInfo, src, dst, "", "github.com/Educentr/go-activerecord", Options{
+		SchemaPath: schemaDir,
+	})
+	if err != nil {
+		t.Fatalf("Init error: %v", err)
+	}
+
+	oldSchema := &schema.Schema{
+		Version: "1.0",
+		Backend: "postgres",
+		Tables: map[string]schema.Table{
+			"users":    {Name: "users", Backend: "postgres", Columns: []schema.Column{{Name: "id", Type: "BIGINT", GoType: "int64", NotNull: true, Default: "0"}}},
+			"products": {Name: "products", Backend: "postgres", Columns: []schema.Column{{Name: "id", Type: "BIGINT", GoType: "int64", NotNull: true, Default: "0"}}},
+			"sessions": {Name: "sessions", Backend: "postgres", Columns: []schema.Column{{Name: "id", Type: "BIGINT", GoType: "int64", NotNull: true, Default: "0"}}},
+		},
+	}
+
+	pgSchemaDir := filepath.Join(schemaDir, "postgres", "multidb")
+
+	if err := os.MkdirAll(pgSchemaDir, 0755); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+
+	schemaJSON, errJSON := json.MarshalIndent(oldSchema, "", "  ")
+	if errJSON != nil {
+		t.Fatalf("MarshalIndent error: %v", errJSON)
+	}
+
+	if err := os.WriteFile(filepath.Join(pgSchemaDir, "schema.json"), schemaJSON, 0644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	rpUsers := ds.NewRecordPackage()
+	rpUsers.Backends = []ds.Backend{"postgres"}
+	rpUsers.ServerConfKey = "multidb"
+	rpUsers.Namespace = ds.NamespaceDeclaration{ObjectName: "users", PackageName: "users", PublicName: "Users"}
+
+	if err := rpUsers.AddField(ds.FieldDeclaration{Name: "Id", Format: "int64", PrimaryKey: true, Mutators: []string{}, Serializer: []string{}}); err != nil {
+		t.Fatalf("AddField error: %v", err)
+	}
+
+	rpUsers.Indexes = []ds.IndexDeclaration{{
+		Name: "PK", Fields: []int{0}, FieldsMap: map[string]ds.IndexField{"Id": {IndField: 0}}, Primary: true, Unique: true,
+	}}
+
+	argen.packagesParsed = map[string]*ds.RecordPackage{"users": rpUsers}
+
+	if err := argen.generateSchemaArtifacts(); err != nil {
+		t.Fatalf("generateSchemaArtifacts error: %v", err)
+	}
+
+	migrationsDir := filepath.Join(pgSchemaDir, "migrations")
+
+	entries, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		t.Fatalf("ReadDir migrations error: %v", err)
+	}
+
+	if len(entries) == 0 {
+		t.Fatal("expected migration file")
+	}
+
+	content, err := os.ReadFile(filepath.Join(migrationsDir, entries[0].Name()))
+	if err != nil {
+		t.Fatalf("ReadFile error: %v", err)
+	}
+
+	migrationStr := string(content)
+
+	if !strings.Contains(migrationStr, "ALTER TABLE products RENAME TO dropped_products") {
+		t.Errorf("migration should contain RENAME for products, got:\n%s", migrationStr)
+	}
+
+	if !strings.Contains(migrationStr, "ALTER TABLE sessions RENAME TO dropped_sessions") {
+		t.Errorf("migration should contain RENAME for sessions, got:\n%s", migrationStr)
+	}
+}
+
+func TestArGen_generateSchemaArtifacts_MixedAddedAndDropped(t *testing.T) {
+	tempDirs := testutil.InitTmps()
+	defer tempDirs.Defer()
+
+	src, dst, err := tempDirs.CreateDirs(testutil.EmptyDstDir)
+	if err != nil {
+		t.Fatalf("CreateDirs error: %v", err)
+	}
+
+	schemaDir, err := tempDirs.AddTempDir()
+	if err != nil {
+		t.Fatalf("AddTempDir error: %v", err)
+	}
+
+	argen, err := Init(context.Background(), &testutil.TestAppInfo, src, dst, "", "github.com/Educentr/go-activerecord", Options{
+		SchemaPath: schemaDir,
+	})
+	if err != nil {
+		t.Fatalf("Init error: %v", err)
+	}
+
+	oldSchema := &schema.Schema{
+		Version: "1.0",
+		Backend: "postgres",
+		Tables: map[string]schema.Table{
+			"users":    {Name: "users", Backend: "postgres", Columns: []schema.Column{{Name: "id", Type: "BIGINT", GoType: "int64", NotNull: true, Default: "0"}}},
+			"products": {Name: "products", Backend: "postgres", Columns: []schema.Column{{Name: "id", Type: "BIGINT", GoType: "int64", NotNull: true, Default: "0"}}},
+		},
+	}
+
+	pgSchemaDir := filepath.Join(schemaDir, "postgres", "mixdb")
+
+	if err := os.MkdirAll(pgSchemaDir, 0755); err != nil {
+		t.Fatalf("MkdirAll error: %v", err)
+	}
+
+	schemaJSON, errJSON := json.MarshalIndent(oldSchema, "", "  ")
+	if errJSON != nil {
+		t.Fatalf("MarshalIndent error: %v", errJSON)
+	}
+
+	if err := os.WriteFile(filepath.Join(pgSchemaDir, "schema.json"), schemaJSON, 0644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
+
+	rpUsers := ds.NewRecordPackage()
+	rpUsers.Backends = []ds.Backend{"postgres"}
+	rpUsers.ServerConfKey = "mixdb"
+	rpUsers.Namespace = ds.NamespaceDeclaration{ObjectName: "users", PackageName: "users", PublicName: "Users"}
+
+	if err := rpUsers.AddField(ds.FieldDeclaration{Name: "Id", Format: "int64", PrimaryKey: true, Mutators: []string{}, Serializer: []string{}}); err != nil {
+		t.Fatalf("AddField error: %v", err)
+	}
+
+	rpUsers.Indexes = []ds.IndexDeclaration{{
+		Name: "PK", Fields: []int{0}, FieldsMap: map[string]ds.IndexField{"Id": {IndField: 0}}, Primary: true, Unique: true,
+	}}
+
+	rpOrders := ds.NewRecordPackage()
+	rpOrders.Backends = []ds.Backend{"postgres"}
+	rpOrders.ServerConfKey = "mixdb"
+	rpOrders.Namespace = ds.NamespaceDeclaration{ObjectName: "orders", PackageName: "orders", PublicName: "Orders"}
+
+	if err := rpOrders.AddField(ds.FieldDeclaration{Name: "Id", Format: "int64", PrimaryKey: true, Mutators: []string{}, Serializer: []string{}}); err != nil {
+		t.Fatalf("AddField error: %v", err)
+	}
+
+	if err := rpOrders.AddField(ds.FieldDeclaration{Name: "Amount", Format: "int32", Mutators: []string{}, Serializer: []string{}}); err != nil {
+		t.Fatalf("AddField error: %v", err)
+	}
+
+	rpOrders.Indexes = []ds.IndexDeclaration{{
+		Name: "PK", Fields: []int{0}, FieldsMap: map[string]ds.IndexField{"Id": {IndField: 0}}, Primary: true, Unique: true,
+	}}
+
+	argen.packagesParsed = map[string]*ds.RecordPackage{
+		"users":  rpUsers,
+		"orders": rpOrders,
+	}
+
+	if err := argen.generateSchemaArtifacts(); err != nil {
+		t.Fatalf("generateSchemaArtifacts error: %v", err)
+	}
+
+	migrationsDir := filepath.Join(pgSchemaDir, "migrations")
+
+	entries, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		t.Fatalf("ReadDir migrations error: %v", err)
+	}
+
+	if len(entries) == 0 {
+		t.Fatal("expected migration file")
+	}
+
+	content, err := os.ReadFile(filepath.Join(migrationsDir, entries[0].Name()))
+	if err != nil {
+		t.Fatalf("ReadFile error: %v", err)
+	}
+
+	migrationStr := string(content)
+
+	if !strings.Contains(migrationStr, "ADD COLUMN") {
+		t.Errorf("migration should contain ADD COLUMN for orders table, got:\n%s", migrationStr)
+	}
+
+	if !strings.Contains(migrationStr, "ALTER TABLE products RENAME TO dropped_products") {
+		t.Errorf("migration should contain RENAME for products, got:\n%s", migrationStr)
+	}
+
+	if !strings.Contains(migrationStr, "drop table products") {
+		t.Errorf("migration should mention 'drop table products', got:\n%s", migrationStr)
+	}
+
+	if !strings.Contains(migrationStr, "add table orders") {
+		t.Errorf("migration should mention 'add table orders', got:\n%s", migrationStr)
 	}
 }

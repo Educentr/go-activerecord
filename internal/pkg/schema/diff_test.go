@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"sort"
 	"testing"
 )
 
@@ -264,5 +265,295 @@ func TestTableDiff_IsEmpty(t *testing.T) {
 
 	if notEmpty.IsEmpty() {
 		t.Error("expected non-empty table diff to return false for IsEmpty()")
+	}
+}
+
+func TestComputeColumnDiff(t *testing.T) {
+	base := Column{Name: "col", Type: "BIGINT", Size: 0, Default: "0", NotNull: true}
+
+	tests := []struct {
+		name           string
+		old, cur       Column
+		wantNil        bool
+		typeChanged    bool
+		sizeChanged    bool
+		defaultChanged bool
+		notNullChanged bool
+	}{
+		{
+			name:    "no changes",
+			old:     base,
+			cur:     base,
+			wantNil: true,
+		},
+		{
+			name:        "type changed",
+			old:         base,
+			cur:         Column{Name: "col", Type: "INTEGER", Size: 0, Default: "0", NotNull: true},
+			typeChanged: true,
+		},
+		{
+			name:        "size changed",
+			old:         Column{Name: "col", Type: "VARCHAR(100)", Size: 100, Default: "''", NotNull: true},
+			cur:         Column{Name: "col", Type: "VARCHAR(100)", Size: 255, Default: "''", NotNull: true},
+			sizeChanged: true,
+		},
+		{
+			name:           "default changed",
+			old:            base,
+			cur:            Column{Name: "col", Type: "BIGINT", Size: 0, Default: "42", NotNull: true},
+			defaultChanged: true,
+		},
+		{
+			name:           "not null changed",
+			old:            base,
+			cur:            Column{Name: "col", Type: "BIGINT", Size: 0, Default: "0", NotNull: false},
+			notNullChanged: true,
+		},
+		{
+			name:           "multiple changes",
+			old:            Column{Name: "col", Type: "VARCHAR(100)", Size: 100, Default: "''", NotNull: true},
+			cur:            Column{Name: "col", Type: "TEXT", Size: 0, Default: "", NotNull: true},
+			typeChanged:    true,
+			sizeChanged:    true,
+			defaultChanged: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diff := computeColumnDiff(tt.old, tt.cur)
+			if tt.wantNil {
+				if diff != nil {
+					t.Errorf("expected nil diff, got %+v", diff)
+				}
+
+				return
+			}
+
+			if diff == nil {
+				t.Fatal("expected non-nil diff")
+			}
+
+			if diff.TypeChanged != tt.typeChanged {
+				t.Errorf("TypeChanged = %v, want %v", diff.TypeChanged, tt.typeChanged)
+			}
+
+			if diff.SizeChanged != tt.sizeChanged {
+				t.Errorf("SizeChanged = %v, want %v", diff.SizeChanged, tt.sizeChanged)
+			}
+
+			if diff.DefaultChanged != tt.defaultChanged {
+				t.Errorf("DefaultChanged = %v, want %v", diff.DefaultChanged, tt.defaultChanged)
+			}
+
+			if diff.NotNullChanged != tt.notNullChanged {
+				t.Errorf("NotNullChanged = %v, want %v", diff.NotNullChanged, tt.notNullChanged)
+			}
+		})
+	}
+}
+
+func TestComputeIndexDiff(t *testing.T) {
+	base := Index{Name: "idx", Columns: []string{"a", "b"}, Order: map[string]string{"a": "ASC", "b": "ASC"}, Unique: false, Condition: ""}
+
+	tests := []struct {
+		name             string
+		old, cur         Index
+		wantNil          bool
+		columnsChanged   bool
+		uniqueChanged    bool
+		conditionChanged bool
+	}{
+		{
+			name:    "no changes",
+			old:     base,
+			cur:     Index{Name: "idx", Columns: []string{"a", "b"}, Order: map[string]string{"a": "ASC", "b": "ASC"}, Unique: false},
+			wantNil: true,
+		},
+		{
+			name:           "columns changed",
+			old:            base,
+			cur:            Index{Name: "idx", Columns: []string{"a", "c"}, Order: map[string]string{"a": "ASC", "c": "ASC"}},
+			columnsChanged: true,
+		},
+		{
+			name:           "order changed same columns different directions",
+			old:            base,
+			cur:            Index{Name: "idx", Columns: []string{"a", "b"}, Order: map[string]string{"a": "ASC", "b": "DESC"}},
+			columnsChanged: true, // Order change is detected via ColumnsChanged
+		},
+		{
+			name:          "unique changed",
+			old:           base,
+			cur:           Index{Name: "idx", Columns: []string{"a", "b"}, Order: map[string]string{"a": "ASC", "b": "ASC"}, Unique: true},
+			uniqueChanged: true,
+		},
+		{
+			name:             "condition changed",
+			old:              base,
+			cur:              Index{Name: "idx", Columns: []string{"a", "b"}, Order: map[string]string{"a": "ASC", "b": "ASC"}, Condition: "status = 'active'"},
+			conditionChanged: true,
+		},
+		{
+			name: "multiple changes",
+			old:  base,
+			cur: Index{
+				Name: "idx", Columns: []string{"a"}, Order: map[string]string{"a": "DESC"},
+				Unique: true, Condition: "active = true",
+			},
+			columnsChanged:   true,
+			uniqueChanged:    true,
+			conditionChanged: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diff := computeIndexDiff(tt.old, tt.cur)
+			if tt.wantNil {
+				if diff != nil {
+					t.Errorf("expected nil diff, got %+v", diff)
+				}
+
+				return
+			}
+
+			if diff == nil {
+				t.Fatal("expected non-nil diff")
+			}
+
+			if diff.ColumnsChanged != tt.columnsChanged {
+				t.Errorf("ColumnsChanged = %v, want %v", diff.ColumnsChanged, tt.columnsChanged)
+			}
+
+			if diff.UniqueChanged != tt.uniqueChanged {
+				t.Errorf("UniqueChanged = %v, want %v", diff.UniqueChanged, tt.uniqueChanged)
+			}
+
+			if diff.ConditionChanged != tt.conditionChanged {
+				t.Errorf("ConditionChanged = %v, want %v", diff.ConditionChanged, tt.conditionChanged)
+			}
+		})
+	}
+}
+
+func TestComputeDiff_IdenticalSchemas(t *testing.T) {
+	s := &Schema{
+		Tables: map[string]Table{
+			"users": {
+				Name:    "users",
+				Columns: []Column{{Name: "id", Type: "BIGINT"}},
+				Indexes: []Index{{Name: "pk", Columns: []string{"id"}, Order: map[string]string{"id": "ASC"}, Primary: true}},
+			},
+		},
+	}
+
+	diff := ComputeDiff(s, s)
+	if !diff.IsEmpty() {
+		t.Errorf("expected empty diff for identical schemas, got added=%v dropped=%v modified=%v",
+			diff.AddedTables, diff.DroppedTables, diff.ModifiedTables)
+	}
+}
+
+func TestComputeDiff_MixedChanges(t *testing.T) {
+	oldSchema := &Schema{
+		Tables: map[string]Table{
+			"users":    {Name: "users", Columns: []Column{{Name: "id", Type: "BIGINT"}}},
+			"products": {Name: "products", Columns: []Column{{Name: "id", Type: "BIGINT"}}},
+			"sessions": {Name: "sessions", Columns: []Column{{Name: "id", Type: "BIGINT"}}},
+		},
+	}
+
+	curSchema := &Schema{
+		Tables: map[string]Table{
+			"users":  {Name: "users", Columns: []Column{{Name: "id", Type: "BIGINT"}, {Name: "email", Type: "VARCHAR(255)"}}},
+			"orders": {Name: "orders", Columns: []Column{{Name: "id", Type: "BIGINT"}}},
+		},
+	}
+
+	diff := ComputeDiff(oldSchema, curSchema)
+
+	if len(diff.AddedTables) != 1 || diff.AddedTables[0] != "orders" {
+		t.Errorf("AddedTables = %v, want [orders]", diff.AddedTables)
+	}
+
+	sort.Strings(diff.DroppedTables)
+
+	if len(diff.DroppedTables) != 2 {
+		t.Fatalf("DroppedTables len = %d, want 2", len(diff.DroppedTables))
+	}
+
+	if diff.DroppedTables[0] != "products" || diff.DroppedTables[1] != "sessions" {
+		t.Errorf("DroppedTables = %v, want [products, sessions]", diff.DroppedTables)
+	}
+
+	if _, ok := diff.ModifiedTables["users"]; !ok {
+		t.Error("expected 'users' in ModifiedTables")
+	}
+}
+
+func TestComputeDiff_EmptyNewSchema(t *testing.T) {
+	oldSchema := &Schema{
+		Tables: map[string]Table{
+			"users":    {Name: "users"},
+			"products": {Name: "products"},
+		},
+	}
+
+	curSchema := &Schema{
+		Tables: map[string]Table{},
+	}
+
+	diff := ComputeDiff(oldSchema, curSchema)
+
+	sort.Strings(diff.DroppedTables)
+
+	if len(diff.DroppedTables) != 2 {
+		t.Fatalf("DroppedTables len = %d, want 2", len(diff.DroppedTables))
+	}
+
+	if diff.DroppedTables[0] != "products" || diff.DroppedTables[1] != "users" {
+		t.Errorf("DroppedTables = %v, want [products, users]", diff.DroppedTables)
+	}
+
+	if len(diff.AddedTables) != 0 {
+		t.Errorf("AddedTables = %v, want empty", diff.AddedTables)
+	}
+}
+
+func TestComputeDiff_ModifiedIndex(t *testing.T) {
+	oldSchema := &Schema{
+		Tables: map[string]Table{
+			"users": {
+				Name:    "users",
+				Indexes: []Index{{Name: "idx_email", Columns: []string{"email"}, Order: map[string]string{"email": "ASC"}, Unique: false}},
+			},
+		},
+	}
+
+	curSchema := &Schema{
+		Tables: map[string]Table{
+			"users": {
+				Name:    "users",
+				Indexes: []Index{{Name: "idx_email", Columns: []string{"email"}, Order: map[string]string{"email": "ASC"}, Unique: true}},
+			},
+		},
+	}
+
+	diff := ComputeDiff(oldSchema, curSchema)
+
+	tableDiff, ok := diff.ModifiedTables["users"]
+	if !ok {
+		t.Fatal("expected 'users' in ModifiedTables")
+	}
+
+	idxDiff, ok := tableDiff.ModifiedIndexes["idx_email"]
+	if !ok {
+		t.Fatal("expected 'idx_email' in ModifiedIndexes")
+	}
+
+	if !idxDiff.UniqueChanged {
+		t.Error("expected UniqueChanged to be true")
 	}
 }
