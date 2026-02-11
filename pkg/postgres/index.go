@@ -81,6 +81,67 @@ func (i Index) OrderConditions() string {
 	return " ORDER BY " + strings.Join(orderFields, ", ")
 }
 
+func (i Index) OrderConditionsWithDir(dir Order) string {
+	orderFields := []string{}
+
+	for _, f := range i.Fields {
+		order := f.Order
+		if dir == DESC {
+			// reverse: ASC→DESC, DESC→ASC
+			if order == ASC {
+				order = DESC
+			} else {
+				order = ASC
+			}
+		}
+
+		str := f.Field
+
+		switch order {
+		case ASC:
+			str += " ASC"
+		case DESC:
+			str += " DESC"
+		}
+
+		orderFields = append(orderFields, str)
+	}
+
+	return " ORDER BY " + strings.Join(orderFields, ", ")
+}
+
+func (i Index) CursorConditionsWithOrder(c CursorPosition, paramsOffset int, order Order) (string, []any) {
+	str := ""
+	params := []any{}
+
+	if len(c.Values) == 0 {
+		return str, params
+	}
+
+	op := ">"
+	if order == DESC {
+		op = "<"
+	}
+
+	if i.MultiField() {
+		str += " AND ( " + strings.Join(i.Fields.GetFieldNames(), ", ") + ") " + op + " ("
+
+		placeholder := make([]string, 0, len(c.Values))
+
+		for _, b := range c.Values {
+			params = append(params, b)
+			placeholder = append(placeholder, fmt.Sprintf("$%d", len(params)+paramsOffset)) //nolint:goconst
+		}
+
+		str += strings.Join(placeholder, ", ") + ")"
+	} else {
+		params = append(params, c.Values[0])
+		str += fmt.Sprintf(" AND %s %s $%d", i.Fields[0].Field, op, len(params)+paramsOffset)
+	}
+
+	return str, params
+}
+
 func (i Index) CursorConditions(c CursorPosition, paramsOffset int) (string, []any) {
 	str := ""
 	params := []any{}

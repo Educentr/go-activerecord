@@ -287,6 +287,24 @@ func GenerateSelectAll(tableName string, fieldNames []string, index Index, limit
 	return q, nil
 }
 
+func GenerateSelectAllOrdered(tableName string, fieldNames []string, index Index, limit uint32, cursor CursorPosition, order Order) (*Query, error) {
+	q := &Query{
+		QueryString: fmt.Sprintf("SELECT %s FROM %s WHERE true", strings.Join(fieldNames, ", "), QuoteIdentifier(tableName)),
+		Params:      []any{},
+	}
+
+	if limit > uint32(MaxLimit) {
+		return nil, fmt.Errorf("limit %d is more than max limit %d", limit, MaxLimit) //nolint:err113
+	}
+
+	q.AddWhereCondition(index.CursorConditionsWithOrder(cursor, len(q.Params), order))
+	q.AddQuery(index.OrderConditionsWithDir(order))
+
+	q.AddLimitOffset(limit, 0)
+
+	return q, nil
+}
+
 func GenerateSelect(tableName string, fieldNames []string, index Index, keys [][]any, offset, limit uint32, cursor CursorPosition) (*Query, error) {
 	if err := index.validateKeys(keys); err != nil {
 		return nil, err

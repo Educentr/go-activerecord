@@ -135,8 +135,23 @@ limiter := activerecord.NewLimiter(10000)
 items, err := dict.SelectAll(ctx, limiter)
 ```
 
+### SelectAllOrdered
+
+Выборка всех записей с указанием направления сортировки:
+
+```go
+// По убыванию (DESC)
+items, err := dict.SelectAllOrdered(ctx, 1000, postgres.CursorPosition{}, postgres.DESC)
+
+// По возрастанию (ASC) — аналогично SelectAll
+items, err := dict.SelectAllOrdered(ctx, 1000, postgres.CursorPosition{}, postgres.ASC)
+
+// Пагинация с курсором в обратном порядке
+items, err := dict.SelectAllOrdered(ctx, 100, postgres.CursorPosition{Values: []any{lastID}}, postgres.DESC)
+```
+
 !!! warning "Осторожно"
-    `SelectAll` может вернуть много данных. Максимальный лимит — 20000.
+    `SelectAll` и `SelectAllOrdered` могут вернуть много данных. Максимальный лимит — 20000.
 
 ## Обработка результатов
 

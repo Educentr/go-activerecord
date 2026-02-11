@@ -87,6 +87,33 @@ func SelectAll(ctx context.Context, limit uint32, cursor postgres.CursorPosition
 
 	return selectRawDB(ctx, query, activerecord.NewLimiter(uint32(limit)))
 }
+
+func SelectAllOrdered(ctx context.Context, limit uint32, cursor postgres.CursorPosition, order postgres.Order) ([]*{{ $PublicStructName }}, error) {
+	logger := activerecord.Logger()
+	ctx = logger.SetLoggerValueToContext(ctx, arlogger.ValueLogPrefix{"select_all_ordered": 1})
+	metricTimer := activerecord.Metric().Timer("postgres", "{{ $PublicStructName }}")
+	metricStatCnt := activerecord.Metric().StatCount("postgres", "{{ $PublicStructName }}")
+	metricErrCnt := activerecord.Metric().ErrorCount("postgres", "{{ $PublicStructName }}")
+
+	columnNames := []string{
+	{{- range $_, $fstruct := $fields }}
+		"{{ $fstruct.Name }}",
+	{{ end }}
+	}
+
+	query, err := postgres.GenerateSelectAllOrdered(tableName, columnNames, index{{ $ind.Name }}, limit, cursor, order)
+	if err != nil {
+		metricErrCnt.Inc(ctx, "select_gen", 1)
+		logger.Error(ctx, fmt.Sprintf("Error get all ordered from db '%s'", err))
+
+		return nil, err
+	}
+
+	metricTimer.Timing(ctx, "select_gen")
+	metricStatCnt.Inc(ctx, "select_all_ordered", 1)
+
+	return selectRawDB(ctx, query, activerecord.NewLimiter(uint32(limit)))
+}
 		{{ end }}
 
 
