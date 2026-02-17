@@ -147,7 +147,7 @@ func (s *Server) ListenAndServe(ctx context.Context, network, addr string) error
 // connections with default configured Server.
 func ListenAndServe(ctx context.Context, network, addr string, h Handler) error {
 	if h == nil {
-		h = DefaultServeMux
+		h = NewServeMux()
 	}
 
 	s := &Server{

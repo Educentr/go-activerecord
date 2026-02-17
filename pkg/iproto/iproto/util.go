@@ -88,18 +88,6 @@ func CopyChannelConfig(c *ChannelConfig) *ChannelConfig {
 	return &cp
 }
 
-// CopyPacketServerConfig returns deep copy of c.
-// If c is nil, it returns new PacketServerConfig.
-func CopyPacketServerConfig(c *PacketServerConfig) *PacketServerConfig {
-	if c == nil {
-		return &PacketServerConfig{}
-	}
-
-	cp := *c
-
-	return &cp
-}
-
 func isNoConnError(err error) bool {
 	return err == ErrStopped || err == io.EOF
 }

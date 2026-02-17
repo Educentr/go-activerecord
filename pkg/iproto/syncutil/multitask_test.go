@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Educentr/go-activerecord/v3/pkg/iproto/util/pool"
 	"golang.org/x/net/context"
 )
 
@@ -126,15 +125,19 @@ func BenchmarkMultitask(b *testing.B) {
 }
 
 func getPoolGoer(n int) func(context.Context, func()) error {
-	p, err := pool.New(&pool.Config{
-		UnstoppableWorkers: n,
-		MaxWorkers:         n,
-	})
-	if err != nil {
-		panic(err)
-	}
+	sem := make(chan struct{}, n)
 	return func(ctx context.Context, task func()) error {
-		return p.ScheduleContext(ctx, pool.TaskFunc(task))
+		select {
+		case sem <- struct{}{}:
+			go func() {
+				defer func() { <-sem }()
+				task()
+			}()
+
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 

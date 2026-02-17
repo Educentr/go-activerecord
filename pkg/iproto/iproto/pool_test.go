@@ -15,6 +15,14 @@ import (
 	"golang.org/x/net/context"
 )
 
+type addrconn struct {
+	net.Conn
+	local  net.Addr
+	remote net.Addr
+}
+
+type strAddr string
+
 // TestPoolShareChannel expects that just established channel will be shared
 // with Call() and other actors only when config.OnDial callback returns.
 func TestPoolShareChannel(t *testing.T) {
@@ -600,7 +608,9 @@ func runServer(t breaker, h Handler) (ln net.Listener, done chan struct{}) {
 	srv := &Server{
 		ChannelConfig: &ChannelConfig{
 			DisablePing: true,
-			Handler:     ParallelHandler(h, 128),
+			Handler: HandlerFunc(func(ctx context.Context, c Conn, pkt Packet) {
+				go h.ServeIProto(ctx, c, pkt)
+			}),
 		},
 	}
 	done = make(chan struct{})
@@ -632,12 +642,6 @@ func runEchoServer(t breaker, stop chan struct{}) (ln net.Listener, done chan st
 	}))
 }
 
-type addrconn struct {
-	net.Conn
-	local  net.Addr
-	remote net.Addr
-}
-
 func (a addrconn) RemoteAddr() net.Addr {
 	return a.remote
 }
@@ -645,6 +649,9 @@ func (a addrconn) RemoteAddr() net.Addr {
 func (a addrconn) LocalAddr() net.Addr {
 	return a.local
 }
+
+func (s strAddr) Network() string { return "tcp" }
+func (s strAddr) String() string  { return string(s) }
 
 func withAddr(c net.Conn, local, remote string) net.Conn {
 	return addrconn{c, strAddr(local), strAddr(remote)}

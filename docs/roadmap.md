@@ -96,11 +96,9 @@
 
 ## Runtime: iproto
 
-| Задача | Статус | Описание | Комментарий в коде |
-|--------|--------|----------|--------------------|
-| Размер буфера MultiWatcher | 🔴 | Подобрать более точный размер буфера каналов | `pkg/iproto/iproto/watch.go:181` |
-| Escape to heap в dgram | 🔴 | Оптимизировать аллокацию — peer утекает в heap | `pkg/iproto/iproto/dgram.go:324` |
-| Фикс pool_test linker error | 🔴 | Ошибка линкера `sync.(*WaitGroup).state` — тест `_TestPoolSchedule` отключён | `pkg/iproto/util/pool/pool_test.go:480` |
+| Задача | Статус | Описание |
+|--------|--------|----------|
+| Вынос в отдельный модуль | 🔴 | Выделить `pkg/iproto` в отдельный Go модуль |
 
 ---
 
@@ -167,6 +165,14 @@
 
 - 🟢 And/Or/Xor операции для PostgreSQL
 - 🟢 Документация Flags* структуры
+
+### Подготовка iproto к выносу
+
+- 🟢 Удалён мёртвый код: Cluster, MultiWatcher, PacketServer/UDP, config factories, worker pool (~4600 строк)
+- 🟢 Удалены пакеты: `iproto/config`, `util/pool`, `context/ctxlog`
+- 🟢 Удалены файлы: `cluster.go`, `watch.go`, `dgram.go`, monotonic time
+- 🟢 Очищены `handler.go`, `util.go` от мёртвых символов
+- 🟢 Инлайнен интерфейс `ctxlog.Context` в `pool.go`
 
 ---
 

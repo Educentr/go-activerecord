@@ -1,7 +1,6 @@
 package iproto
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -660,81 +659,6 @@ func TestChannelRunCallbackSerialization(t *testing.T) {
 			"expected first action to be inside Init() call (%v), and second OnClose() callback (%v); got %v, %v",
 			cbInit, cbClose, a, b,
 		)
-	}
-}
-
-func TestChannelUDP(t *testing.T) {
-	serv, err := net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer serv.Close()
-
-	recv := make(chan bytesWithAddr, 3)
-	go func() {
-		buf := make([]byte, 4096)
-
-		for {
-			n, addr, errRead := serv.ReadFrom(buf)
-			if errRead != nil {
-				return
-			}
-			t.Logf(
-				"server received %d bytes from %q: %v (err is %v)",
-				n, addr, buf[:n], errRead,
-			)
-			recv <- bytesWithAddr{
-				append(([]byte)(nil), buf[:n]...), addr,
-			}
-		}
-	}()
-
-	pool, err := Dial(bg, "udp", serv.LocalAddr().String(), &PoolConfig{
-		ChannelConfig: &ChannelConfig{
-			WriteBufferSize: 18, // 12 bytes for 1.5 empty packets; need to test packet split.
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-
-	ch, err := pool.NextChannel(bg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// First, send two packets for check split cases.
-	_ = ch.Notify(bg, 1, nil)
-	_ = ch.Notify(bg, 1, nil)
-	_ = ch.Notify(bg, 1, nil)
-
-	time.Sleep(time.Millisecond)
-	// Second, send some packet with payload.
-	_ = ch.Notify(bg, 42, []byte("ping"))
-
-	for {
-		select {
-		case ba := <-recv:
-			if act, exp := ba.addr.String(), ch.LocalAddr().String(); act != exp {
-				t.Fatalf("received from unexpected addr: %q; want %q", act, exp)
-			}
-			r := bytes.NewReader(ba.bytes)
-			for r.Len() > 0 {
-				p, err := ReadPacket(r)
-				if err != nil {
-					t.Fatalf("can not parse packet: %v", err)
-				}
-				if p.Header.Msg == 42 {
-					if act, exp := string(p.Data), "ping"; act != exp {
-						t.Fatalf("unexpected data: %q; want %q", act, exp)
-					}
-					return
-				}
-			}
-		case <-time.After(time.Second):
-			t.Fatalf("udp server did not receive any packet after 1s")
-		}
 	}
 }
 

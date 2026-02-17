@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Educentr/go-activerecord/v3/pkg/iproto/context/ctxlog"
 	"github.com/Educentr/go-activerecord/v3/pkg/iproto/netutil"
 	"github.com/Educentr/go-activerecord/v3/pkg/iproto/syncutil"
 	egoTime "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/time"
@@ -931,7 +930,9 @@ func setContextLogger(ctx context.Context, config *PoolConfig) *PoolConfig {
 }
 
 func contextLogger(ctx context.Context) (Logger, bool) {
-	c, ok := ctx.(ctxlog.Context)
+	type ctxlogContext interface{ LogPrefix() string }
+
+	c, ok := ctx.(ctxlogContext)
 	if !ok {
 		return nil, false
 	}

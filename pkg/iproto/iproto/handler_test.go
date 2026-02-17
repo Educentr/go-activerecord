@@ -6,7 +6,6 @@ import (
 
 	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto"
 	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto/internal/testutil"
-	"github.com/Educentr/go-activerecord/v3/pkg/iproto/util/pool"
 	"golang.org/x/net/context"
 )
 
@@ -31,17 +30,4 @@ func benchmarkHandler(b *testing.B, h iproto.Handler) {
 
 func BenchmarkHandlerPlain(b *testing.B) {
 	benchmarkHandler(b, iproto.HandlerFunc(handler))
-}
-
-func BenchmarkHandlerParallel(b *testing.B) {
-	benchmarkHandler(b, iproto.ParallelHandler(iproto.HandlerFunc(handler), 128))
-}
-
-func BenchmarkHandlerPool(b *testing.B) {
-	p := pool.Must(pool.New(&pool.Config{
-		UnstoppableWorkers: 128,
-		MaxWorkers:         128,
-		WorkQueueSize:      100,
-	}))
-	benchmarkHandler(b, iproto.PoolHandler(iproto.HandlerFunc(handler), p))
 }

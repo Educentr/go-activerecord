@@ -2,12 +2,9 @@ package iproto
 
 import (
 	"fmt"
-	"log"
 	"net"
-	"runtime"
 	"sync"
 
-	"github.com/Educentr/go-activerecord/v3/pkg/iproto/util/pool"
 	"golang.org/x/net/context"
 )
 
@@ -21,10 +18,6 @@ type Handler interface {
 type HandlerFunc func(context.Context, Conn, Packet)
 
 func (f HandlerFunc) ServeIProto(ctx context.Context, c Conn, p Packet) { f(ctx, c, p) }
-
-var DefaultServeMux = NewServeMux()
-
-func Handle(message uint32, handler Handler) { DefaultServeMux.Handle(message, handler) }
 
 // Sender represetns iproto packets sender in different forms.
 type Sender interface {
@@ -94,44 +87,3 @@ func (s *ServeMux) ServeIProto(ctx context.Context, c Conn, p Packet) {
 	s.Handler(p.Header.Msg).ServeIProto(ctx, c, p)
 }
 
-// RecoverHandler tries to make recover after handling packet.
-// If panic was occurred it logs its message and stack of panicked goroutine.
-// Note that this handler should be the last one in the chain of handler wrappers,
-// e.g.: PoolHandler(RecoverHandler(h)) or ParallelHandler(RecoverHandler(h)).
-func RecoverHandler(h Handler) Handler {
-	return HandlerFunc(func(ctx context.Context, c Conn, pkt Packet) {
-		defer func() {
-			if err := recover(); err != nil {
-				const size = 64 << 10
-				buf := make([]byte, size)
-				buf = buf[:runtime.Stack(buf, false)]
-				log.Printf("iproto: panic serving %v: %v\n%s", c.RemoteAddr().String(), err, buf)
-			}
-		}()
-
-		h.ServeIProto(ctx, c, pkt)
-	})
-}
-
-// PoolHandler returns Handler that schedules to handle packets by h in given pool p.
-func PoolHandler(h Handler, p *pool.Pool) Handler {
-	return HandlerFunc(func(ctx context.Context, c Conn, pkt Packet) {
-		_ = p.Schedule(pool.TaskFunc(func() {
-			h.ServeIProto(ctx, c, pkt)
-		}))
-	})
-}
-
-// ParallelHandler wraps handler and starts goroutine for each request on demand.
-// It runs maximum n goroutines in one time. After serving request goroutine is exits.
-func ParallelHandler(h Handler, n int) Handler {
-	sem := make(chan struct{}, n)
-
-	return HandlerFunc(func(ctx context.Context, c Conn, pkt Packet) {
-		sem <- struct{}{}
-		go func() {
-			h.ServeIProto(ctx, c, pkt)
-			<-sem
-		}()
-	})
-}
