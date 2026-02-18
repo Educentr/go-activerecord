@@ -213,10 +213,7 @@ func (a *ArGen) saveGenerateResult(name, dst string, genRes []generator.Generate
 		}
 
 		// Удаляем из лишних все директории сгенерированных пакетов
-		if _, ex := a.fileToRemove[dirPkg]; ex {
-			// log.Printf("Replace dir: %s", dirPkg)
-			delete(a.fileToRemove, dirPkg)
-		}
+		delete(a.fileToRemove, dirPkg)
 	}
 
 	return nil
@@ -444,6 +441,14 @@ func (a *ArGen) generateSchemaArtifacts() error {
 						allDown = append(allDown, migration.Down...)
 						descriptions = append(descriptions, migration.Description)
 					}
+				}
+
+				for _, tableName := range diff.DroppedTables {
+					renamedName := "dropped_" + tableName
+					renameSQL := "ALTER TABLE %s RENAME TO %s"
+					allUp = append(allUp, fmt.Sprintf(renameSQL, tableName, renamedName))
+					allDown = append(allDown, fmt.Sprintf(renameSQL, renamedName, tableName))
+					descriptions = append(descriptions, "drop table "+tableName)
 				}
 
 				if len(allUp) > 0 {
