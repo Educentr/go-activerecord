@@ -19,6 +19,7 @@ type FormatType struct {
 	packConvFunc   string
 	UnpackConvFunc string
 	unpackType     string
+	omitModeParam  bool
 	len            uint
 	lenFunc        func(uint32) uint32
 	tostr          string
@@ -30,6 +31,14 @@ func (p FormatType) PackConvFunc(fieldname string) string {
 	}
 
 	return fieldname
+}
+
+func (p FormatType) ModeCallSuffix() string {
+	if p.omitModeParam {
+		return ""
+	}
+
+	return ", iproto.ModeDefault"
 }
 
 func (p FormatType) UnpackFunc() string {
@@ -64,7 +73,7 @@ func (p FormatType) DefaultValue() string {
 	case strings.HasPrefix(p.Name, "Uint"):
 		return fname + "([]byte{}, 0, iproto.ModeDefault)"
 	case strings.HasPrefix(p.Name, "String"):
-		return fname + `([]byte{}, "", iproto.ModeDefault)`
+		return fname + `([]byte{}, ""` + p.ModeCallSuffix() + `)`
 	default:
 		return "can't detect type"
 	}

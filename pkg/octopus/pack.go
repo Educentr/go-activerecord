@@ -60,20 +60,6 @@ func PackedFieldLen(field []byte) uint32 {
 	return ByteLen(uint32(len(field)))
 }
 
-func PackFieldNums(w []byte, cnt uint32) []byte {
-	return iproto.PackUint32(w, cnt, iproto.ModeDefault)
-}
-
-func UnpackFieldNums(r *bytes.Reader) (uint32, error) {
-	var fieldsNum uint32
-
-	if err := iproto.UnpackUint32(r, &fieldsNum, iproto.ModeDefault); err != nil {
-		return 0, fmt.Errorf("can't unpack fieldsNum: %w", err)
-	}
-
-	return fieldsNum, nil
-}
-
 func PackedTuplesLen(keys [][][]byte) (length uint32) {
 	length = 4
 
@@ -168,7 +154,7 @@ func UnpackTuples(r *bytes.Reader) ([][][]byte, error) {
 }
 
 func PackTuple(w []byte, keys [][]byte) []byte {
-	w = PackFieldNums(w, uint32(len(keys)))
+	w = iproto.PackUint32(w, uint32(len(keys)), iproto.ModeDefault) //nolint:gosec
 
 	for _, k := range keys {
 		w = PackField(w, k)
@@ -180,9 +166,10 @@ func PackTuple(w []byte, keys [][]byte) []byte {
 func UnpackTuple(r *bytes.Reader) ([][]byte, error) {
 	ret := [][]byte{}
 
-	fieldsNum, err := UnpackFieldNums(r)
-	if err != nil {
-		return nil, fmt.Errorf("can't unpack fieldnum: %w", err)
+	var fieldsNum uint32
+
+	if err := iproto.UnpackUint32(r, &fieldsNum, iproto.ModeDefault); err != nil {
+		return nil, fmt.Errorf("can't unpack fieldsNum: %w", err)
 	}
 
 	for f := uint32(0); f < fieldsNum; f++ {
@@ -252,16 +239,6 @@ func UnpackRequestFlagsVal(r *bytes.Reader) (bool, InsertMode, error) {
 	}
 
 	return false, InsertMode(flags), nil //nolint:gosec
-}
-
-func PackDeleteFlagsVal(w []byte, ret bool) []byte {
-	var flags uint32
-
-	if ret {
-		flags = 1
-	}
-
-	return iproto.PackUint32(w, flags, iproto.ModeDefault)
 }
 
 func PackLimit(w []byte, limit uint32) []byte {
@@ -367,11 +344,11 @@ func PackResopnseStatus(statusCode RetCode, data [][][]byte) ([]byte, error) {
 	return resp, nil
 }
 
-func PackString(w []byte, field string, mode iproto.PackMode) []byte {
+func PackString(w []byte, field string) []byte {
 	return append(w, field...)
 }
 
-func UnpackString(r *bytes.Reader, res *string, mode iproto.PackMode) error {
+func UnpackString(r *bytes.Reader, res *string) error {
 	len := r.Len()
 	if len == 0 {
 		*res = ""

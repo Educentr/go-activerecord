@@ -128,7 +128,11 @@ var FloatFormatT = []FormatType{
 }
 
 var DataFormatT = []FormatType{
-	{TypeName: "string", Name: "String", tostr: " %% ", lenFunc: octopusPkg.ByteLen, packFunc: "octopus.PackString", unpackFunc: "octopus.UnpackString", minValue: "0", maxValue: "4096", unpackType: "string"},
+	{
+		TypeName: "string", Name: "String", tostr: " %% ", lenFunc: octopusPkg.ByteLen,
+		packFunc: "octopus.PackString", unpackFunc: "octopus.UnpackString", omitModeParam: true,
+		minValue: "0", maxValue: "4096", unpackType: "string",
+	},
 }
 
 var AllFormatT = append(append(append(

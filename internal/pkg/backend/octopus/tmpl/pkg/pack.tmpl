@@ -57,14 +57,14 @@ func pack{{ $fstruct.Name }}(w []byte, {{ $fstruct.Name }} {{ $rtype }}) ([]byte
 	pvar := {{ $bvar }}
 	{{- end }}
 
-	return {{ $packerparam.PackFunc }}(w, pvar, iproto.ModeDefault), nil
+	return {{ $packerparam.PackFunc }}(w, pvar{{ $packerparam.ModeCallSuffix }}), nil
 }
 
 func Unpack{{ $fstruct.Name }}(r *bytes.Reader) (ret {{ $rtype }}, errRet error) {
 	var {{ $fstruct.Name }} {{ if ne $packerparam.UnpackType "" }}{{ $packerparam.UnpackType }}{{ else }}{{ $fstruct.Format }}{{ end }}
 	{{ $isPointer := hasPrefix (printf "%s" $rtype) "*" }}
 
-	err := {{ $packerparam.UnpackFunc }}(r, &{{ $fstruct.Name }}, iproto.ModeDefault)
+	err := {{ $packerparam.UnpackFunc }}(r, &{{ $fstruct.Name }}{{ $packerparam.ModeCallSuffix }})
 	if err != nil {
 		errRet = fmt.Errorf("error unpack field {{ $fstruct.Name }} in tuple: '%w'", err)
 		return

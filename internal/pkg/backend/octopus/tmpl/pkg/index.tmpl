@@ -98,13 +98,13 @@ func PackKeyIndex{{ $ind.Name }}(ctx context.Context, keys []{{ $ind.Type }}) ([
 					{{ $packparam = "skey" }}
 				{{ end }}
 
-		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc $packparam }}, iproto.ModeDefault))
+		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc $packparam }}{{ $packerparam.ModeCallSuffix }}))
 			{{ end -}}
 		{{ else -}}
 			{{ $ifield := index $ind.Fields 0 -}}
 			{{ $sfield := index $fields $ifield -}}
 			{{ $packerparam := packerParam $sfield.Format -}}
-		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc "key" }}, iproto.ModeDefault))
+		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc "key" }}{{ $packerparam.ModeCallSuffix }}))
 		{{ end -}}
 		keysPacked = append(keysPacked, keysField)
 	}
@@ -163,13 +163,13 @@ func UnpackKeyIndex{{ $ind.Name }}(packedKeys [][][]byte) ([]{{ $ind.Type }}, er
 					{{ $packparam = "skey" }}
 				{{ end }}
 
-		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc $packparam }}, iproto.ModeDefault))
+		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc $packparam }}{{ $packerparam.ModeCallSuffix }}))
 			{{ end -}}
 		{{ else -}}
 			{{ $ifield := index $ind.Fields 0 -}}
 			{{ $sfield := index $fields $ifield -}}
 			{{ $packerparam := packerParam $sfield.Format -}}
-		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc "key" }}, iproto.ModeDefault))
+		keysField = append(keysField, {{ $packerparam.PackFunc }}([]byte{}, {{ $packerparam.PackConvFunc "key" }}{{ $packerparam.ModeCallSuffix }}))
 		{{ end -}}
 		keysPacked = append(keysPacked, keysField)
 	}

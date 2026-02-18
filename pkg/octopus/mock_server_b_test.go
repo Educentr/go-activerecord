@@ -6,19 +6,18 @@ import (
 	"testing"
 
 	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
-	"github.com/Educentr/go-iproto/iproto"
 )
 
 func TestMockServer_ProcessRequest(t *testing.T) {
 	logger := NewMockMockServerLogger(t)
 
-	pk := append([][]byte{}, PackString([]byte{}, "pk", iproto.ModeDefault))
+	pk := append([][]byte{}, PackString([]byte{}, "pk"))
 
 	var keysPacked [][][]byte
 
 	for _, key := range []string{"key1"} {
 		var keysField [][]byte
-		keysField = append(keysField, PackString([]byte{}, key, iproto.ModeDefault))
+		keysField = append(keysField, PackString([]byte{}, key))
 		keysPacked = append(keysPacked, keysField)
 	}
 
