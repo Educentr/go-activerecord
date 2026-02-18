@@ -278,6 +278,7 @@ go 1.19
 
 require (
 	github.com/Educentr/go-activerecord/v3 v3.0.2
+	github.com/Educentr/go-iproto v0.1.0
 )
 
 replace github.com/Educentr/go-activerecord/v3 => ` + srcPath

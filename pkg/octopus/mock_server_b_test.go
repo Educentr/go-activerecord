@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
-	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto"
+	"github.com/Educentr/go-iproto/iproto"
 )
 
 func TestMockServer_ProcessRequest(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto"
+	"github.com/Educentr/go-iproto/iproto"
 )
 
 type CheckUsesFixtureType uint8

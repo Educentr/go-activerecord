@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto"
+	"github.com/Educentr/go-iproto/iproto"
 )
 
 func ByteLen(length uint32) uint32 {

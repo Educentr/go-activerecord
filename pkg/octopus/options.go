@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Educentr/go-activerecord/v3/pkg/activerecord"
-	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto"
+	"github.com/Educentr/go-iproto/iproto"
 )
 
 // Константы определяющие дефолтное поведение конектора к octopus-у
