@@ -1,12 +1,11 @@
 package iproto
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"testing"
-
-	pbufio "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/bufio"
 )
 
 type loopBytesReader struct {
@@ -100,8 +99,8 @@ func BenchmarkStreamReader(b *testing.B) {
 			bench.alloc = DefaultAlloc
 		}
 
-		b.Run(fmt.Sprintf("pooled_buf%d_data%d%s", bench.size, bench.data, sufix), func(b *testing.B) {
-			buf := pbufio.AcquireReaderSize(getLoopPacketReader(bench.data), bench.size)
+		b.Run(fmt.Sprintf("buf%d_data%d%s", bench.size, bench.data, sufix), func(b *testing.B) {
+			buf := bufio.NewReaderSize(getLoopPacketReader(bench.data), bench.size)
 			br := StreamReader{
 				Source:    buf,
 				SizeLimit: 1 << 16,
@@ -115,9 +114,6 @@ func BenchmarkStreamReader(b *testing.B) {
 					b.Fatal(err)
 				}
 			}
-
-			b.StopTimer()
-			pbufio.ReleaseReader(buf, bench.size)
 		})
 	}
 }

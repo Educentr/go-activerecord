@@ -1,21 +1,18 @@
 package netutil
 
 import (
+	"context"
 	"errors"
 	"net"
 	"sync"
 	"time"
 
 	"github.com/Educentr/go-activerecord/v3/pkg/iproto/syncutil"
-	egotime "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/time"
-	"golang.org/x/net/context"
 )
 
 const DefaultLoopInterval = time.Millisecond * 50
 
-var (
-	ErrClosed = errors.New("dialer owner has been gone")
-)
+var ErrClosed = errors.New("dialer owner has been gone")
 
 // BackgroundDialer is a wrapper around Dialer that contains logic of gluing
 // and cancellation of dial requests.
@@ -99,11 +96,7 @@ func (d *BackgroundDialer) setDeadline(t time.Time) {
 		return
 	}
 
-	//nolint:gosimple
-	tm := t.Sub(time.Now())
-	if tm < 0 {
-		tm = 0
-	}
+	tm := max(time.Until(t), 0)
 
 	if d.timer == nil {
 		d.timer = time.AfterFunc(tm, d.Cancel)
@@ -149,8 +142,8 @@ type Dialer struct {
 	NetDial func(ctx context.Context, network, addr string) (net.Conn, error)
 
 	// Logf could be set to receive log messages from Dialer.
-	Logf   func(string, ...interface{})
-	Debugf func(string, ...interface{})
+	Logf   func(string, ...any)
+	Debugf func(string, ...any)
 
 	// DisableLogAddr removes addr part in log message prefix.
 	DisableLogAddr bool
@@ -176,11 +169,13 @@ func (d *Dialer) Dial(ctx context.Context) (conn net.Conn, err error) {
 		maxInterval = interval
 	}
 
-	loopTimer := egotime.AcquireTimer(interval)
-	defer egotime.ReleaseTimer(loopTimer)
+	loopTimer := time.NewTimer(interval)
+	defer loopTimer.Stop()
 
 	if tm := d.LoopTimeout; tm != 0 {
-		ctx, _ = context.WithTimeout(ctx, tm)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, tm)
+		defer cancel()
 	}
 
 	var attempts int
@@ -227,7 +222,9 @@ func (d *Dialer) Dial(ctx context.Context) (conn net.Conn, err error) {
 
 func (d *Dialer) dial(ctx context.Context) (conn net.Conn, err error) {
 	if tm := d.Timeout; tm != 0 {
-		ctx, _ = context.WithTimeout(ctx, tm)
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, tm)
+		defer cancel()
 	}
 
 	netDial := d.NetDial
@@ -246,7 +243,7 @@ func (d *Dialer) getLogPrefix() string {
 	return `dialer to "` + d.Network + `:` + d.Addr + `": `
 }
 
-func (d *Dialer) logf(fmt string, args ...interface{}) {
+func (d *Dialer) logf(fmt string, args ...any) {
 	prefix := d.getLogPrefix()
 
 	if logf := d.Logf; logf != nil {
@@ -254,7 +251,7 @@ func (d *Dialer) logf(fmt string, args ...interface{}) {
 	}
 }
 
-func (d *Dialer) debugf(fmt string, args ...interface{}) {
+func (d *Dialer) debugf(fmt string, args ...any) {
 	prefix := d.getLogPrefix()
 
 	if debugf := d.Debugf; debugf != nil {

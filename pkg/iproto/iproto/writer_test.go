@@ -1,13 +1,12 @@
 package iproto
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
 	"runtime/debug"
 	"testing"
-
-	pbufio "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/bufio"
 )
 
 func TestPutPacket(t *testing.T) {
@@ -74,8 +73,8 @@ func BenchmarkStreamWriter(b *testing.B) {
 			data: 5000,
 		},
 	} {
-		b.Run(fmt.Sprintf("pooled_buf%d_data%d", bench.size, bench.data), func(b *testing.B) {
-			buf := pbufio.AcquireWriterSize(io.Discard, bench.size)
+		b.Run(fmt.Sprintf("buf%d_data%d", bench.size, bench.data), func(b *testing.B) {
+			buf := bufio.NewWriterSize(io.Discard, bench.size)
 			bw := StreamWriter{
 				Dest: buf,
 			}
@@ -95,9 +94,6 @@ func BenchmarkStreamWriter(b *testing.B) {
 					b.Fatal(err)
 				}
 			}
-
-			b.StopTimer()
-			pbufio.ReleaseWriter(buf, bench.size)
 		})
 	}
 }

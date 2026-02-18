@@ -5,9 +5,13 @@ import (
 	"io"
 	"net"
 	"time"
-
-	wio "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/io"
 )
+
+// deadlineWriter describes an object with io.Writer + deadline support.
+type deadlineWriter interface {
+	io.Writer
+	SetWriteDeadline(time.Time) error
+}
 
 // WritePacket writes p to w.
 func WritePacket(w io.Writer, p Packet) (err error) {
@@ -69,7 +73,7 @@ type buffers struct {
 	// that its unexported methods become hidden. That is, normally
 	// net.Buffers.WriteTo() uses writev() syscall for net.bufferWriter
 	// implementors. It is much efficient than for plain io.Writer.
-	conn    wio.DeadlineWriter
+	conn    deadlineWriter
 	timeout time.Duration
 
 	b    net.Buffers

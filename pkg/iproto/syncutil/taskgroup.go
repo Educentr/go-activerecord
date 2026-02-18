@@ -1,9 +1,8 @@
 package syncutil
 
 import (
+	"context"
 	"sync"
-
-	"golang.org/x/net/context"
 )
 
 // TaskGroup helps to control execution flow of repeatable tasks.
@@ -42,6 +41,36 @@ func (t *TaskGroup) init() {
 	})
 }
 
+// findFreeSlot returns the index of the first nil slot in t.pending.
+// Caller must hold t.mu.
+func (t *TaskGroup) findFreeSlot() int {
+	for j := range t.pending {
+		if t.pending[j] == nil {
+			return j
+		}
+	}
+
+	return -1
+}
+
+// collectPending returns up to n non-nil pending channels.
+// Caller must hold t.mu.
+func (t *TaskGroup) collectPending(n int) []<-chan error {
+	ret := make([]<-chan error, 0, n)
+
+	for i := range t.pending {
+		if len(ret) >= n {
+			break
+		}
+
+		if t.pending[i] != nil {
+			ret = append(ret, t.pending[i])
+		}
+	}
+
+	return ret
+}
+
 // Do executes given function task in separate goroutine n minus <currently
 // running tasks number> times. It returns slice of n channels which
 // fulfillment means the end of appropriate task execution.
@@ -51,16 +80,12 @@ func (t *TaskGroup) init() {
 //
 // All currently executing tasks can be signaled to cancel by calling
 // TaskGroup's Cancel() method.
-//
-//nolint:gocognit
 func (t *TaskGroup) Do(ctx context.Context, n int, task func(context.Context, int) error) []<-chan error {
 	t.init()
 
 	if n > t.N {
 		n = t.N
 	}
-
-	ret := make([]<-chan error, 0, n)
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -79,16 +104,7 @@ func (t *TaskGroup) Do(ctx context.Context, n int, task func(context.Context, in
 		}
 
 		for i := 0; i < exec; i++ {
-			var j int
-
-			for ; j < len(t.pending); j++ {
-				if t.pending[j] != nil {
-					// Filter out already active "promises".
-					continue
-				}
-
-				break
-			}
+			j := t.findFreeSlot()
 
 			done := make(chan error, 1)
 			err := goer(ctx, t.Goer, func() {
@@ -102,10 +118,12 @@ func (t *TaskGroup) Do(ctx context.Context, n int, task func(context.Context, in
 					// Cancel current sub context.
 					cancel()
 				}
+
 				if t.pending[j] == done {
 					// Current activity was not canceled.
 					t.pending[j] = nil
 					t.n--
+
 					if t.n == 0 {
 						t.cancel = nil
 					}
@@ -122,15 +140,7 @@ func (t *TaskGroup) Do(ctx context.Context, n int, task func(context.Context, in
 		}
 	}
 
-	for i := 0; i < len(t.pending) && len(ret) < n; i++ {
-		if t.pending[i] == nil {
-			continue
-		}
-
-		ret = append(ret, t.pending[i])
-	}
-
-	return ret
+	return t.collectPending(n)
 }
 
 // Cancel cancels context of all currently running tasks. Further Do() calls

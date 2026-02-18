@@ -1,11 +1,10 @@
 package syncutil
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
-
-	"golang.org/x/net/context"
 )
 
 var ErrTaskPanic = fmt.Errorf("task panic occurred")
@@ -82,7 +81,7 @@ func (t *TaskRunner) broadcastErr(err error) {
 	}
 }
 
-func (t *TaskRunner) makeRecover(rec interface{}) {
+func (t *TaskRunner) makeRecover(rec any) {
 	if rec != nil {
 		log.Printf("[internal_error] panic occurred in TaskRunner: %v", rec)
 		t.broadcastErr(ErrTaskPanic)

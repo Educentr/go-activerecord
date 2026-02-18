@@ -1,11 +1,10 @@
 package syncutil
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 func TestTaskRunnerDo(t *testing.T) {

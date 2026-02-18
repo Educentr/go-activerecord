@@ -10,7 +10,7 @@ import (
 )
 
 var testValues = []struct {
-	Unpacked  interface{}
+	Unpacked  any
 	PackedHEX string
 }{
 	{Unpacked: uint8(2), PackedHEX: "02"},
@@ -85,7 +85,7 @@ func TestUnpack(t *testing.T) {
 
 func TestBER(t *testing.T) {
 	for _, test := range []struct {
-		Unpacked  interface{}
+		Unpacked  any
 		PackedHEX string
 	}{
 		{5, "05"},
@@ -162,7 +162,7 @@ func (v *testStrings) IprotoUnpack(r *bytes.Reader, mode PackMode) error {
 	return err
 }
 
-func testPackUnpack(t *testing.T, values []interface{}, mode PackMode) {
+func testPackUnpack(t *testing.T, values []any, mode PackMode) { //nolint:thelper // not a setup helper
 	var (
 		perr, uerr error
 		data, tail []byte
@@ -199,7 +199,7 @@ func testPackUnpack(t *testing.T, values []interface{}, mode PackMode) {
 }
 
 func TestPackUnpack(t *testing.T) {
-	values := []interface{}{
+	values := []any{
 		testStrings([]string{}),
 		testStrings([]string{"abc", "cde"}),
 		testStrings([]string{"0123", "", "!"}),

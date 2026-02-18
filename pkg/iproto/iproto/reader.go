@@ -37,8 +37,8 @@ type StreamReader struct {
 	SizeLimit uint32
 	Alloc     BodyAllocator
 
-	buf [12]byte
-	n   int
+	headerBuf [12]byte
+	n         int
 }
 
 // ReadPackets reads next packet.
@@ -64,11 +64,37 @@ func (b *StreamReader) LastRead() int {
 	return b.n
 }
 
+// RawLastRead returns a copy of the raw bytes read during the last
+// ReadPacket call. This includes partial header and/or body bytes when
+// the read was interrupted (e.g. by a hijack timeout).
+func (b *StreamReader) RawLastRead(packet Packet) []byte {
+	n := b.n
+	if n == 0 {
+		return nil
+	}
+
+	headerN := min(n, len(b.headerBuf))
+
+	raw := make([]byte, 0, n)
+	raw = append(raw, b.headerBuf[:headerN]...)
+
+	if bodyN := n - headerN; bodyN > 0 {
+		raw = append(raw, packet.Data[:bodyN]...)
+	}
+
+	return raw
+}
+
 func (b *StreamReader) readHeader() (ret Header, err error) {
-	b.n, err = io.ReadFull(b.Source, b.buf[:])
-	ret.Msg = binary.LittleEndian.Uint32(b.buf[0:])
-	ret.Len = binary.LittleEndian.Uint32(b.buf[4:])
-	ret.Sync = binary.LittleEndian.Uint32(b.buf[8:])
+	b.n, err = io.ReadFull(b.Source, b.headerBuf[:])
+	if err != nil {
+		return
+	}
+
+	// io.ReadFull guarantees all 12 bytes are read when err == nil.
+	ret.Msg = binary.LittleEndian.Uint32(b.headerBuf[0:])
+	ret.Len = binary.LittleEndian.Uint32(b.headerBuf[4:])
+	ret.Sync = binary.LittleEndian.Uint32(b.headerBuf[8:])
 
 	return
 }

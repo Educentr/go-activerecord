@@ -1,14 +1,13 @@
 package syncutil
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 func TestMultitask(t *testing.T) {
@@ -99,7 +98,6 @@ func TestMultitask(t *testing.T) {
 
 				return true
 			})
-
 			if err != nil {
 				act[err] = rem
 			}

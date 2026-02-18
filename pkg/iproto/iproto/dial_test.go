@@ -89,14 +89,13 @@ func benchmarkCall(b *testing.B, parallelism, size int) {
 	var wg sync.WaitGroup
 	wg.Add(parallelism)
 	for i := 0; i < parallelism; i++ {
-		//nolint:staticcheck,govet
 		go func() {
 			defer wg.Done()
 			for range work {
 				_, err := c.Call(context.Background(), 42, data)
 				if err != nil {
-					//nolint:staticcheck,govet
-					b.Fatal(err)
+					b.Error(err)
+					return
 				}
 			}
 		}()

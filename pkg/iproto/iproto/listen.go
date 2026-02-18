@@ -1,10 +1,10 @@
 package iproto
 
 import (
+	"context"
+	"errors"
 	"net"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 // AcceptFn allows user to construct Channel manually.
@@ -50,12 +50,41 @@ type Server struct {
 	OnShutdown []func()
 }
 
+// handleAcceptError handles errors from net.Listener.Accept(). It returns the
+// new backoff delay and whether the caller should retry. Fatal errors (e.g.
+// listener closed) return retry=false.
+func handleAcceptError(
+	ctx context.Context, err error, tempDelay time.Duration, log Logger,
+) (newDelay time.Duration, retry bool) {
+	if errors.Is(err, net.ErrClosed) {
+		return 0, false
+	}
+
+	const initialAcceptDelay = 5 * time.Millisecond
+
+	if tempDelay == 0 {
+		tempDelay = initialAcceptDelay
+	} else {
+		tempDelay *= 2
+	}
+
+	if tempDelay > time.Second {
+		tempDelay = time.Second
+	}
+
+	if log != nil {
+		log.Printf(ctx, "Accept error: %v; retrying in %v\n", err, tempDelay)
+	}
+
+	time.Sleep(tempDelay)
+
+	return tempDelay, true
+}
+
 // Serve begins to accept connection from ln. It does not handles net.Error
 // temporary cases.
 //
 // Note that Serve() copies s.ChannelConfig once before starting accept loop.
-//
-//nolint:gocognit
 func (s *Server) Serve(ctx context.Context, ln net.Listener) (err error) {
 	accept := s.Accept
 	if accept == nil {
@@ -83,24 +112,10 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) (err error) {
 
 		conn, err := ln.Accept()
 		if err != nil {
-			//nolint:staticcheck
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
-				if tempDelay == 0 {
-					tempDelay = 5 * time.Millisecond
-				} else {
-					tempDelay *= 2
-				}
+			var retry bool
 
-				if max := 1 * time.Second; tempDelay > max {
-					tempDelay = max
-				}
-
-				if log != nil {
-					log.Printf(ctx, "Accept error: %v; retrying in %v\n", err, tempDelay)
-				}
-
-				time.Sleep(tempDelay)
-
+			tempDelay, retry = handleAcceptError(ctx, err, tempDelay, log)
+			if retry {
 				continue
 			}
 

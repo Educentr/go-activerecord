@@ -2,12 +2,11 @@ package iproto
 
 import (
 	"bytes"
+	"context"
 	"net"
 	"sync"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 func TestListenDial(t *testing.T) {
@@ -19,15 +18,13 @@ func TestListenDial(t *testing.T) {
 
 	done := make(chan struct{})
 
-	//nolint:staticcheck
 	go func() {
 		srv := &Server{ChannelConfig: &ChannelConfig{
 			Handler: HandlerFunc(func(ctx context.Context, c Conn, p Packet) {
 				var in uint32
 				err = UnpackUint32(bytes.NewReader(p.Data), &in, 0)
 				if err != nil {
-					//nolint:govet
-					t.Fatal(err)
+					t.Error(err)
 					return
 				}
 
@@ -41,8 +38,7 @@ func TestListenDial(t *testing.T) {
 		case <-done:
 			// test is complete it is okay
 		default:
-			//nolint:govet
-			t.Fatal(err)
+			t.Error(err)
 		}
 	}()
 
@@ -59,27 +55,27 @@ func TestListenDial(t *testing.T) {
 	for i := 0; i < 64; i++ {
 		wg.Add(1)
 
-		//nolint:staticcheck
 		go func() {
 			defer wg.Done()
+
 			var i uint32
 			for i = 0; i < 1024; i++ {
 				resp, err := pool.Call(context.Background(), uint32(i), PackUint32(nil, i, 0))
 				if err != nil {
-					//nolint:govet
-					t.Fatal(err)
+					t.Errorf("pool.Call(%v) error: %v", i, err)
+					return
 				}
 
 				var r uint32
 				err = UnpackUint32(bytes.NewReader(resp), &r, 0)
 				if err != nil {
-					//nolint:govet
-					t.Fatal(err)
+					t.Errorf("UnpackUint32 error: %v", err)
+					return
 				}
 
 				if r != i*2 {
-					//nolint:govet
-					t.Fatalf("pool.Call(%v) = %v; want %v", i, r, i*2)
+					t.Errorf("pool.Call(%v) = %v; want %v", i, r, i*2)
+					return
 				}
 			}
 		}()

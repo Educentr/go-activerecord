@@ -1,6 +1,7 @@
 package iproto
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -9,9 +10,7 @@ import (
 
 	"github.com/Educentr/go-activerecord/v3/pkg/iproto/netutil"
 	"github.com/Educentr/go-activerecord/v3/pkg/iproto/syncutil"
-	egoTime "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/time"
 
-	"golang.org/x/net/context"
 	"golang.org/x/time/rate"
 )
 
@@ -686,11 +685,8 @@ func (p *Pool) NextChannel(ctx context.Context) (c *Channel, err error) {
 		}
 
 		if waitTimer == nil {
-			// We use timer here instead of context.WithTimeout
-			// because we could reuse timers and in some use cases
-			// this is more efficient.
-			waitTimer = egoTime.AcquireTimer(waitTm)
-			defer egoTime.ReleaseTimer(waitTimer)
+			waitTimer = time.NewTimer(waitTm)
+			defer waitTimer.Stop()
 		}
 
 		select {
@@ -846,11 +842,11 @@ func (p *Pool) saveChannelStats(ch *Channel) {
 	p.stats.ChannelStats = p.stats.ChannelStats.Add(ch.Stats())
 }
 
-func (p *Pool) logf(s string, args ...interface{}) {
+func (p *Pool) logf(s string, args ...any) {
 	p.config.Logger.Printf(bg, s, args...)
 }
 
-func (p *Pool) debugf(s string, args ...interface{}) {
+func (p *Pool) debugf(s string, args ...any) {
 	p.config.Logger.Debugf(bg, s, args...)
 }
 

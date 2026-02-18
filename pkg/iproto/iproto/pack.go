@@ -148,7 +148,7 @@ type Packer interface {
 	IprotoPack(w []byte, mode PackMode) ([]byte, error)
 }
 
-func packOne(w []byte, v interface{}, mode PackMode) ([]byte, error) {
+func packOne(w []byte, v any, mode PackMode) ([]byte, error) {
 	if v == nil {
 		return w, nil
 	}
@@ -378,7 +378,7 @@ type Unpacker interface {
 	IprotoUnpack(r *bytes.Reader, mode PackMode) error
 }
 
-func unpackOne(r *bytes.Reader, v interface{}, mode PackMode) error {
+func unpackOne(r *bytes.Reader, v any, mode PackMode) error {
 	if v == nil {
 		return nil
 	}
@@ -446,7 +446,7 @@ func unpackOne(r *bytes.Reader, v interface{}, mode PackMode) error {
 	return fmt.Errorf("unsupported iproto unpack type: %T", v)
 }
 
-func doAppend(mode PackMode, data []byte, value ...interface{}) (out []byte, err error) {
+func doAppend(mode PackMode, data []byte, value ...any) (out []byte, err error) {
 	out = data
 	for _, v := range value {
 		if out, err = packOne(out, v, mode); err != nil {
@@ -466,28 +466,28 @@ func doAppend(mode PackMode, data []byte, value ...interface{}) (out []byte, err
 // BER-encoding used is similar to one used by perl 'pack()' function and is different from varint
 // encoding used in go standard library. BER-encoding is not recursive: for slices only the length
 // of the slice will be BER-encoded, not the items.
-func Pack(value ...interface{}) (out []byte, err error) {
+func Pack(value ...any) (out []byte, err error) {
 	return doAppend(ModeDefault, nil, value...)
 }
 
 // Append is similar to Pack function, but it appends to the slice instead of unconditionally creating
 // a new slice.
-func Append(data []byte, value ...interface{}) (out []byte, err error) {
+func Append(data []byte, value ...any) (out []byte, err error) {
 	return doAppend(ModeDefault, data, value...)
 }
 
 // PackBER is similar to Pack function, except that BER-encoding is used by default for every item.
-func PackBER(value ...interface{}) (out []byte, err error) {
+func PackBER(value ...any) (out []byte, err error) {
 	return doAppend(ModeBER, nil, value...)
 }
 
 // AppendBER is similar to Pack function, but it appends to the slice instead of unconditionally creating
 // a new slice. BER-encoding is used by default for every item.
-func AppendBER(data []byte, value ...interface{}) (out []byte, err error) {
+func AppendBER(data []byte, value ...any) (out []byte, err error) {
 	return doAppend(ModeBER, data, value...)
 }
 
-func unpack(mode PackMode, data []byte, value ...interface{}) ([]byte, error) {
+func unpack(mode PackMode, data []byte, value ...any) ([]byte, error) {
 	rdr := bytes.NewReader(data)
 	for _, v := range value {
 		if err := unpackOne(rdr, v, mode); err != nil {
@@ -505,11 +505,11 @@ func unpack(mode PackMode, data []byte, value ...interface{}) ([]byte, error) {
 }
 
 // Unpack decodes the data as encoded by Pack function. Remaining bytes are returned on success.
-func Unpack(data []byte, value ...interface{}) ([]byte, error) {
+func Unpack(data []byte, value ...any) ([]byte, error) {
 	return unpack(ModeDefault, data, value...)
 }
 
 // UnpackBER is similar to Unpack function, except that BER-encoding is used by default for every item.
-func UnpackBER(data []byte, value ...interface{}) ([]byte, error) {
+func UnpackBER(data []byte, value ...any) ([]byte, error) {
 	return unpack(ModeBER, data, value...)
 }

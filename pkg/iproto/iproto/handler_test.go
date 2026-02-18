@@ -1,12 +1,12 @@
 package iproto_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto"
 	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto/internal/testutil"
-	"golang.org/x/net/context"
 )
 
 func handler(ctx context.Context, rw iproto.Conn, pkt iproto.Packet) {

@@ -1,6 +1,7 @@
 package iproto
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -12,8 +13,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 // TestChannelShutdownTwice tests that second call to Shutdown() will return
@@ -111,16 +110,15 @@ func TestChannelCall(t *testing.T) {
 		},
 	} {
 		wg.Add(1)
-		//nolint:staticcheck
 
 		go func(i int, test testCase) {
+			defer wg.Done()
+
 			client, server, err := getClientServerConns()
 			if err != nil {
-				//nolint:staticcheck,govet
-				t.Fatal(err)
+				t.Error(err)
+				return
 			}
-
-			defer wg.Done()
 			defer client.Close()
 			defer server.Close()
 
@@ -128,8 +126,7 @@ func TestChannelCall(t *testing.T) {
 			go RunChannel(server, &ChannelConfig{
 				Handler: HandlerFunc(func(ctx context.Context, w Conn, p Packet) {
 					if err = w.Send(bg, ResponseTo(p, test.resp)); err != nil {
-						//nolint:govet
-						t.Fatal(err)
+						t.Error(err)
 					}
 				}),
 				Logger: devnullLogger{},
@@ -143,8 +140,8 @@ func TestChannelCall(t *testing.T) {
 				Logger:          devnullLogger{},
 			})
 			if err != nil {
-				//nolint:govet
-				t.Fatal(err)
+				t.Error(err)
+				return
 			}
 
 			data, err := channel.Call(context.Background(), test.method, nil)
@@ -225,8 +222,7 @@ func TestChannelShutdown(t *testing.T) {
 		go func() {
 			defer func() {
 				if err := recover(); err != nil {
-					//nolint:govet
-					t.Fatal(err)
+					t.Errorf("panic: %v", err)
 				}
 			}()
 			wgEnter.Done()
@@ -439,7 +435,10 @@ func TestChannelCallContextDone(t *testing.T) {
 	defer c.Close()
 
 	result := make(chan error)
-	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	defer cancel()
+
 	now := time.Now()
 	go func() {
 		_, err := c.Call(ctx, 42, nil)
@@ -693,5 +692,5 @@ func devnull(c net.Conn) {
 
 type devnullLogger struct{}
 
-func (devnullLogger) Printf(context.Context, string, ...interface{}) {}
-func (devnullLogger) Debugf(context.Context, string, ...interface{}) {}
+func (devnullLogger) Printf(context.Context, string, ...any) {}
+func (devnullLogger) Debugf(context.Context, string, ...any) {}

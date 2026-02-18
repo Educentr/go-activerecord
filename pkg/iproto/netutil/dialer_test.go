@@ -1,14 +1,13 @@
 package netutil
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"net"
 	"sync"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 // TestDialerDialLimits expects that Dialer will not reach limits and intervals

@@ -1,11 +1,10 @@
 package syncutil
 
 import (
+	"context"
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 var bg = context.Background()

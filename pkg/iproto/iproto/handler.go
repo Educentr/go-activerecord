@@ -1,11 +1,10 @@
 package iproto
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
-
-	"golang.org/x/net/context"
 )
 
 // Handler represents IProto packets handler.
@@ -86,4 +85,3 @@ func (s *ServeMux) Handler(message uint32) Handler {
 func (s *ServeMux) ServeIProto(ctx context.Context, c Conn, p Packet) {
 	s.Handler(p.Header.Msg).ServeIProto(ctx, c, p)
 }
-

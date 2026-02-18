@@ -1,6 +1,8 @@
 package iproto
 
 import (
+	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -13,47 +15,11 @@ import (
 	"time"
 
 	"github.com/gobwas/pool/pbytes"
-
-	pbufio "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/bufio"
-	wio "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/io"
-	egotime "github.com/Educentr/go-activerecord/v3/pkg/iproto/util/time"
-
-	// ToDo разобраться зачем и по возможности заменить на context
-	"golang.org/x/net/context"
-)
-
-// Constant control message codes.
-// All control message codes should be greater than MessagePing.
-const (
-	MessagePing     = 0xff00
-	MessageShutdown = 0xff01
-)
-
-const (
-	DefaultPingInterval    = time.Minute
-	DefaultShutdownTimeout = 5 * time.Second
-
-	DefaultReadBufferSize = 256
-	DefaultSizeLimit      = 1e8
-
-	DefaultWriteQueueSize  = 50
-	DefaultWriteTimeout    = 5 * time.Second
-	DefaultWriteBufferSize = 4096
-
-	DefaultRequestTimeout = 5 * time.Second
-	DefaultNoticeTimeout  = 1 * time.Second
-)
-
-var ErrTimeout = errors.New("timed out")
-var ErrDroppedConn = errors.New("connection is gone")
-
-var (
-	logReadWriteGoroutine = false
 )
 
 type Logger interface {
-	Printf(ctx context.Context, fmt string, v ...interface{})
-	Debugf(ctx context.Context, fmt string, v ...interface{})
+	Printf(ctx context.Context, fmt string, v ...any)
+	Debugf(ctx context.Context, fmt string, v ...any)
 }
 
 // BytePool describes an object that contains bytes buffer reuse logic.
@@ -110,13 +76,61 @@ type ChannelConfig struct {
 	GetCustomRequestTimeout func() time.Duration
 }
 
-var (
-	defaultBytePool = func(p *pbytes.Pool) BytePool {
-		return BytePoolFunc(
-			p.GetLen, p.Put,
-		)
-	}(pbytes.New(256, 65536))
+// statReader wraps io.Reader to track bytes read.
+type statReader struct {
+	r     io.Reader
+	bytes uint32
+	calls uint32
+}
+
+// Constant control message codes.
+// All control message codes should be greater than MessagePing.
+const (
+	MessagePing     = 0xff00
+	MessageShutdown = 0xff01
 )
+
+const (
+	DefaultPingInterval    = time.Minute
+	DefaultShutdownTimeout = 5 * time.Second
+
+	DefaultReadBufferSize = 256
+	DefaultSizeLimit      = 1e8
+
+	DefaultWriteQueueSize  = 50
+	DefaultWriteTimeout    = 5 * time.Second
+	DefaultWriteBufferSize = 4096
+
+	DefaultRequestTimeout = 5 * time.Second
+	DefaultNoticeTimeout  = 1 * time.Second
+
+	minBytePoolSize = 256
+	maxBytePoolSize = 65536
+)
+
+var (
+	ErrTimeout     = errors.New("timed out")
+	ErrDroppedConn = errors.New("connection is gone")
+)
+
+var logReadWriteGoroutine = false
+
+var defaultBytePool = func(p *pbytes.Pool) BytePool {
+	return BytePoolFunc(
+		p.GetLen, p.Put,
+	)
+}(pbytes.New(minBytePoolSize, maxBytePoolSize))
+
+func (r *statReader) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	if n > 0 {
+		r.bytes += uint32(n) //nolint:gosec // n is always non-negative and bounded by buffer size
+	}
+
+	r.calls++
+
+	return n, err
+}
 
 func (cc *ChannelConfig) withDefaults() (c ChannelConfig) {
 	if cc != nil {
@@ -384,8 +398,8 @@ func (c *Channel) Call(ctx context.Context, method uint32, data []byte) (resp []
 		requestTimeout = c.config.GetCustomRequestTimeout()
 	}
 
-	timer := egotime.AcquireTimer(requestTimeout)
-	defer egotime.ReleaseTimer(timer)
+	timer := time.NewTimer(requestTimeout)
+	defer timer.Stop()
 
 	sync := c.pending.push(method, res.cb)
 
@@ -431,8 +445,8 @@ func (c *Channel) Call(ctx context.Context, method uint32, data []byte) (resp []
 func (c *Channel) Notify(ctx context.Context, method uint32, data []byte) (err error) {
 	atomic.AddUint32(&c.stats.NoticesCount, 1)
 
-	timer := egotime.AcquireTimer(c.config.NoticeTimeout)
-	defer egotime.ReleaseTimer(timer)
+	timer := time.NewTimer(c.config.NoticeTimeout)
+	defer timer.Stop()
 
 	pkt := Packet{
 		Data: data,
@@ -684,8 +698,6 @@ func (c *Channel) Error() error {
 }
 
 var (
-	pingPacket = Packet{Header{Msg: MessagePing}, nil}
-
 	shutdownPacket     = Packet{Header{Msg: MessageShutdown}, nil}
 	shutdownPacketSize = PacketSize(shutdownPacket)
 )
@@ -794,7 +806,82 @@ func (c *Channel) writer() {
 	}
 }
 
-//nolint:gocognit
+// handleReadError processes errors from the reader loop. It handles hijack
+// timeouts (buffering partially-read data) and EOF/fatal errors.
+func (c *Channel) handleReadError(
+	err error, packet Packet, stream *StreamReader,
+	buf *bufio.Reader, hijackBuffer []byte,
+) {
+	c.mu.RLock()
+	hijacked := c.hijacked
+	c.mu.RUnlock()
+
+	var neterr net.Error
+	if errors.As(err, &neterr) && neterr.Timeout() && hijacked {
+		if raw := stream.RawLastRead(packet); len(raw) > 0 {
+			hijackBuffer = append(hijackBuffer, raw...)
+		}
+
+		buffered, _ := buf.Peek(buf.Buffered())
+		hijackBuffer = append(hijackBuffer, buffered...)
+
+		c.mu.Lock()
+		c.hijackReadBuffer = hijackBuffer
+		c.mu.Unlock()
+
+		return
+	}
+
+	if p := c.pending.size(); errors.Is(err, io.EOF) && p == 0 {
+		c.Drop()
+	} else {
+		c.fatalf("receive packet error while having %d pending call(s): %v", p, err)
+	}
+}
+
+// handleMessage dispatches an incoming non-response packet: ping, shutdown, or
+// application-level handler.
+func (c *Channel) handleMessage(ctx context.Context, packet Packet, stopped, dropped bool) {
+	switch packet.Header.Msg {
+	case MessagePing:
+		c.mu.Lock()
+		waitPingAck := !c.lastPing.IsZero()
+		c.lastPing = time.Time{}
+		c.mu.Unlock()
+
+		// When both sides ping and we ping with sync = 0
+		// and the other side with sync != 0, it is necessary to process such ping anyway
+		if !waitPingAck || packet.Header.Sync != 0 {
+			err := c.Send(ctx, Packet{
+				Header: Header{
+					Msg:  MessagePing,
+					Sync: packet.Header.Sync,
+				},
+			})
+			if err != nil {
+				c.logf(ctx, "warning: sending ping(ack) failed: %v", err)
+			}
+		}
+
+	case MessageShutdown:
+		select {
+		case c.shutdown <- struct{}{}:
+		default:
+			c.logf(bg, "warning: peer is sending too many shutdown packets")
+			return
+		}
+
+		if !stopped {
+			go c.Shutdown()
+		}
+
+	default:
+		if !dropped && c.config.Handler != nil {
+			c.config.Handler.ServeIProto(ctx, c, packet)
+		}
+	}
+}
+
 func (c *Channel) reader(ctx context.Context) {
 	defer close(c.readDone)
 	defer close(c.shutdown)
@@ -805,13 +892,10 @@ func (c *Channel) reader(ctx context.Context) {
 	}
 
 	// Wrap c.conn to get read stats.
-	wrapper := wio.WrapReader(c.conn)
+	wrapper := &statReader{r: c.conn}
 
 	// Buffer reads from wrapper.
-	bufSize := c.config.ReadBufferSize
-	buf := pbufio.AcquireReaderSize(wrapper, bufSize)
-
-	defer pbufio.ReleaseReader(buf, bufSize)
+	buf := bufio.NewReaderSize(wrapper, c.config.ReadBufferSize)
 
 	stream := StreamReader{
 		Source:    buf,
@@ -824,58 +908,12 @@ func (c *Channel) reader(ctx context.Context) {
 	for {
 		packet, err := stream.ReadPacket()
 		if err != nil {
-			// Since Go 1.12 TCP keep-alives are enabled by default, and an error on a
-			// read from a connection that was closed by a keep-alive has .Timeout() == true.
-			// Therefore we must ensure that the timeout error was intentional to prevent
-			// leaving channel half-broken through an abnormal reader quit.
-			c.mu.RLock()
-			hijacked := c.hijacked
-			c.mu.RUnlock()
-
-			if neterr, ok := err.(net.Error); ok && neterr.Timeout() && hijacked {
-				// Read deadline was set to unblock the reader. That is,
-				// someone wants to hijack the connection.
-				if n := stream.LastRead(); n != 0 {
-					// Hijack splits the incoming packet.
-					// Must buffer n read bytes from the packet.
-					//
-					// Marshaled packet bytes will probably contain not
-					// complete and incorrect data. Thats okay for us because
-					// bytes ordered the same way that they streamed. So we
-					// just take n bytes from the stream and buffer them.
-					p := MarshalPacket(packet)
-					hijackBuffer = append(hijackBuffer, p[:n]...)
-				}
-
-				// Do not loose the buffered bytes inside the bufio.Reader.
-				buffered, _ := buf.Peek(buf.Buffered())
-				hijackBuffer = append(hijackBuffer, buffered...)
-
-				c.mu.Lock()
-				c.hijackReadBuffer = hijackBuffer
-				c.mu.Unlock()
-
-				return
-			}
-
-			// NOTE: we do not check io.EOF here because we rely on MessageShutdown
-			// packet as a signal to gracefully shutdown the connection.
-			if p := c.pending.size(); err == io.EOF && p == 0 {
-				c.Drop()
-			} else {
-				c.fatalf(
-					"receive packet error while having %d pending call(s): %v",
-					p, err,
-				)
-			}
-
+			c.handleReadError(err, packet, &stream, buf, hijackBuffer)
 			return
 		}
 
 		atomic.AddUint32(&c.stats.PacketsReceived, 1)
-
-		stat := wrapper.Stat()
-		atomic.StoreUint32(&c.stats.BytesReceived, stat.Bytes)
+		atomic.StoreUint32(&c.stats.BytesReceived, wrapper.bytes)
 
 		isResponse := c.pending.resolve(
 			packet.Header.Msg,
@@ -904,46 +942,7 @@ func (c *Channel) reader(ctx context.Context) {
 			continue
 		}
 
-		switch packet.Header.Msg {
-		case MessagePing:
-			c.mu.Lock()
-			waitPingAck := !c.lastPing.IsZero()
-			c.lastPing = time.Time{}
-			c.mu.Unlock()
-
-			// When both sides ping and we ping with sync = 0
-			// and the other side with sync != 0, it is necessary to process such ping anyway
-			if !waitPingAck || packet.Header.Sync != 0 {
-				err := c.Send(ctx, Packet{
-					Header: Header{
-						Msg:  MessagePing,
-						Sync: packet.Header.Sync,
-					},
-				})
-				if err != nil {
-					c.logf(ctx, "warning: sending ping(ack) failed: %v", err)
-				}
-			}
-
-		case MessageShutdown:
-			select {
-			case c.shutdown <- struct{}{}:
-			default:
-				c.logf(bg, "warning: peer is sending too many shutdown packets")
-				continue
-			}
-
-			if stopped {
-				continue
-			}
-
-			go c.Shutdown()
-
-		default:
-			if !dropped && c.config.Handler != nil {
-				c.config.Handler.ServeIProto(ctx, c, packet)
-			}
-		}
+		c.handleMessage(ctx, packet, stopped, dropped)
 	}
 }
 
@@ -1038,7 +1037,7 @@ func (c *Channel) resetPingTimer(d time.Duration) {
 }
 
 // fatalf is the same as fatal excepts f.
-func (c *Channel) fatalf(cause string, args ...interface{}) {
+func (c *Channel) fatalf(cause string, args ...any) {
 	c.fatal(fmt.Errorf(cause, args...))
 }
 
@@ -1063,11 +1062,11 @@ func (c *Channel) saveError(err error) bool {
 	return true
 }
 
-func (c *Channel) logf(ctx context.Context, f string, arg ...interface{}) {
+func (c *Channel) logf(ctx context.Context, f string, arg ...any) {
 	c.config.Logger.Printf(ctx, f, arg...)
 }
 
-func (c *Channel) debugf(ctx context.Context, f string, arg ...interface{}) {
+func (c *Channel) debugf(ctx context.Context, f string, arg ...any) {
 	c.config.Logger.Debugf(ctx, f, arg...)
 }
 
@@ -1148,14 +1147,14 @@ type DefaultLogger struct {
 // Printf logs message in Sprintf form.
 // If ctx implements ctxlog.Context then ctxlog package will be used to print
 // the message. In other way it prints message with d.Prefix via log package.
-func (d DefaultLogger) Printf(ctx context.Context, f string, args ...interface{}) {
+func (d DefaultLogger) Printf(ctx context.Context, f string, args ...any) {
 	log.Print(d.Prefix, fmt.Sprintf(f, args...))
 }
 
 // Debugf logs message in Sprintf form.
 // If ctx implements ctxlog.Context then ctxlog package will be used to print
 // the message. In other way it prints message with d.Prefix via log package.
-func (d DefaultLogger) Debugf(ctx context.Context, f string, args ...interface{}) {
+func (d DefaultLogger) Debugf(ctx context.Context, f string, args ...any) {
 	log.Printf(d.Prefix+f, args...)
 }
 
@@ -1164,11 +1163,11 @@ type prefixLogger struct {
 	logger Logger
 }
 
-func (p prefixLogger) Printf(ctx context.Context, f string, args ...interface{}) {
+func (p prefixLogger) Printf(ctx context.Context, f string, args ...any) {
 	p.logger.Printf(ctx, fmt.Sprint(p.prefix, fmt.Sprintf(f, args...)))
 }
 
-func (p prefixLogger) Debugf(ctx context.Context, f string, args ...interface{}) {
+func (p prefixLogger) Debugf(ctx context.Context, f string, args ...any) {
 	p.logger.Debugf(ctx, fmt.Sprint(p.prefix, fmt.Sprintf(f, args...)))
 }
 

@@ -2,6 +2,7 @@ package iproto
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"io"
 	"net"
@@ -9,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
 )
 
@@ -193,12 +193,10 @@ func TestChannelHijackSplitPacket(t *testing.T) {
 
 			release := make(chan struct{})
 
-			//nolint:staticcheck,govet
 			go func() {
 				<-release
 				if _, err = client.Write(dump[test.split:]); err != nil {
-					//nolint:staticcheck,govet
-					t.Fatal(err)
+					t.Error(err)
 				}
 			}()
 

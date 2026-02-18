@@ -1,10 +1,10 @@
 package testutil
 
 import (
+	"context"
 	"net"
 
 	"github.com/Educentr/go-activerecord/v3/pkg/iproto/iproto"
-	"golang.org/x/net/context"
 )
 
 type StubResponseWriter struct {
@@ -36,33 +36,43 @@ func NewFakeResponseWriter() *StubResponseWriter {
 func (s *StubResponseWriter) Call(ctx context.Context, message uint32, data []byte) ([]byte, error) {
 	return s.DoCall(ctx, message, data)
 }
+
 func (s *StubResponseWriter) Notify(ctx context.Context, message uint32, data []byte) error {
 	return s.DoNotify(ctx, message, data)
 }
+
 func (s *StubResponseWriter) Send(ctx context.Context, packet iproto.Packet) error {
 	return s.DoSend(ctx, packet)
 }
+
 func (s *StubResponseWriter) Close() {
 	s.DoClose()
 }
+
 func (s *StubResponseWriter) Shutdown() {
 	s.DoShutdown()
 }
+
 func (s *StubResponseWriter) OnClose(f func()) {
 	s.DoOnClose(f)
 }
+
 func (s *StubResponseWriter) Done() <-chan struct{} {
 	return s.DoDone()
 }
+
 func (s *StubResponseWriter) RemoteAddr() net.Addr {
 	return s.DoRemoteAddr()
 }
+
 func (s *StubResponseWriter) LocalAddr() net.Addr {
 	return s.DoLocalAddr()
 }
+
 func (s *StubResponseWriter) GetBytes(n int) []byte {
 	return make([]byte, n)
 }
+
 func (s *StubResponseWriter) PutBytes([]byte) {
 }
 

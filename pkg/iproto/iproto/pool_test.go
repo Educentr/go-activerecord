@@ -1,6 +1,7 @@
 package iproto
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -11,8 +12,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 )
 
 type addrconn struct {
@@ -51,12 +50,11 @@ func TestPoolShareChannel(t *testing.T) {
 		},
 	})
 
-	//nolint:staticcheck
 	go func() {
 		_, err := p.NextChannel(context.Background())
 		if err != nil {
-			//nolint:govet
-			t.Fatal(err)
+			t.Error(err)
+			return
 		}
 		order <- received
 	}()
@@ -496,8 +494,11 @@ func TestPoolReconnectCancel(t *testing.T) {
 		NetDial: stubNetDial(attempts, 0),
 	})
 
-	ctx1, _ := context.WithTimeout(context.Background(), time.Millisecond*25)
-	ctx2, _ := context.WithTimeout(context.Background(), time.Millisecond*55)
+	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Millisecond*25)
+	defer cancel1()
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Millisecond*55)
+	defer cancel2()
 
 	//nolint:errcheck
 	go p.Notify(ctx1, 42, nil)
@@ -578,7 +579,7 @@ func BenchmarkPoolNextChannel(b *testing.B) {
 }
 
 type breaker interface {
-	Fatal(...interface{})
+	Fatal(...any)
 }
 
 func getListener(t breaker) (ln net.Listener) {

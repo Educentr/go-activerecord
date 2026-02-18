@@ -1,9 +1,8 @@
 package syncutil
 
 import (
+	"context"
 	"sync"
-
-	"golang.org/x/net/context"
 )
 
 // Multitask helps to run N tasks in parallel.
