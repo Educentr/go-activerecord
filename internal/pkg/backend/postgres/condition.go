@@ -14,8 +14,21 @@ import (
 const (
 	// Основание системы счисления, в которой пишутся числовые константы условий
 	conditionNumBase = 10
-	// Разрядность числа секунд unix-времени
-	conditionTimeBits = 64
+	// Разрядность числовых типов
+	conditionBits16 = 16
+	conditionBits32 = 32
+	conditionBits64 = 64
+)
+
+// Имена форматов, у которых константа условия требует своего разбора.
+// Константы, а не литералы по месту: один и тот же формат упоминается и в
+// разборе значения, и в тексте ошибки
+const (
+	boolFormat   ds.Format = "bool"
+	stringFormat ds.Format = "string"
+	byteaFormat  ds.Format = "postgres.BYTEA"
+	timeFormat   ds.Format = "time.Time"
+	uuidFormat   ds.Format = "uuid.UUID"
 )
 
 var (
@@ -30,14 +43,14 @@ var (
 var (
 	// Разрядность целочисленных типов
 	conditionIntBits = map[ds.Format]int{
-		"int16": 16,
-		"int32": 32,
-		"int64": 64,
+		"int16": conditionBits16,
+		"int32": conditionBits32,
+		"int64": conditionBits64,
 	}
 	// Разрядность типов с плавающей точкой
 	conditionFloatBits = map[ds.Format]int{
-		"float32": 32,
-		"float64": 64,
+		"float32": conditionBits32,
+		"float64": conditionBits64,
 	}
 )
 
@@ -63,20 +76,15 @@ func ConditionLiteral(format ds.Format, value string) (string, error) {
 	}
 
 	switch format {
-	case "bool":
-		parsed, err := strconv.ParseBool(value)
-		if err != nil {
-			return "", conditionValueError(format, value, "bool")
-		}
-
-		return strconv.FormatBool(parsed), nil
-	case "string":
+	case boolFormat:
+		return boolConditionLiteral(format, value)
+	case stringFormat:
 		return strconv.Quote(value), nil
-	case "postgres.BYTEA":
-		return fmt.Sprintf("%s(%s)", format, strconv.Quote(value)), nil
-	case "time.Time":
+	case byteaFormat:
+		return conversionLiteral(format, strconv.Quote(value)), nil
+	case timeFormat:
 		return timeConditionLiteral(format, value)
-	case "uuid.UUID":
+	case uuidFormat:
 		return uuidConditionLiteral(format, value)
 	}
 
@@ -89,7 +97,7 @@ func intConditionLiteral(format ds.Format, value string, bitSize int) (string, e
 		return "", conditionValueError(format, value, "integer")
 	}
 
-	return fmt.Sprintf("%s(%d)", format, parsed), nil
+	return conversionLiteral(format, strconv.FormatInt(parsed, conditionNumBase)), nil
 }
 
 func floatConditionLiteral(format ds.Format, value string, bitSize int) (string, error) {
@@ -98,12 +106,21 @@ func floatConditionLiteral(format ds.Format, value string, bitSize int) (string,
 		return "", conditionValueError(format, value, "float")
 	}
 
-	return fmt.Sprintf("%s(%s)", format, strconv.FormatFloat(parsed, 'g', -1, bitSize)), nil
+	return conversionLiteral(format, strconv.FormatFloat(parsed, 'g', -1, bitSize)), nil
+}
+
+func boolConditionLiteral(format ds.Format, value string) (string, error) {
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return "", conditionValueError(format, value, string(boolFormat))
+	}
+
+	return strconv.FormatBool(parsed), nil
 }
 
 // timeConditionLiteral ожидает в теге число секунд unix-времени
 func timeConditionLiteral(format ds.Format, value string) (string, error) {
-	parsed, err := strconv.ParseInt(value, conditionNumBase, conditionTimeBits)
+	parsed, err := strconv.ParseInt(value, conditionNumBase, conditionBits64)
 	if err != nil {
 		return "", conditionValueError(format, value, "unix timestamp (seconds)")
 	}
@@ -128,6 +145,11 @@ func uuidConditionLiteral(format ds.Format, value string) (string, error) {
 	}
 
 	return fmt.Sprintf("%s{%s}", format, strings.Join(octets, ", ")), nil
+}
+
+// conversionLiteral оборачивает готовое значение в преобразование к типу поля
+func conversionLiteral(format ds.Format, value string) string {
+	return fmt.Sprintf("%s(%s)", format, value)
 }
 
 // conditionValueError описывает, какое значение и к какому типу не удалось

@@ -3,6 +3,7 @@ package postgres
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
@@ -50,6 +51,7 @@ type FormatType struct {
 	sqlSerializer     string
 	sqlDeserializer   string
 	availableMutators []Mutator
+	fromstr           string
 }
 
 func (p FormatType) OrigType() string {
@@ -79,9 +81,14 @@ func (p FormatType) PackConvFunc(fieldname string) string {
 	return ""
 }
 
-// StringDeserializer не используется в postgres: строковые константы (значения
-// условий частичных индексов) разбираются на этапе генерации, см. ConditionLiteral
+// StringDeserializer отдаёт разбор строки для рантайма и не годится для
+// константы: вызовы в fromstr двузначные. Константы (значения условий
+// частичных индексов) разбираются на этапе генерации, см. ConditionLiteral
 func (p FormatType) StringDeserializer() []string {
+	if p.fromstr != "" {
+		return strings.SplitN(p.fromstr, `%%`, 2)
+	}
+
 	return []string{}
 }
 
@@ -158,13 +165,13 @@ func (p FormatType) MutatorTypeConv() string {
 // ToDo numeric or numeric(p,s)
 // ByteArray   Format = "[]byte"
 var NumericFormatT = []FormatType{
-	{TypeName: "int16", Name: "Int16", len: 3, minValue: "math.MinInt16", maxValue: "math.MaxInt16", DBTypeName: "SMALLINT"},
-	{TypeName: "int32", Name: "Int32", len: 5, minValue: "math.MinInt32", maxValue: "math.MaxInt32", DBTypeName: "INTEGER"},
-	{TypeName: "int64", Name: "Int64", len: 9, minValue: "math.MinInt64", maxValue: "math.MaxInt64", DBTypeName: "BIGINT"},
+	{TypeName: "int16", Name: "Int16", len: 3, minValue: "math.MinInt16", maxValue: "math.MaxInt16", fromstr: "int16(strconv.ParseInt(%%, 10, 16))", DBTypeName: "SMALLINT"},
+	{TypeName: "int32", Name: "Int32", len: 5, minValue: "math.MinInt32", maxValue: "math.MaxInt32", fromstr: "int32(strconv.ParseInt(%%, 10, 32))", DBTypeName: "INTEGER"},
+	{TypeName: "int64", Name: "Int64", len: 9, minValue: "math.MinInt64", maxValue: "math.MaxInt64", fromstr: "int64(strconv.ParseInt(%%, 10, 64))", DBTypeName: "BIGINT"},
 }
 var FloatFormatT = []FormatType{
-	{TypeName: "float32", Name: "Float32", len: 5, minValue: "math.MinFloat32", maxValue: "math.MaxFloat32", DBTypeName: "REAL"},
-	{TypeName: "float64", Name: "Float64", len: 9, minValue: "math.MinFloat64", maxValue: "math.MaxFloat64", DBTypeName: "DOUBLE PRECISION"},
+	{TypeName: "float32", Name: "Float32", len: 5, minValue: "math.MinFloat32", maxValue: "math.MaxFloat32", fromstr: "float32(strconv.ParseFloat(%%, 32))", DBTypeName: "REAL"},
+	{TypeName: "float64", Name: "Float64", len: 9, minValue: "math.MinFloat64", maxValue: "math.MaxFloat64", fromstr: "float64(strconv.ParseFloat(%%, 64))", DBTypeName: "DOUBLE PRECISION"},
 }
 var DataFormatT = []FormatType{
 	// ToDo тип в бд может быть разный CHARACTER(n) or CHAR(n) VARYING(n) VARCHAR(n) TEXT
@@ -173,7 +180,7 @@ var DataFormatT = []FormatType{
 }
 
 var DateFormatT = []FormatType{
-	{TypeName: "time.Time", Name: "DateTime", len: 9, minValue: "math.MinInt64", maxValue: "math.MaxInt64", DBTypeName: "TIMESTAMP", availableMutators: []Mutator{{Name: ds.IncMutator, sqlSerializer: "INTERVAL '$%d sec'"}}},
+	{TypeName: "time.Time", Name: "DateTime", len: 9, minValue: "math.MinInt64", maxValue: "math.MaxInt64", fromstr: "time.Unix(strconv.ParseInt(%%, 10, 64), 0)", DBTypeName: "TIMESTAMP", availableMutators: []Mutator{{Name: ds.IncMutator, sqlSerializer: "INTERVAL '$%d sec'"}}},
 }
 
 var AllFormatT = append(append(append(append(
@@ -181,8 +188,8 @@ var AllFormatT = append(append(append(append(
 	FloatFormatT...),
 	DataFormatT...),
 	DateFormatT...),
-	FormatType{TypeName: "bool", Name: "Uint8", len: 2, DBTypeName: "BOOLEAN"},
-	FormatType{TypeName: "uuid.UUID", Name: "UUID", len: 16, DBTypeName: "UUID"},
+	FormatType{TypeName: "bool", Name: "Uint8", len: 2, fromstr: "strconv.ParseBool(%%)", DBTypeName: "BOOLEAN"},
+	FormatType{TypeName: "uuid.UUID", Name: "UUID", len: 16, fromstr: "uuid.Parse(%%)", DBTypeName: "UUID"},
 )
 
 func GetFormat(format ds.Format) (FormatType, error) {
