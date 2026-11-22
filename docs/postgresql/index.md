@@ -113,7 +113,7 @@ err := user.BulkInsertReplace(ctx, users, user.OnConflictEmail)
 ## Генерация DDL
 
 ```bash
-argen --path "model/repository" --schema-output schema.sql
+argen --path "model/repository" --schema_path "etc/database"
 ```
 
 Подробнее: [Генератор схемы](schema-generator.md)

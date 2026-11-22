@@ -22,7 +22,7 @@ argen [OPTIONS]
 | `--destination` | `generated` | Папка для сгенерированного кода |
 | `--module` | из `go.mod` | Имя модуля |
 | `--fixture_path` | - | Путь для тестовых фикстур |
-| `--schema-output` | - | Файл для DDL схемы |
+| `--schema_path` | - | Каталог для DDL схемы и миграций |
 
 ## Примеры
 
@@ -54,7 +54,7 @@ argen --path "model/repository" \
 
 ```bash
 argen --path "model/repository" \
-      --schema-output database/schema.sql
+      --schema_path database
 ```
 
 ## Структура путей
@@ -154,7 +154,7 @@ generate-fixtures: ## Generate test fixtures
 .PHONY: generate-schema
 generate-schema: ## Generate DDL schema
 	argen --path "model/repository" \
-	      --schema-output database/schema.sql
+	      --schema_path database
 ```
 
 ## Интеграция с go:generate

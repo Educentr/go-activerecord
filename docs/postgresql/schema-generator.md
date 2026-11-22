@@ -19,8 +19,24 @@ graph LR
 argen --path "model/repository" \
       --declaration "declaration" \
       --destination "generated" \
-      --schema-output schema.sql
+      --schema_path "etc/database"
 ```
+
+`--schema_path` — это каталог, а не файл. Артефакты раскладываются по бэкенду и
+ключу конфига сервера (`//ar:serverConf:`):
+
+```text
+etc/database/
+└── postgres/
+    └── mydb/
+        ├── schema.sql      # полный DDL всех таблиц этой БД
+        ├── schema.json     # машинное описание схемы, вход для diff
+        └── migrations/     # 001_*.sql, 002_*.sql — по diff со schema.json
+```
+
+`schema.json` — это снимок схемы предыдущей генерации. Из diff с ним argen
+получает очередную миграцию, поэтому файл нужно хранить в репозитории рядом с
+`schema.sql`.
 
 ## Пример вывода
 
@@ -202,6 +218,36 @@ type Migration struct {
 | Добавление индекса | CREATE INDEX | DROP INDEX |
 | Удаление индекса | DROP INDEX | -- комментарий (см. [roadmap](../roadmap.md)) |
 
+## Детерминированность вывода
+
+Повторный прогон argen на неизменённых декларациях даёт **побайтно те же**
+`schema.sql`, `schema.json` и файлы миграций: новых файлов миграций не
+появляется. Это позволяет проверять регенерацию через `git diff --exit-code`.
+
+Что для этого зафиксировано:
+
+| Что | Порядок |
+|-----|---------|
+| Блоки таблиц в `schema.sql` (и в `space.cfg` у octopus) | по имени таблицы |
+| Таблицы в миграции (added / modified / dropped) | по имени таблицы |
+| Колонки и индексы в миграции | в порядке объявления, изменённые — по имени |
+| Части `WHERE` условного индекса | по номеру поля в декларации |
+| `CONSTRAINT` внешних ключей | по имени поля связи |
+| Таблицы в `schema.json` | по имени (ключи JSON-объекта сортируются) |
+
+!!! note "Поле `generated` в `schema.json`"
+
+    Метка времени в `schema.json` обновляется **только при реальном изменении
+    схемы**. Если содержимое схемы не изменилось, argen переносит метку из
+    предыдущей версии файла, и файл остаётся неизменным. Так метка сохраняет
+    смысл («когда схема менялась в последний раз») и при этом не создаёт шум в
+    диффе на каждом прогоне.
+
+Порядок частей `WHERE` важен не только для читаемости: `condition` в
+`schema.json` сравнивается как строка, поэтому плавающий порядок условий
+выглядел для diff'а как изменение индекса и приводил к лишней миграции с
+`DROP INDEX` / `CREATE INDEX`.
+
 ## Ограничения
 
 !!! warning "Текущие ограничения"
@@ -217,31 +263,37 @@ type Migration struct {
 ```makefile
 .PHONY: schema
 schema: ## Generate PostgreSQL DDL schema
-	argen --path "model/repository" --schema-output schema.sql
+	argen --path "model/repository" --schema_path "etc/database"
 
 .PHONY: migrate
 migrate: schema ## Generate and apply migrations
-	psql -d mydb -f schema.sql
+	psql -d mydb -f etc/database/postgres/mydb/schema.sql
 ```
 
 ## Best Practices
 
 ### 1. Храните схему в репозитории
 
-```
+```text
 project/
 ├── model/
 │   └── repository/
 │       └── declaration/
-└── database/
-    └── schema.sql      # Сгенерированная схема
+└── etc/
+    └── database/
+        └── postgres/
+            └── mydb/
+                ├── schema.sql
+                ├── schema.json
+                └── migrations/
 ```
 
 ### 2. Используйте для документации
 
 ```bash
-# Генерация схемы для документации
-argen --schema-output docs/database-schema.sql
+# Генерация схемы, пригодной для публикации в документации
+argen --path "model/repository" --schema_path "etc/database"
+cp etc/database/postgres/mydb/schema.sql docs/database-schema.sql
 ```
 
 ### 3. Сравнивайте с production
@@ -251,10 +303,20 @@ argen --schema-output docs/database-schema.sql
 pg_dump -s mydb > current.sql
 
 # Генерация из деклараций
-argen --schema-output expected.sql
+argen --schema_path "etc/database"
 
 # Сравнение
-diff current.sql expected.sql
+diff current.sql etc/database/postgres/mydb/schema.sql
+```
+
+### 4. Проверяйте регенерацию в CI
+
+Вывод генератора детерминирован, поэтому «схема в репозитории соответствует
+декларациям» проверяется обычным `git diff`:
+
+```bash
+argen --path "model/repository" --schema_path "etc/database"
+git diff --exit-code etc/database
 ```
 
 ## Следующие шаги
