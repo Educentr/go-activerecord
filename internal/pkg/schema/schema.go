@@ -3,6 +3,8 @@
 package schema
 
 import (
+	"bytes"
+	"encoding/json"
 	"time"
 )
 
@@ -118,4 +120,43 @@ func (t *Table) GetPrimaryKey() *Index {
 		}
 	}
 	return nil
+}
+
+// SameContent сравнивает схему с другой по содержимому, игнорируя метку времени
+// Generated. Сравнение идёт по сериализованному JSON, поэтому nil и пустые
+// коллекции считаются одинаковыми — ровно так же, как они выглядят в schema.json.
+func (s *Schema) SameContent(other *Schema) bool {
+	if other == nil {
+		return false
+	}
+
+	left, err := marshalWithoutTimestamp(s)
+	if err != nil {
+		return false
+	}
+
+	right, err := marshalWithoutTimestamp(other)
+	if err != nil {
+		return false
+	}
+
+	return bytes.Equal(left, right)
+}
+
+// PreserveGenerated переносит метку времени из предыдущей версии схемы, если
+// содержимое схемы не изменилось. Без этого schema.json меняется на каждом
+// прогоне argen только из-за метки времени, и проверить «регенерация ничего не
+// меняет» через git diff --exit-code невозможно.
+func (s *Schema) PreserveGenerated(old *Schema) {
+	if s.SameContent(old) {
+		s.Generated = old.Generated
+	}
+}
+
+// marshalWithoutTimestamp сериализует схему с обнулённой меткой времени
+func marshalWithoutTimestamp(s *Schema) ([]byte, error) {
+	withoutTimestamp := *s
+	withoutTimestamp.Generated = time.Time{}
+
+	return json.Marshal(&withoutTimestamp)
 }
