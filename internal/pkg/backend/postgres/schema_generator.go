@@ -3,6 +3,7 @@ package postgres
 import (
 	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -70,8 +71,12 @@ func (g *PostgresSchemaGenerator) GenerateSchemaJSON(pkgInterface any) (*schema.
 		table.Indexes = append(table.Indexes, schemaIdx)
 	}
 
-	// Генерируем FK из FieldsObjectMap
-	for _, fo := range pkg.FieldsObjectMap {
+	// Генерируем FK из FieldsObjectMap.
+	// Обходим по отсортированным именам полей: порядок обхода map случайный,
+	// а от него зависит порядок CONSTRAINT в DDL и foreign_keys в schema.json
+	for _, fieldName := range sortedMapKeys(pkg.FieldsObjectMap) {
+		fo := pkg.FieldsObjectMap[fieldName]
+
 		fk := schema.ForeignKey{
 			Name:      fmt.Sprintf("%s_%s_fkey", strings.ToLower(tableName), strings.ToLower(fo.Field)),
 			Column:    strings.ToLower(fo.Field),
@@ -217,7 +222,20 @@ func (g *PostgresSchemaGenerator) generateIndexName(tableName string, idx ds.Ind
 func (g *PostgresSchemaGenerator) generateConditionClause(conditions map[int]ds.IndexCondition, pkg *ds.RecordPackage) string {
 	var parts []string
 
-	for fieldNum, cond := range conditions {
+	// Обходим условия по возрастанию номера поля: порядок обхода map случайный,
+	// а от него зависит и текст WHERE в DDL, и строка condition в schema.json
+	// (её сравнение как строки давало ложный diff индекса и лишнюю миграцию)
+	fieldNums := make([]int, 0, len(conditions))
+
+	for fieldNum := range conditions {
+		fieldNums = append(fieldNums, fieldNum)
+	}
+
+	sort.Ints(fieldNums)
+
+	for _, fieldNum := range fieldNums {
+		cond := conditions[fieldNum]
+
 		var fieldName string
 		var fieldFormat ds.Format
 		if fieldNum < len(pkg.Fields) {
@@ -381,7 +399,9 @@ func (g *PostgresSchemaGenerator) GenerateMigration(diff *schema.TableDiff, tabl
 	}
 
 	// Изменённые колонки
-	for colName, colDiff := range diff.ModifiedColumns {
+	for _, colName := range diff.ModifiedColumnNames() {
+		colDiff := diff.ModifiedColumns[colName]
+
 		if colDiff.TypeChanged {
 			migration.Up = append(migration.Up,
 				fmt.Sprintf("ALTER TABLE %s ALTER COLUMN %s TYPE %s", tableName, colName, colDiff.NewColumn.Type))
@@ -438,7 +458,9 @@ func (g *PostgresSchemaGenerator) GenerateMigration(diff *schema.TableDiff, tabl
 	}
 
 	// Изменённые индексы (drop + create)
-	for _, idxDiff := range diff.ModifiedIndexes {
+	for _, idxName := range diff.ModifiedIndexNames() {
+		idxDiff := diff.ModifiedIndexes[idxName]
+
 		migration.Up = append(migration.Up, fmt.Sprintf("DROP INDEX IF EXISTS %s", idxDiff.OldIndex.Name))
 		migration.Up = append(migration.Up, g.generateCreateIndexStatement(tableName, idxDiff.NewIndex))
 
@@ -490,4 +512,17 @@ func (g *PostgresSchemaGenerator) generateCreateIndexStatement(tableName string,
 	}
 
 	return sb.String()
+}
+
+// sortedMapKeys возвращает ключи map в алфавитном порядке
+func sortedMapKeys(m map[string]ds.FieldObject) []string {
+	keys := make([]string, 0, len(m))
+
+	for key := range m {
+		keys = append(keys, key)
+	}
+
+	sort.Strings(keys)
+
+	return keys
 }
