@@ -6,6 +6,7 @@ toolchain go1.24.4
 
 require (
 	github.com/Educentr/go-iproto v0.1.0
+	github.com/gofrs/uuid/v5 v5.0.0
 	github.com/google/go-cmp v0.6.0
 	github.com/jackc/pgx-gofrs-uuid v0.0.0-20230224015001-1d428863c2e2
 	github.com/jackc/pgx/v5 v5.7.1
@@ -25,7 +26,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
-	github.com/gofrs/uuid/v5 v5.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
