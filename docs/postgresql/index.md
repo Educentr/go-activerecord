@@ -74,8 +74,8 @@ CREATE INDEX idx_users_noemail ON users (id)
 
 | Тип поля | Как писать значение | Литерал в `index.go` |
 |----------|---------------------|----------------------|
-| `int16`, `int32`, `int64` | целое число | `int64(0)` |
-| `float32`, `float64` | число | `float64(0.5)` |
+| `int16`, `int32`, `int64` | целое число | литерал типа поля: `int16(0)`, `int32(0)`, `int64(0)` |
+| `float32`, `float64` | число | литерал типа поля: `float32(0.5)`, `float64(0.5)` |
 | `bool` | `true` / `false` | `true` |
 | `string` | текст, кавычки необязательны | `"active"` |
 | `postgres.BYTEA` | текст | `postgres.BYTEA("...")` |
