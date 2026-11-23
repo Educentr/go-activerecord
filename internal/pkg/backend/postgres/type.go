@@ -81,6 +81,9 @@ func (p FormatType) PackConvFunc(fieldname string) string {
 	return ""
 }
 
+// StringDeserializer отдаёт разбор строки для рантайма и не годится для
+// константы: вызовы в fromstr двузначные. Константы (значения условий
+// частичных индексов) разбираются на этапе генерации, см. ConditionLiteral
 func (p FormatType) StringDeserializer() []string {
 	if p.fromstr != "" {
 		return strings.SplitN(p.fromstr, `%%`, 2)

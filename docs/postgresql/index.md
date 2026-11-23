@@ -66,6 +66,30 @@ CREATE INDEX idx_users_noemail ON users (id)
     WHERE email = '';
 ```
 
+### Значения условий
+
+Константа условия разбирается на этапе генерации и попадает в сгенерированный
+`index.go` литералом того типа, который объявлен у поля. Поэтому она должна быть
+записана в теге так, чтобы приводилась к этому типу:
+
+| Тип поля | Как писать значение | Литерал в `index.go` |
+|----------|---------------------|----------------------|
+| `int16`, `int32`, `int64` | целое число | литерал типа поля: `int16(0)`, `int32(0)`, `int64(0)` |
+| `float32`, `float64` | число | литерал типа поля: `float32(0.5)`, `float64(0.5)` |
+| `bool` | `true` / `false` | `true` |
+| `string` | текст, кавычки необязательны | `"active"` |
+| `postgres.BYTEA` | текст | `postgres.BYTEA("...")` |
+| `time.Time` | число секунд unix-времени | `time.Unix(1700000000, 0)` |
+| `uuid.UUID` | uuid в каноническом виде | `uuid.UUID{0x6b, ...}` |
+
+Если значение к типу поля не приводится, `argen` падает на проверке декларации
+и указывает поле, значение и тип:
+
+```text
+ErrCheckPackageIndexDecl Pkg: `user`; Index: `Status`;
+	condition on field `Status`: invalid index condition value: `abc` is not a valid integer for type `int64`
+```
+
 ## Типы данных
 
 | Go тип | PostgreSQL | С init_by_db |

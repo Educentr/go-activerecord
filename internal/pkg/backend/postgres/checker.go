@@ -66,8 +66,7 @@ func (b BackendGenerator) CheckIndexes(cl *ds.RecordPackage) error {
 	for _, ind := range cl.Indexes {
 		for fldNum, cond := range ind.Conditions {
 			fld := cl.Fields[fldNum]
-			format, err := GetFormat(fld.Format)
-			if err != nil {
+			if _, err := GetFormat(fld.Format); err != nil {
 				return &arerror.ErrCheckPackageFieldDecl{Pkg: cl.Namespace.PackageName, Field: fld.Name, Err: arerror.ErrCheckInternalError}
 			}
 
@@ -134,11 +133,17 @@ func (b BackendGenerator) CheckIndexes(cl *ds.RecordPackage) error {
 				}
 			}
 
-			// Проверка что десериализатор из строки будет работать корректно
-			deserializers := format.StringDeserializer()
-			if len(deserializers) == 0 && len(cond.Value) > 0 {
-				// Если нет десериализатора, значения будут использоваться как строки напрямую
-				// Это нормально для строковых типов
+			// Проверка что константа из тега приводится к типу поля: в index.go
+			// она попадает литералом, несоответствие типу ломает компиляцию
+			// сгенерированного пакета
+			for _, value := range cond.Value {
+				if _, err := ConditionLiteral(fld.Format, value); err != nil {
+					return &arerror.ErrCheckPackageIndexDecl{
+						Pkg:   cl.Namespace.PackageName,
+						Index: ind.Name,
+						Err:   fmt.Errorf("condition on field `%s`: %w", fld.Name, err),
+					}
+				}
 			}
 		}
 	}

@@ -180,17 +180,7 @@ var index{{ $ind.Name }} = postgres.Index{
 			{{ if not $c.IsNullCheck -}}
 			Values: []any{
 			{{ range $_, $v := $c.Value }}
-				{{ if eq $ifield.Format "bool" }}
-					{{ $v }},
-				{{ else }}
-					{{ $packerparam := packerParam $ifield.Format -}}
-					{{ $des := $packerparam.StringDeserializer }}
-					{{ if ne (len $des) 0 }}
-						{{ index $des 0 }}"{{ $v }}"{{ index $des 1 }},
-					{{ else }}
-						"{{ $v }}",
-					{{ end }}
-				{{ end }}
+				{{ conditionLiteral $ifield.Format $v }},
 			{{ end }}
 			},
 			{{ else -}}

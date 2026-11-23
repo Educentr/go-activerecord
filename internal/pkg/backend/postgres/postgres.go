@@ -52,6 +52,9 @@ func (b BackendGenerator) TemplateFuncs() template.FuncMap {
 
 			return f
 		},
+		// Константа условия частичного индекса превращается в литерал Go на
+		// этапе генерации, см. ConditionLiteral
+		"conditionLiteral": ConditionLiteral,
 		"indexOrder": func(iField ds.IndexField) postgresPkg.Order {
 			switch iField.Order {
 			case ds.IndexOrderAsc:
