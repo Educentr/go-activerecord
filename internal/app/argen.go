@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -346,13 +347,20 @@ type schemaKey struct {
 
 // generateSchemaArtifacts генерирует DDL схемы и миграции для всех пакетов
 // Таблицы группируются по backend и serverConfKey (база данных)
+//
+// Вывод детерминирован: пакеты обходятся в порядке имён, таблицы внутри группы
+// сортируются по имени таблицы. Иначе повторный прогон на неизменённых
+// декларациях даёт другой порядок блоков в schema.sql / space.cfg.
 func (a *ArGen) generateSchemaArtifacts() error {
 	// Группируем пакеты по бэкенду и serverConfKey
 	groupedPackages := make(map[schemaKey][]*ds.RecordPackage)
-	for _, pkg := range a.packagesParsed {
+
+	for _, pkgName := range sortedPackageNames(a.packagesParsed) {
+		pkg := a.packagesParsed[pkgName]
 		if len(pkg.Backends) == 0 {
 			continue
 		}
+
 		key := schemaKey{
 			backend:       pkg.Backends[0],
 			serverConfKey: pkg.ServerConfKey,
@@ -361,7 +369,9 @@ func (a *ArGen) generateSchemaArtifacts() error {
 	}
 
 	// Генерируем схему для каждой группы (backend + serverConfKey)
-	for key, packages := range groupedPackages {
+	for _, key := range sortedSchemaKeys(groupedPackages) {
+		packages := groupedPackages[key]
+
 		be, err := backend.GetBackendByName(key.backend)
 		if err != nil {
 			return fmt.Errorf("get backend %s: %w", key.backend, err)
@@ -389,15 +399,18 @@ func (a *ArGen) generateSchemaArtifacts() error {
 			return fmt.Errorf("load old schema for %s/%s: %w", key.backend, sanitizedConfKey, err)
 		}
 
-		// Создаём новую схему со всеми таблицами
+		// Создаём новую схему со всеми таблицами.
+		// Пакеты упорядочиваем по имени таблицы: этот же порядок задаёт порядок
+		// блоков в файле схемы и порядок операторов в миграциях
+		packages, tables, err := sortPackagesByTableName(schemaGen, packages)
+		if err != nil {
+			return fmt.Errorf("generate schema JSON for %s/%s: %w", key.backend, sanitizedConfKey, err)
+		}
+
 		newSchema := schema.NewSchema(string(key.backend))
 
-		for _, pkg := range packages {
-			newTable, err := schemaGen.GenerateSchemaJSON(pkg)
-			if err != nil {
-				return fmt.Errorf("generate schema JSON for %s: %w", pkg.Namespace.PublicName, err)
-			}
-			newSchema.Tables[newTable.Name] = *newTable
+		for _, table := range tables {
+			newSchema.Tables[table.Name] = *table
 		}
 
 		// Генерируем миграцию если есть изменения и backend поддерживает миграции
@@ -431,7 +444,9 @@ func (a *ArGen) generateSchemaArtifacts() error {
 					}
 				}
 
-				for tableName, tableDiff := range diff.ModifiedTables {
+				for _, tableName := range diff.ModifiedTableNames() {
+					tableDiff := diff.ModifiedTables[tableName]
+
 					migration, err := schemaGen.GenerateMigration(&tableDiff, tableName)
 					if err != nil {
 						return fmt.Errorf("generate migration for %s: %w", tableName, err)
@@ -479,13 +494,87 @@ func (a *ArGen) generateSchemaArtifacts() error {
 		}
 		log.Printf("Generated schema: %s", schemaFilePath)
 
-		// Сохраняем schema.json
+		// Сохраняем schema.json. Метку времени переносим из предыдущей версии,
+		// если схема не изменилась — иначе файл менялся бы на каждом прогоне
+		newSchema.PreserveGenerated(oldSchema)
+
 		if err := schema.SaveSchema(newSchema, schemaJSONPath); err != nil {
 			return fmt.Errorf("save schema JSON for %s/%s: %w", key.backend, sanitizedConfKey, err)
 		}
 	}
 
 	return nil
+}
+
+// sortedPackageNames возвращает имена разобранных пакетов в алфавитном порядке
+func sortedPackageNames(packages map[string]*ds.RecordPackage) []string {
+	names := make([]string, 0, len(packages))
+
+	for name := range packages {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	return names
+}
+
+// sortedSchemaKeys возвращает ключи групп в порядке (backend, serverConfKey)
+func sortedSchemaKeys(grouped map[schemaKey][]*ds.RecordPackage) []schemaKey {
+	keys := make([]schemaKey, 0, len(grouped))
+
+	for key := range grouped {
+		keys = append(keys, key)
+	}
+
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].backend != keys[j].backend {
+			return keys[i].backend < keys[j].backend
+		}
+
+		return keys[i].serverConfKey < keys[j].serverConfKey
+	})
+
+	return keys
+}
+
+// sortPackagesByTableName упорядочивает пакеты группы по имени таблицы и
+// возвращает их вместе с уже сгенерированным JSON-описанием таблиц.
+// Имя таблицы определяет бэкенд, поэтому порядок берётся из его генератора.
+func sortPackagesByTableName(schemaGen schema.Generator, packages []*ds.RecordPackage) ([]*ds.RecordPackage, []*schema.Table, error) {
+	type packageTable struct {
+		pkg   *ds.RecordPackage
+		table *schema.Table
+	}
+
+	packageTables := make([]packageTable, 0, len(packages))
+
+	for _, pkg := range packages {
+		table, err := schemaGen.GenerateSchemaJSON(pkg)
+		if err != nil {
+			return nil, nil, fmt.Errorf("generate schema JSON for %s: %w", pkg.Namespace.PublicName, err)
+		}
+
+		packageTables = append(packageTables, packageTable{pkg: pkg, table: table})
+	}
+
+	sort.Slice(packageTables, func(i, j int) bool {
+		if packageTables[i].table.Name != packageTables[j].table.Name {
+			return packageTables[i].table.Name < packageTables[j].table.Name
+		}
+
+		return packageTables[i].pkg.Namespace.PackageName < packageTables[j].pkg.Namespace.PackageName
+	})
+
+	sortedPackages := make([]*ds.RecordPackage, 0, len(packageTables))
+	tables := make([]*schema.Table, 0, len(packageTables))
+
+	for _, packageTable := range packageTables {
+		sortedPackages = append(sortedPackages, packageTable.pkg)
+		tables = append(tables, packageTable.table)
+	}
+
+	return sortedPackages, tables, nil
 }
 
 // generateFullSchemaForBackend генерирует полную DDL схему для всех таблиц одного бэкенда

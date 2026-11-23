@@ -864,24 +864,16 @@ func TestPostgresSchemaGenerator_generateConditionClause_MultipleConditions(t *t
 		{Name: "Active", Format: "bool"},
 	}
 
-	// Use ordered conditions - note: map iteration order is non-deterministic,
-	// so we check both parts are present
+	// Условия обходятся по возрастанию номера поля, поэтому результат
+	// предсказуем целиком (см. TestPostgresSchemaGenerator_generateConditionClause_Deterministic)
 	conditions := map[int]ds.IndexCondition{
 		0: {ConditionType: "=", Value: []string{"published"}},
 		1: {ConditionType: "=", Value: []string{"true"}},
 	}
 
-	got := g.generateConditionClause(conditions, pkg)
+	want := "status = 'published' AND active = true"
 
-	if !strings.Contains(got, "status = 'published'") {
-		t.Errorf("result should contain status condition, got: %q", got)
-	}
-
-	if !strings.Contains(got, "active = true") {
-		t.Errorf("result should contain active condition, got: %q", got)
-	}
-
-	if !strings.Contains(got, " AND ") {
-		t.Errorf("multiple conditions should be joined with AND, got: %q", got)
+	if got := g.generateConditionClause(conditions, pkg); got != want {
+		t.Errorf("generateConditionClause() = %q, want %q", got, want)
 	}
 }
