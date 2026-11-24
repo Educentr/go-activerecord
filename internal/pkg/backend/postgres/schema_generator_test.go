@@ -877,3 +877,126 @@ func TestPostgresSchemaGenerator_generateConditionClause_MultipleConditions(t *t
 		t.Errorf("generateConditionClause() = %q, want %q", got, want)
 	}
 }
+
+// Условие по полям time.Time, uuid.UUID и postgres.BYTEA должно попадать в DDL
+// литералом типа колонки: TIMESTAMP не сравнивается с целым числом, uuid без
+// кавычек разбирается как числовой литерал, а bytea — как имя колонки
+func TestPostgresSchemaGenerator_generateConditionClause_TypedLiterals(t *testing.T) {
+	g := NewSchemaGenerator()
+
+	pkg := ds.NewRecordPackage()
+	pkg.Fields = []ds.FieldDeclaration{
+		{Name: "CreatedAt", Format: "time.Time"},
+		{Name: "Token", Format: "uuid.UUID"},
+		{Name: "Data", Format: "postgres.BYTEA"},
+	}
+
+	tests := []struct {
+		name       string
+		conditions map[int]ds.IndexCondition
+		want       string
+	}{
+		{
+			name: "time.Time as timestamp literal",
+			conditions: map[int]ds.IndexCondition{
+				0: {ConditionType: ">", Value: []string{"1700000000"}},
+			},
+			want: "createdat > TIMESTAMP '2023-11-14 22:13:20'",
+		},
+		{
+			name: "uuid.UUID quoted",
+			conditions: map[int]ds.IndexCondition{
+				1: {ConditionType: "!=", Value: []string{"6ba7b810-9dad-11d1-80b4-00c04fd430c8"}},
+			},
+			want: "token != '6ba7b810-9dad-11d1-80b4-00c04fd430c8'",
+		},
+		{
+			name: "postgres.BYTEA quoted",
+			conditions: map[int]ds.IndexCondition{
+				2: {ConditionType: "!=", Value: []string{"abc"}},
+			},
+			want: "data != 'abc'",
+		},
+		{
+			name: "all three at once",
+			conditions: map[int]ds.IndexCondition{
+				0: {ConditionType: ">=", Value: []string{"1700000000"}},
+				1: {ConditionType: "=", Value: []string{"6ba7b810-9dad-11d1-80b4-00c04fd430c8"}},
+				2: {ConditionType: "!=", Value: []string{"abc"}},
+			},
+			want: "createdat >= TIMESTAMP '2023-11-14 22:13:20'" +
+				" AND token = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'" +
+				" AND data != 'abc'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := g.generateConditionClause(tt.conditions, pkg); got != tt.want {
+				t.Errorf("generateConditionClause() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// Полный DDL условного индекса по time.Time, uuid.UUID и postgres.BYTEA:
+// предикат должен быть применимым в PostgreSQL
+func TestPostgresSchemaGenerator_ConditionalIndex_TypedLiterals(t *testing.T) {
+	g := NewSchemaGenerator()
+
+	pkg := ds.NewRecordPackage()
+	pkg.Namespace.ObjectName = "provider_keys"
+	pkg.Namespace.PublicName = "ProviderKey"
+	pkg.Fields = []ds.FieldDeclaration{
+		{Name: "ID", Format: "int64", PrimaryKey: true, InitByDB: true},
+		{Name: "CreatedAt", Format: "time.Time"},
+		{Name: "Token", Format: "uuid.UUID"},
+		{Name: "Data", Format: "postgres.BYTEA"},
+	}
+	pkg.FieldsMap = map[string]int{"ID": 0, "CreatedAt": 1, "Token": 2, "Data": 3}
+	pkg.Indexes = []ds.IndexDeclaration{
+		{
+			Name:      "CreatedAt",
+			Fields:    []int{1},
+			FieldsMap: map[string]ds.IndexField{"CreatedAt": {IndField: 1}},
+			Conditions: map[int]ds.IndexCondition{
+				1: {ConditionType: ">", Value: []string{"1700000000"}},
+			},
+		},
+		{
+			Name:      "Token",
+			Fields:    []int{2},
+			FieldsMap: map[string]ds.IndexField{"Token": {IndField: 2}},
+			Conditions: map[int]ds.IndexCondition{
+				2: {ConditionType: "!=", Value: []string{"6ba7b810-9dad-11d1-80b4-00c04fd430c8"}},
+			},
+		},
+		{
+			Name:      "Data",
+			Fields:    []int{3},
+			FieldsMap: map[string]ds.IndexField{"Data": {IndField: 3}},
+			Conditions: map[int]ds.IndexCondition{
+				3: {ConditionType: "!=", Value: []string{"abc"}},
+			},
+		},
+	}
+
+	ddl, err := g.GenerateFullSchema(pkg)
+	if err != nil {
+		t.Fatalf("GenerateFullSchema error: %v", err)
+	}
+
+	ddlStr := string(ddl)
+
+	wantClauses := []string{
+		"WHERE createdat > TIMESTAMP '2023-11-14 22:13:20'",
+		"WHERE token != '6ba7b810-9dad-11d1-80b4-00c04fd430c8'",
+		"WHERE data != 'abc'",
+	}
+
+	for _, want := range wantClauses {
+		if !strings.Contains(ddlStr, want) {
+			t.Errorf("expected %q in DDL, got:\n%s", want, ddlStr)
+		}
+	}
+}

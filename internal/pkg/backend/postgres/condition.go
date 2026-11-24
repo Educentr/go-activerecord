@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofrs/uuid/v5"
 
@@ -18,6 +19,8 @@ const (
 	conditionBits16 = 16
 	conditionBits32 = 32
 	conditionBits64 = 64
+	// Формат TIMESTAMP-литерала в DDL: дата и время без часового пояса
+	conditionTimestampLayout = "2006-01-02 15:04:05"
 )
 
 // Имена форматов, у которых константа условия требует своего разбора.
@@ -51,6 +54,15 @@ var (
 	conditionFloatBits = map[ds.Format]int{
 		"float32": conditionBits32,
 		"float64": conditionBits64,
+	}
+	// Форматы, у которых значение условия пишется в DDL строковым литералом.
+	// uuid и bytea в предикате индекса без кавычек — невалидный SQL: uuid
+	// разбирается как числовой литерал (`trailing junk after numeric literal`),
+	// а bytea — как имя колонки (`column "abc" does not exist`)
+	conditionSQLQuoted = map[ds.Format]struct{}{
+		stringFormat: {},
+		byteaFormat:  {},
+		uuidFormat:   {},
 	}
 )
 
@@ -156,4 +168,52 @@ func conversionLiteral(format ds.Format, value string) string {
 // привести
 func conditionValueError(format ds.Format, value, expected string) error {
 	return fmt.Errorf("%w: `%s` is not a valid %s for type `%s`", ErrConditionValueInvalid, value, expected, format)
+}
+
+// ConditionSQLLiteral преобразует значение условия частичного индекса, взятое
+// из тега декларации, в литерал SQL того типа, который объявлен у колонки.
+//
+// Значение подставляется в предикат `WHERE` в DDL, поэтому его тип должен
+// совпадать с типом колонки: оператора `timestamp > integer` в PostgreSQL нет,
+// как нет и сравнения uuid или bytea с неквотированным литералом.
+//
+// Семантика значения в теге — та же, что у ConditionLiteral (для time.Time это
+// число секунд unix-времени). Значение проверено checker-ом до генерации схемы;
+// для форматов, которым отдельный литерал не нужен (числа, bool), и для
+// неизвестных форматов значение отдаётся как есть.
+func ConditionSQLLiteral(format ds.Format, value string) string {
+	if _, ex := conditionSQLQuoted[format]; ex {
+		return sqlStringLiteral(value)
+	}
+
+	if format == timeFormat {
+		return timeConditionSQLLiteral(value)
+	}
+
+	return value
+}
+
+// sqlStringLiteral оборачивает значение в одинарные кавычки, удваивая кавычки
+// внутри значения
+func sqlStringLiteral(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
+}
+
+// timeConditionSQLLiteral отдаёт число секунд unix-времени как TIMESTAMP-литерал
+// в UTC.
+//
+// Предикат частичного индекса обязан быть IMMUTABLE, поэтому `to_timestamp(N)`
+// здесь не годится: он возвращает timestamptz, сравнение с колонкой TIMESTAMP
+// зависит от TimeZone сессии и PostgreSQL отклоняет такой индекс
+// (`functions in index predicate must be marked IMMUTABLE`). У литерала без
+// часового пояса этого ограничения нет.
+func timeConditionSQLLiteral(value string) string {
+	seconds, err := strconv.ParseInt(value, conditionNumBase, conditionBits64)
+	if err != nil {
+		// Значение проверено checker-ом (ConditionLiteral) раньше, чем
+		// генерируется схема; если проверку обошли, отдаём значение как есть
+		return value
+	}
+
+	return fmt.Sprintf("TIMESTAMP '%s'", time.Unix(seconds, 0).UTC().Format(conditionTimestampLayout))
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
@@ -92,5 +93,62 @@ func TestConditionLiteralError(t *testing.T) {
 				t.Errorf("ConditionLiteral(%q, %q) error = %q, want it to mention the value", tt.format, tt.value, err)
 			}
 		})
+	}
+}
+
+func TestConditionSQLLiteral(t *testing.T) {
+	tests := []struct {
+		name   string
+		format ds.Format
+		value  string
+		want   string
+	}{
+		{name: "int64 as is", format: "int64", value: "42", want: "42"},
+		{name: "int64 negative", format: "int64", value: "-42", want: "-42"},
+		{name: "float64 as is", format: "float64", value: "0.5", want: "0.5"},
+		{name: "bool as is", format: "bool", value: "true", want: "true"},
+		{name: "string quoted", format: "string", value: "active", want: "'active'"},
+		{name: "string with quote escaped", format: "string", value: "o'hara", want: "'o''hara'"},
+		{name: "bytea quoted", format: "postgres.BYTEA", value: "abc", want: "'abc'"},
+		{name: "uuid quoted", format: "uuid.UUID", value: "6ba7b810-9dad-11d1-80b4-00c04fd430c8", want: "'6ba7b810-9dad-11d1-80b4-00c04fd430c8'"},
+		{name: "time as timestamp literal in utc", format: "time.Time", value: "1700000000", want: "TIMESTAMP '2023-11-14 22:13:20'"},
+		{name: "time epoch", format: "time.Time", value: "0", want: "TIMESTAMP '1970-01-01 00:00:00'"},
+		// Формат, которого нет в type.go: значение отдаётся как есть, как и до
+		// появления ConditionSQLLiteral
+		{name: "unknown format as is", format: "complex128", value: "0", want: "0"},
+		// Значение проверяет checker до генерации схемы, но на мусоре функция
+		// не должна собирать битый TIMESTAMP-литерал
+		{name: "time with unparsable value as is", format: "time.Time", value: "2023-11-14", want: "2023-11-14"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ConditionSQLLiteral(tt.format, tt.value); got != tt.want {
+				t.Errorf("ConditionSQLLiteral(%q, %q) = %q, want %q", tt.format, tt.value, got, tt.want)
+			}
+		})
+	}
+}
+
+// Литерал времени в DDL не зависит от TZ процесса: предикат частичного индекса
+// обязан быть IMMUTABLE, значение в теге — unix-секунды в UTC
+func TestConditionSQLLiteralTimeIndependentOfLocalZone(t *testing.T) {
+	saved := time.Local
+
+	defer func() { time.Local = saved }()
+
+	const want = "TIMESTAMP '2023-11-14 22:13:20'"
+
+	for _, name := range []string{"UTC", "Europe/Moscow", "America/Los_Angeles"} {
+		loc, err := time.LoadLocation(name)
+		if err != nil {
+			t.Skipf("timezone database is not available: %s", err)
+		}
+
+		time.Local = loc
+
+		if got := ConditionSQLLiteral(timeFormat, "1700000000"); got != want {
+			t.Errorf("ConditionSQLLiteral with TZ %s = %q, want %q", name, got, want)
+		}
 	}
 }
