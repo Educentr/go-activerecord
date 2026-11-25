@@ -31,19 +31,43 @@ TEST_TIMEOUT=60s make test   # Run tests with custom timeout
 ### Code Quality
 
 ```bash
-make lint           # Run golangci-lint on changes from origin/main
-make full-lint      # Run golangci-lint on entire codebase
-make lint-fix       # Run linter and auto-fix issues
-make generate       # Run go generate (required before commits)
+make lint                 # Run golangci-lint on changes from origin/main
+make full-lint            # Run golangci-lint on entire codebase
+make lint-fix             # Run linter and auto-fix issues
+make lint-config-verify   # Check .golangci.yml against the pinned linter schema
+make generate             # Regenerate mocks (required before commits)
 ```
 
 ### Development Tools
 
 ```bash
-make install-tool        # Install mockery for generating mocks
+make install-tool        # Install the pinned mockery into ./bin
 make pre-commit-hook     # Install pre-commit hook (runs generate + lint)
 make pre-push-hook       # Install pre-push hook (runs coverage tests)
 ```
+
+Both tools are pinned in the `Makefile` (`GOLANGCI_TAG`, `MOCKERY_TAG`) and installed into
+`./bin` on demand — `make lint` and `make generate` bootstrap what they need, so there is
+nothing to install by hand:
+
+- **golangci-lint.** `.golangci.yml` is written in the config format of the pinned major
+  version, so the Makefile accepts a binary of *exactly* `GOLANGCI_TAG` (an installed
+  golangci-lint of another version, 2.x in particular, is ignored rather than used against
+  an incompatible config) and otherwise builds the pinned version into `./bin`. A binary
+  built by a Go toolchain older than the local `go` is rebuilt too — including the official
+  release binary of the pinned version: the linter typechecks the stdlib of the local
+  `GOROOT` and would otherwise fail with `file requires newer Go version`. After
+  changing `GOLANGCI_TAG`, run `make lint-config-verify`: `golangci-lint run` silently
+  ignores unknown config keys, so only `config verify` notices a config left behind by
+  another major version.
+- **mockery.** Stays on v2: the `//go:generate` directives use the v2 CLI flags
+  (`--name`, `--structname`, `--inpackage`), which v3 replaced with a `.mockery.yml`.
+  `make generate` puts `./bin` in front of `PATH`, so the pinned binary generates the
+  mocks even when another version is installed globally. `MOCKERY_TAG` is additionally
+  capped by the `go` directive of our `go.mod`: a mockery release that declares a newer
+  `go` than ours cannot be built by the toolchain the repository targets, so bumping the
+  pin past that point breaks `make generate` on a pinned (`GOTOOLCHAIN=local`) Go 1.24.
+  Raise it together with `go.mod`, not before.
 
 ### Running argen
 
@@ -215,8 +239,11 @@ Metrics are namespace-specific and include operation details.
 
 ## Minimum Requirements
 
-- **Go 1.19.0+** (checked by scripts/goversioncheck.sh)
-- **golangci-lint 1.60.3** (auto-installed by make targets)
+- **Go 1.24.0+** — `MIN_GO_VERSION` in the `Makefile` (checked by `scripts/goversioncheck.sh`),
+  matching the `go` directive of `go.mod`
+- **golangci-lint** and **mockery** — versions are pinned in the `Makefile` (`GOLANGCI_TAG`,
+  `MOCKERY_TAG`) and installed into `./bin` by the make targets; do not repeat the numbers
+  elsewhere, the `Makefile` is the single source of truth
 
 ## Common Development Tasks
 
@@ -250,7 +277,7 @@ Metrics are namespace-specific and include operation details.
 ## Important Notes
 
 - Generated code is identified by file patterns `*_gen.go` and `*_mock.go` (excluded from linting)
-- The project requires Go 1.19.0+ (enforced by `scripts/goversioncheck.sh`)
+- The project requires Go 1.24.0+ (`MIN_GO_VERSION`, enforced by `scripts/goversioncheck.sh`)
 - Tests use build tag `activerecord` - always run with this tag
 - Field order matters for Octopus backend (must match tuple structure)
 - Index order matters for Octopus backend (must match database configuration)

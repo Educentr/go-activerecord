@@ -75,8 +75,8 @@ linters:
     # - godot
     # Tool for detection of FIX.ME, TO.DO and other comment keywords.
     # - godox
-    # Go linter to check the errors handling expressions.
-    - goerr113
+    # Go linter to check the errors handling expressions (named goerr113 before v1.64).
+    - err113
     # Check import statements are formatted according to the 'goimport' command. Reformat imports in autofix mode.
     - goimports
     # An analyzer to detect magic numbers.
@@ -143,8 +143,9 @@ linters:
     - staticcheck
     # Stylecheck is a replacement for golint.
     - stylecheck
-    # The tenv is analyzer that detects using os.Setenv instead of t.Setenv since Go1.17
-    - tenv
+    # Detects os.Setenv instead of t.Setenv and other test hygiene violations.
+    # Replaces tenv, deprecated since v1.64.0.
+    - usetesting
     # Like the front-end of a Go compiler, parses and type-checks Go code.
     - typecheck
     # The thelper detects Go test helpers without t.Helper() call and checks the consistency of test helpers.
@@ -453,7 +454,7 @@ issues:
         - goconst
         - gocritic
         - gocyclo
-        - goerr113
+        - err113
         - gosec
         - lll
         - nilerr
