@@ -53,7 +53,10 @@ nothing to install by hand:
 - **golangci-lint.** `.golangci.yml` is written in the config format of the pinned major
   version, so the Makefile accepts a binary of *exactly* `GOLANGCI_TAG` (an installed
   golangci-lint of another version, 2.x in particular, is ignored rather than used against
-  an incompatible config) and otherwise builds the pinned version into `./bin`. After
+  an incompatible config) and otherwise builds the pinned version into `./bin`. A binary
+  built by a Go toolchain older than the local `go` is rebuilt too — including the official
+  release binary of the pinned version: the linter typechecks the stdlib of the local
+  `GOROOT` and would otherwise fail with `file requires newer Go version`. After
   changing `GOLANGCI_TAG`, run `make lint-config-verify`: `golangci-lint run` silently
   ignores unknown config keys, so only `config verify` notices a config left behind by
   another major version.

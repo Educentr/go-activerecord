@@ -55,13 +55,29 @@ golangci_version = $(shell $(1) --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+
 # Go-тулчейн, которым собран бинарь ("<path>: go1.26.0" -> "1.26.0"), пусто если
 # неизвестен. GOTOOLCHAIN=local не даёт пробе переключать тулчейн.
 golangci_go_version = $(shell GOTOOLCHAIN=local go version -m $(1) 2>/dev/null | awk 'NR==1 { sub(/^go/, "", $$2); print $$2 }')
+# Версия локального go ("go1.26.5" -> "1.26.5"), пусто если определить не
+# удалось. GOTOOLCHAIN=local — та же причина, что выше.
+LOCAL_GO_VERSION := $(shell GOTOOLCHAIN=local go env GOVERSION 2>/dev/null | sed -e 's/^go//')
 # Непусто, когда версия $(2) известна и меньше требуемой $(1); неизвестную $(2)
 # оставляем в покое, чтобы сбойная проба не загоняла сборку в цикл.
+# Сравнение версий здесь и в version_max лексикографическое ($(sort)); для go1.2x
+# и релизов golangci-lint 1.x/2.x этого достаточно.
 version_older = $(if $(1),$(if $(2),$(filter-out $(1),$(word 1, $(sort $(1) $(2))))))
+version_max = $(lastword $(sort $(1) $(2)))
+# Тулчейн, которым должен быть собран бинарь линтера, чтобы тайпчек не падал.
+# Линтер тайпчекает не только код репозитория, но и stdlib из GOROOT локального
+# go, поэтому решает именно версия локального go, а не директива go в go.mod:
+# официальный релизный бинарь 1.64.8 собран go1.24.1 и при локальном go1.26.5
+# падает на файлах stdlib
+#   file requires newer Go version go1.26 (application built with go1.24)
+# хотя go1.24.1 и не старше go 1.24.0 из нашего go.mod. GO_MOD_VERSION берём в
+# максимуме на случай локального go старше версии языка самого репозитория.
+GOLANGCI_GO_REQUIRED := $(call version_max,$(GO_MOD_VERSION),$(LOCAL_GO_VERSION))
 # Бинарь непригоден, если его версия не равна точно GOLANGCI_TAG либо он собран
-# тулчейном старше той версии Go, на которую рассчитан репозиторий, — второе
-# роняет линтер на тайпчеке ("file requires newer Go version goX.Y").
-golangci_unusable = $(if $(filter $(GOLANGCI_TAG),$(call golangci_version,$(1))),,version)$(call version_older,$(GO_MOD_VERSION),$(call golangci_go_version,$(1)))
+# тулчейном старше GOLANGCI_GO_REQUIRED. Цикла «непригоден → пересобрали → снова
+# непригоден» не возникает: install-lint собирает бинарь локальным go, то есть
+# тулчейном ровно LOCAL_GO_VERSION (или новее, если go переключит тулчейн сам).
+golangci_unusable = $(if $(filter $(GOLANGCI_TAG),$(call golangci_version,$(1))),,version)$(call version_older,$(GOLANGCI_GO_REQUIRED),$(call golangci_go_version,$(1)))
 
 # Проверка локальной версии бинаря
 ifneq ($(wildcard $(GOLANGCI_BIN)),)
