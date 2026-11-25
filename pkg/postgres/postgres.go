@@ -234,17 +234,20 @@ func (q *Query) AddCondition(c Condition) {
 		return
 	}
 
-	// Несколько значений: IN clause (только для равенства)
+	// Несколько значений: IN/NOT IN clause
 	if len(c.Values) > 1 {
-		if c.Operator == "=" {
-			placeholders := make([]string, 0, len(c.Values))
-			for _, val := range c.Values {
-				placeholders = append(placeholders, fmt.Sprintf("$%d", q.AddParams(val)))
-			}
-			q.AddWhereQuery(fmt.Sprintf("%s IN (%s)", fieldName, strings.Join(placeholders, ", ")))
-		} else {
+		listOperator, ex := ConditionListOperator(c.Operator)
+		if !ex {
 			panic(fmt.Sprintf("operator '%s' does not support multiple values", c.Operator))
 		}
+
+		placeholders := make([]string, 0, len(c.Values))
+		for _, val := range c.Values {
+			placeholders = append(placeholders, fmt.Sprintf("$%d", q.AddParams(val)))
+		}
+
+		q.AddWhereQuery(fmt.Sprintf("%s %s (%s)", fieldName, listOperator, strings.Join(placeholders, ", ")))
+
 		return
 	}
 

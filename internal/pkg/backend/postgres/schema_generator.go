@@ -9,6 +9,7 @@ import (
 
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/schema"
+	postgresPkg "github.com/Educentr/go-activerecord/v3/pkg/postgres"
 )
 
 // PostgresSchemaGenerator генератор DDL схемы для PostgreSQL
@@ -257,25 +258,31 @@ func (g *PostgresSchemaGenerator) generateConditionClause(conditions map[int]ds.
 		}
 
 		var part string
-		if cond.IsNullCheck {
+
+		switch {
+		case cond.IsNullCheck:
 			part = fmt.Sprintf("%s %s", fieldExpr, cond.ConditionType)
-		} else if len(cond.Value) > 0 {
-			value := cond.Value[0]
+		case len(cond.Value) == 1:
+			part = fmt.Sprintf("%s %s %s", fieldExpr, cond.ConditionType, conditionDDLValue(fieldFormat, cond.Value[0]))
+		case len(cond.Value) > 1:
+			// Список значений: предикат индекса должен совпасть с условием
+			// запроса по этому индексу, которое рантайм строит как
+			// `IN (...)`/`NOT IN (...)` по той же таблице операторов.
+			// Иначе планировщик не применит частичный индекс к запросу, а у
+			// уникального индекса уникальность будет действовать только для
+			// первого значения списка.
+			//
+			// Операторов сравнения (`>`, `<`, `>=`, `<=`) со списком значений
+			// здесь быть не может: checker отвергает их до генерации схемы
+			// (ErrCheckIndexConditionValuesMismatch)
+			if listOperator, ex := postgresPkg.ConditionListOperator(cond.ConditionType); ex {
+				values := make([]string, 0, len(cond.Value))
+				for _, value := range cond.Value {
+					values = append(values, conditionDDLValue(fieldFormat, value))
+				}
 
-			switch {
-			case value == "" || value == ",":
-				// Если значение пустое, используем пустую строку в SQL
-				value = "''"
-			case strings.HasPrefix(value, "'"):
-				// Значение экранировано в декларации, повторно не трогаем
-			default:
-				// Приводим значение к типу колонки: без этого предикат
-				// индекса по time.Time, uuid.UUID или postgres.BYTEA —
-				// невалидный SQL, см. ConditionSQLLiteral
-				value = ConditionSQLLiteral(fieldFormat, value)
+				part = fmt.Sprintf("%s %s (%s)", fieldExpr, listOperator, strings.Join(values, ", "))
 			}
-
-			part = fmt.Sprintf("%s %s %s", fieldExpr, cond.ConditionType, value)
 		}
 
 		if part != "" {
@@ -284,6 +291,24 @@ func (g *PostgresSchemaGenerator) generateConditionClause(conditions map[int]ds.
 	}
 
 	return strings.Join(parts, " AND ")
+}
+
+// conditionDDLValue отдаёт одно значение условия частичного индекса литералом
+// SQL. Применяется к каждому значению отдельно, в том числе к элементам списка
+func conditionDDLValue(fieldFormat ds.Format, value string) string {
+	switch {
+	case value == "" || value == ",":
+		// Если значение пустое, используем пустую строку в SQL
+		return "''"
+	case strings.HasPrefix(value, "'"):
+		// Значение экранировано в декларации, повторно не трогаем
+		return value
+	default:
+		// Приводим значение к типу колонки: без этого предикат
+		// индекса по time.Time, uuid.UUID или postgres.BYTEA —
+		// невалидный SQL, см. ConditionSQLLiteral
+		return ConditionSQLLiteral(fieldFormat, value)
+	}
 }
 
 // GenerateFullSchema генерирует полную DDL схему

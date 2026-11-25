@@ -71,3 +71,37 @@ func TestCheckIndexesConditionValue(t *testing.T) {
 		})
 	}
 }
+
+// TestCheckIndexesConditionValueList проверяет, что список значений в условии
+// допускается только для операторов, у которых он выражается через IN/NOT IN:
+// для остальных это ошибка генерации, а не паника рантайма на первом запросе
+// по индексу
+func TestCheckIndexesConditionValueList(t *testing.T) {
+	tests := []struct {
+		name          string
+		conditionType string
+		values        []string
+		wantErr       bool
+	}{
+		{name: "equality with value list", conditionType: "=", values: []string{"1", "2", "3"}},
+		{name: "inequality with value list", conditionType: "!=", values: []string{"1", "2"}},
+		{name: "greater than with value list", conditionType: ">", values: []string{"1", "2"}, wantErr: true},
+		{name: "less or equal with value list", conditionType: "<=", values: []string{"1", "2"}, wantErr: true},
+	}
+
+	backendGen := BackendGenerator{}
+	backendGen.Init()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := backendGen.CheckIndexes(conditionRecordPackage(tt.conditionType, tt.values))
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("CheckIndexes() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if tt.wantErr && !strings.Contains(err.Error(), "value count mismatch") {
+				t.Errorf("CheckIndexes() error = %q, want it to report value count mismatch", err)
+			}
+		})
+	}
+}

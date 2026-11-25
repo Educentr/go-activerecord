@@ -7,6 +7,7 @@ import (
 
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/arerror"
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
+	postgresPkg "github.com/Educentr/go-activerecord/v3/pkg/postgres"
 )
 
 var rxCanonicalTableName = regexp.MustCompile("^[a-z0-9_]*$")
@@ -94,6 +95,20 @@ func (b BackendGenerator) CheckIndexes(cl *ds.RecordPackage) error {
 				isStringType := fld.Format == "string"
 				if !isStringType {
 					return &arerror.ErrCheckPackageIndexDecl{Pkg: cl.Namespace.PackageName, Index: ind.Name, Err: fmt.Errorf("empty string condition is only valid for string fields")}
+				}
+			}
+
+			// Список значений выражается только через `IN`/`NOT IN`, то есть
+			// поддерживается для `=` и `!=`. Для остальных операторов его
+			// нечем записать ни в предикате частичного индекса, ни в запросе
+			// рантайма — проверяем на генерации, а не падаем на первом запросе
+			if len(cond.Value) > 1 {
+				if _, ex := postgresPkg.ConditionListOperator(cond.ConditionType); !ex {
+					return &arerror.ErrCheckPackageIndexDecl{
+						Pkg:   cl.Namespace.PackageName,
+						Index: ind.Name,
+						Err:   arerror.ErrCheckIndexConditionValuesMismatch,
+					}
 				}
 			}
 
