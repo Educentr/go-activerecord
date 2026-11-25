@@ -31,7 +31,7 @@ graph TB
 
 ## Требования
 
-- **Go 1.19+** (проверяется при сборке)
+- **Go 1.24+** (`MIN_GO_VERSION` в `Makefile`, проверяется при сборке)
 - **PostgreSQL** или **Octopus/Tarantool 1.5**
 
 !!! info "Примечание"
