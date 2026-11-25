@@ -112,7 +112,7 @@ condition:Status[=]1&&Flags&1[=]1&&DeletedAt[is null]
 [PostgreSQL](../postgresql/index.md).
 
 !!! note "Поддержка в бэкендах"
-    Условные индексы поддерживаются в PostgreSQL и Octopus. Условия автоматически добавляются во все запросы по этому индексу.
+    Условные индексы поддерживаются только в PostgreSQL. Условия автоматически добавляются во все запросы по этому индексу. Для Octopus `argen` отвергает индекс с `condition` на проверке (`index condition not supported`).
 
 ## IndexParts*
 
