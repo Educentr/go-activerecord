@@ -92,7 +92,9 @@ type IndexesUser struct {
 | Условие | Пример | SQL |
 |---------|--------|-----|
 | Равенство | `Status[=]1` | `status = 1` |
-| Не равно | `Status[<>]0` | `status <> 0` |
+| Не равно | `Status[!=]0` | `status != 0` |
+| Список значений | `Status[=]1,2` | `status IN (1, 2)` |
+| Список значений (не равно) | `Status[!=]1,2` | `status NOT IN (1, 2)` |
 | IS NULL | `DeletedAt[is null]` | `deleted_at IS NULL` |
 | IS NOT NULL | `DeletedAt[is not null]` | `deleted_at IS NOT NULL` |
 | Пустая строка | `Email[=]''` | `email = ''` |
@@ -103,6 +105,11 @@ type IndexesUser struct {
 ```go
 condition:Status[=]1&&Flags&1[=]1&&DeletedAt[is null]
 ```
+
+Значения одного условия перечисляются через запятую: `=` со списком даёт
+`IN (...)`, `!=` — `NOT IN (...)`. Операторы сравнения (`>`, `<`, `>=`, `<=`)
+принимают только одно значение. Как список значений попадает в DDL — раздел «Условные индексы» в
+[PostgreSQL](../postgresql/index.md).
 
 !!! note "Поддержка в бэкендах"
     Условные индексы поддерживаются в PostgreSQL и Octopus. Условия автоматически добавляются во все запросы по этому индексу.
