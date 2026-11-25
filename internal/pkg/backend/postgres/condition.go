@@ -130,14 +130,23 @@ func boolConditionLiteral(format ds.Format, value string) (string, error) {
 	return strconv.FormatBool(parsed), nil
 }
 
-// timeConditionLiteral ожидает в теге число секунд unix-времени
+// timeConditionLiteral ожидает в теге число секунд unix-времени.
+//
+// Литерал приводится к UTC. time.Unix возвращает значение в локальной зоне
+// процесса, а pgx при записи time.Time в колонку TIMESTAMP (без зоны)
+// отбрасывает зону, сохраняя wall clock как есть (pgtype/timestamp.go,
+// discardTimeZone). Без .UTC() одно и то же значение из тега означало бы
+// разные моменты: предикат частичного индекса в DDL пишется в UTC
+// (timeConditionSQLLiteral), а условие запроса из index.go уезжало бы со
+// смещением зоны процесса — частичный индекс для такого запроса не
+// применяется, и выборка отбирает не тот диапазон, что описан в декларации
 func timeConditionLiteral(format ds.Format, value string) (string, error) {
 	parsed, err := strconv.ParseInt(value, conditionNumBase, conditionBits64)
 	if err != nil {
 		return "", conditionValueError(format, value, "unix timestamp (seconds)")
 	}
 
-	return fmt.Sprintf("time.Unix(%d, 0)", parsed), nil
+	return fmt.Sprintf("time.Unix(%d, 0).UTC()", parsed), nil
 }
 
 // uuidConditionLiteral собирает составной литерал, а не вызов конструктора
