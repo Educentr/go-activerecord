@@ -2,9 +2,15 @@ package postgres
 
 import (
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
 )
@@ -30,7 +36,7 @@ func TestConditionLiteral(t *testing.T) {
 		{name: "string empty", format: "string", value: "", want: `""`},
 		{name: "string with quote", format: "string", value: `a"b`, want: `"a\"b"`},
 		{name: "bytea", format: "postgres.BYTEA", value: "raw", want: `postgres.BYTEA("raw")`},
-		{name: "time", format: "time.Time", value: "1700000000", want: "time.Unix(1700000000, 0)"},
+		{name: "time", format: "time.Time", value: "1700000000", want: "time.Unix(1700000000, 0).UTC()"},
 		{
 			name:   "uuid",
 			format: "uuid.UUID",
@@ -151,4 +157,138 @@ func TestConditionSQLLiteralTimeIndependentOfLocalZone(t *testing.T) {
 			t.Errorf("ConditionSQLLiteral with TZ %s = %q, want %q", name, got, want)
 		}
 	}
+}
+
+// Литерал условия для time.Time в index.go и TIMESTAMP-литерал предиката в DDL
+// обязаны означать один и тот же wall clock при любом TZ процесса: pgx при
+// записи time.Time в колонку TIMESTAMP отбрасывает зону, сохраняя wall clock
+// как есть, а предикат частичного индекса в DDL всегда в UTC. Расходятся —
+// планировщик не может применить частичный индекс к запросу, а выборка
+// отбирает не тот диапазон, что описан в декларации
+func TestConditionLiteralTimeAgreesWithSQLLiteral(t *testing.T) {
+	saved := time.Local
+
+	defer func() { time.Local = saved }()
+
+	for _, zone := range []string{"UTC", "Europe/Moscow", "America/Los_Angeles"} {
+		loc, err := time.LoadLocation(zone)
+		if err != nil {
+			t.Skipf("timezone database is not available: %s", err)
+		}
+
+		time.Local = loc
+
+		for _, value := range []string{"1700000000", "0", "-1"} {
+			literal, err := ConditionLiteral(timeFormat, value)
+			if err != nil {
+				t.Fatalf("ConditionLiteral(%q, %q) unexpected error: %s", timeFormat, value, err)
+			}
+
+			// то же значение time.Time, которое получит сгенерированный index.go
+			runtimeValue := evalTimeConditionLiteral(t, literal)
+
+			stored := "TIMESTAMP '" + encodeTimestampAsPgx(t, runtimeValue) + "'"
+			if want := ConditionSQLLiteral(timeFormat, value); stored != want {
+				t.Errorf("TZ %s, condition `%s`: index.go literal %s пишется в TIMESTAMP как %s, в DDL предикате %s",
+					zone, value, literal, stored, want)
+			}
+		}
+	}
+}
+
+// evalTimeConditionLiteral вычисляет литерал, который ConditionLiteral отдаёт
+// для time.Time: разбирает его как выражение Go и применяет те же вызовы, что
+// попали в сгенерированный код. Тест сверяет не текст литерала, а момент,
+// который этот литерал означает в рантайме, — пропавший `.UTC()` изменит
+// результат, а не только текст
+func evalTimeConditionLiteral(t *testing.T, literal string) time.Time {
+	t.Helper()
+
+	expr, err := parser.ParseExpr(literal)
+	if err != nil {
+		t.Fatalf("condition literal `%s` is not a valid go expression: %s", literal, err)
+	}
+
+	toUTC := false
+
+	if call, ok := expr.(*ast.CallExpr); ok {
+		if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "UTC" {
+			toUTC = true
+			expr = sel.X
+		}
+	}
+
+	sec, nsec := timeUnixArgs(t, literal, expr)
+
+	value := time.Unix(sec, nsec)
+	if toUTC {
+		value = value.UTC()
+	}
+
+	return value
+}
+
+// timeUnixArgs проверяет, что выражение — вызов time.Unix, и отдаёт его аргументы
+func timeUnixArgs(t *testing.T, literal string, expr ast.Expr) (int64, int64) {
+	t.Helper()
+
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("condition literal `%s` is not a time.Unix call", literal)
+	}
+
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("condition literal `%s` is not a time.Unix call", literal)
+	}
+
+	if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "time" || sel.Sel.Name != "Unix" {
+		t.Fatalf("condition literal `%s` is not a time.Unix call", literal)
+	}
+
+	if len(call.Args) != 2 {
+		t.Fatalf("condition literal `%s`: time.Unix takes 2 arguments, got %d", literal, len(call.Args))
+	}
+
+	return intLiteralArg(t, literal, call.Args[0]), intLiteralArg(t, literal, call.Args[1])
+}
+
+// intLiteralArg разбирает целочисленный аргумент литерала, в том числе
+// отрицательный (в AST это унарный минус, а не часть константы)
+func intLiteralArg(t *testing.T, literal string, arg ast.Expr) int64 {
+	t.Helper()
+
+	sign := int64(1)
+
+	if unary, ok := arg.(*ast.UnaryExpr); ok && unary.Op == token.SUB {
+		sign = -1
+		arg = unary.X
+	}
+
+	lit, ok := arg.(*ast.BasicLit)
+	if !ok || lit.Kind != token.INT {
+		t.Fatalf("condition literal `%s`: time.Unix argument is not an integer literal", literal)
+	}
+
+	parsed, err := strconv.ParseInt(lit.Value, conditionNumBase, conditionBits64)
+	if err != nil {
+		t.Fatalf("condition literal `%s`: cannot parse time.Unix argument `%s`: %s", literal, lit.Value, err)
+	}
+
+	return sign * parsed
+}
+
+// encodeTimestampAsPgx отдаёт wall clock, который pgx отправит в колонку
+// TIMESTAMP для этого значения. Нормализацию (отбрасывание зоны,
+// pgtype/timestamp.go, discardTimeZone) делает сам драйвер: повторять её в
+// тесте — значит проверять копию, а не поведение pgx
+func encodeTimestampAsPgx(t *testing.T, value time.Time) string {
+	t.Helper()
+
+	encoded, err := pgtype.NewMap().Encode(pgtype.TimestampOID, pgtype.TextFormatCode, value, nil)
+	if err != nil {
+		t.Fatalf("pgx cannot encode %s as TIMESTAMP: %s", value, err)
+	}
+
+	return string(encoded)
 }
