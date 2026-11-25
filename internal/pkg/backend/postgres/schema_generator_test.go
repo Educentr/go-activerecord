@@ -1000,3 +1000,162 @@ func TestPostgresSchemaGenerator_ConditionalIndex_TypedLiterals(t *testing.T) {
 		}
 	}
 }
+
+// Условие со списком значений должно попадать в DDL целиком: `=` даёт
+// `IN (...)`, `!=` — `NOT IN (...)`. Предикат частичного индекса обязан
+// совпадать с условием запроса по этому индексу, которое рантайм строит по той
+// же таблице операторов (postgres.ConditionListOperator)
+func TestPostgresSchemaGenerator_generateConditionClause_ValueList(t *testing.T) {
+	g := NewSchemaGenerator()
+
+	pkg := ds.NewRecordPackage()
+	pkg.Fields = []ds.FieldDeclaration{
+		{Name: "Mid", Format: "int32"},
+		{Name: "Status", Format: "string", Size: 32},
+		{Name: "CreatedAt", Format: "time.Time"},
+		{Name: "Token", Format: "uuid.UUID"},
+		{Name: "Flags", Format: "int64"},
+	}
+
+	tests := []struct {
+		name       string
+		conditions map[int]ds.IndexCondition
+		want       string
+	}{
+		{
+			name: "numeric value list",
+			conditions: map[int]ds.IndexCondition{
+				0: {ConditionType: "=", Value: []string{"1", "2", "3"}},
+			},
+			want: "mid IN (1, 2, 3)",
+		},
+		{
+			name: "string value list",
+			conditions: map[int]ds.IndexCondition{
+				1: {ConditionType: "=", Value: []string{"active", "pending"}},
+			},
+			want: "status IN ('active', 'pending')",
+		},
+		{
+			name: "value list on typed column keeps per value literal",
+			conditions: map[int]ds.IndexCondition{
+				2: {ConditionType: "=", Value: []string{"1700000000", "1700003600"}},
+				3: {ConditionType: "=", Value: []string{"6ba7b810-9dad-11d1-80b4-00c04fd430c8", "6ba7b811-9dad-11d1-80b4-00c04fd430c8"}},
+			},
+			want: "createdat IN (TIMESTAMP '2023-11-14 22:13:20', TIMESTAMP '2023-11-14 23:13:20')" +
+				" AND token IN ('6ba7b810-9dad-11d1-80b4-00c04fd430c8', '6ba7b811-9dad-11d1-80b4-00c04fd430c8')",
+		},
+		{
+			name: "inequality value list gives NOT IN",
+			conditions: map[int]ds.IndexCondition{
+				1: {ConditionType: "!=", Value: []string{"draft", "deleted"}},
+			},
+			want: "status NOT IN ('draft', 'deleted')",
+		},
+		{
+			name: "value list with field expression",
+			conditions: map[int]ds.IndexCondition{
+				4: {ConditionType: "=", Value: []string{"1", "2"}, FieldExpression: "Flags&3"},
+			},
+			want: "flags&3 IN (1, 2)",
+		},
+		{
+			name: "value list with empty string",
+			conditions: map[int]ds.IndexCondition{
+				1: {ConditionType: "=", Value: []string{"", "active"}},
+			},
+			want: "status IN ('', 'active')",
+		},
+		{
+			name: "value list alongside single value condition",
+			conditions: map[int]ds.IndexCondition{
+				0: {ConditionType: "=", Value: []string{"1", "2"}},
+				1: {ConditionType: "=", Value: []string{"active"}},
+			},
+			want: "mid IN (1, 2) AND status = 'active'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := g.generateConditionClause(tt.conditions, pkg); got != tt.want {
+				t.Errorf("generateConditionClause() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// Список значений в DDL детерминирован: порядок значений берётся из декларации
+func TestPostgresSchemaGenerator_generateConditionClause_ValueListDeterministic(t *testing.T) {
+	g := NewSchemaGenerator()
+
+	pkg := ds.NewRecordPackage()
+	pkg.Fields = []ds.FieldDeclaration{
+		{Name: "Mid", Format: "int32"},
+		{Name: "Status", Format: "string", Size: 32},
+	}
+
+	conditions := map[int]ds.IndexCondition{
+		0: {ConditionType: "=", Value: []string{"3", "1", "2"}},
+		1: {ConditionType: "!=", Value: []string{"draft", "deleted"}},
+	}
+
+	want := "mid IN (3, 1, 2) AND status NOT IN ('draft', 'deleted')"
+
+	for i := 0; i < 100; i++ {
+		if got := g.generateConditionClause(conditions, pkg); got != want {
+			t.Fatalf("iteration %d: generateConditionClause() = %q, want %q", i, got, want)
+		}
+	}
+}
+
+// Полный DDL условного индекса со списком значений
+func TestPostgresSchemaGenerator_ConditionalIndex_ValueList(t *testing.T) {
+	g := NewSchemaGenerator()
+
+	pkg := ds.NewRecordPackage()
+	pkg.Namespace.ObjectName = "provider_keys"
+	pkg.Namespace.PublicName = "ProviderKey"
+	pkg.Fields = []ds.FieldDeclaration{
+		{Name: "ID", Format: "int64", PrimaryKey: true, InitByDB: true},
+		{Name: "Mid", Format: "int32"},
+		{Name: "Status", Format: "string", Size: 32},
+	}
+	pkg.FieldsMap = map[string]int{"ID": 0, "Mid": 1, "Status": 2}
+	pkg.Indexes = []ds.IndexDeclaration{
+		{
+			Name:      "Mid",
+			Fields:    []int{1},
+			FieldsMap: map[string]ds.IndexField{"Mid": {IndField: 1}},
+			Conditions: map[int]ds.IndexCondition{
+				1: {ConditionType: "=", Value: []string{"1", "2", "3"}},
+			},
+		},
+		{
+			Name:      "Status",
+			Fields:    []int{2},
+			FieldsMap: map[string]ds.IndexField{"Status": {IndField: 2}},
+			Conditions: map[int]ds.IndexCondition{
+				2: {ConditionType: "=", Value: []string{"active", "pending"}},
+			},
+		},
+	}
+
+	ddl, err := g.GenerateFullSchema(pkg)
+	if err != nil {
+		t.Fatalf("GenerateFullSchema error: %v", err)
+	}
+
+	ddlStr := string(ddl)
+
+	wantClauses := []string{
+		"WHERE mid IN (1, 2, 3)",
+		"WHERE status IN ('active', 'pending')",
+	}
+
+	for _, want := range wantClauses {
+		if !strings.Contains(ddlStr, want) {
+			t.Errorf("expected %q in DDL, got:\n%s", want, ddlStr)
+		}
+	}
+}

@@ -118,6 +118,48 @@ ErrCheckPackageIndexDecl Pkg: `user`; Index: `Status`;
 	condition on field `Status`: invalid index condition value: `abc` is not a valid integer for type `int64`
 ```
 
+### Несколько значений в условии
+
+Значения перечисляются через запятую. Такое условие попадает в DDL списком:
+`=` даёт `IN (...)`, `!=` — `NOT IN (...)`:
+
+```go
+type IndexesProviderKey struct {
+    Mid    bool `ar:"fields:Mid;condition:Mid[=]1,2,3"`
+    Status bool `ar:"fields:Status;condition:Status[=]'active','pending'"`
+    Live   bool `ar:"fields:Status;condition:Status[!=]'draft','deleted'"`
+}
+```
+
+```sql
+CREATE INDEX idx_provider_keys_mid ON provider_keys (mid ASC)
+    WHERE mid IN (1, 2, 3);
+
+CREATE INDEX idx_provider_keys_status ON provider_keys (status ASC)
+    WHERE status IN ('active', 'pending');
+
+CREATE INDEX idx_provider_keys_live ON provider_keys (status ASC)
+    WHERE status NOT IN ('draft', 'deleted');
+```
+
+Каждое значение приводится к типу колонки по таблице выше, то есть список по
+полю `time.Time` или `uuid.UUID` тоже корректен:
+`WHERE createdat IN (TIMESTAMP '2023-11-14 22:13:20', TIMESTAMP '2023-11-14 23:13:20')`.
+
+Предикат индекса и условие запроса по этому индексу строятся по одной таблице
+операторов, поэтому они совпадают: запрос по индексу `Mid` получает
+`WHERE mid IN ($1, $2, $3)`. Расхождение здесь означало бы, что планировщик не
+применит частичный индекс к запросу, а у уникального индекса уникальность
+действовала бы только для части значений.
+
+Операторы сравнения (`>`, `<`, `>=`, `<=`) принимают только одно значение:
+списка для них нет ни в предикате индекса, ни в запросе. `argen` отвергает такую
+декларацию на проверке:
+
+```text
+ErrCheckPackageIndexDecl Pkg: `providerkey`; Index: `Mid`; operator value count mismatch
+```
+
 ## Типы данных
 
 | Go тип | PostgreSQL | С init_by_db |
