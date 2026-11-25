@@ -100,7 +100,7 @@ CREATE INDEX IF NOT EXISTS idx_users_activeusers ON users (created_at)
 | `float32` | REAL | - |
 | `bool` | BOOLEAN | - |
 | `string` | VARCHAR(n) / TEXT | - |
-| `[]byte` | BYTEA | - |
+| `postgres.BYTEA` | BYTEA | - |
 | `time.Time` | TIMESTAMP | - |
 
 ### NOT NULL и DEFAULT
@@ -134,6 +134,11 @@ CREATE UNIQUE INDEX idx_users_email ON users (email);
 CREATE INDEX idx_users_statusdate ON users (status ASC, created_at DESC);
 CREATE INDEX idx_users_active ON users (id) WHERE status = 'active' AND deleted_at IS NULL;
 ```
+
+Значение условия подставляется в `WHERE` литералом типа колонки: строка, bytea и
+uuid — в одинарных кавычках, `time.Time` — как `TIMESTAMP '<UTC>'` из числа
+секунд unix-времени, числа и `bool` — как есть. Таблица по типам:
+[Значения условий](index.md#значения-условий).
 
 ### Foreign Keys
 

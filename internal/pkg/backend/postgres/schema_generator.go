@@ -261,16 +261,20 @@ func (g *PostgresSchemaGenerator) generateConditionClause(conditions map[int]ds.
 			part = fmt.Sprintf("%s %s", fieldExpr, cond.ConditionType)
 		} else if len(cond.Value) > 0 {
 			value := cond.Value[0]
-			// Определяем нужно ли экранировать значение как строку
-			needQuote := g.isStringType(fieldFormat)
 
-			// Если значение пустое, используем пустую строку в SQL
-			if value == "" || value == "," {
+			switch {
+			case value == "" || value == ",":
+				// Если значение пустое, используем пустую строку в SQL
 				value = "''"
-			} else if needQuote && !strings.HasPrefix(value, "'") {
-				// Экранируем строковое значение если оно ещё не экранировано
-				value = fmt.Sprintf("'%s'", strings.ReplaceAll(value, "'", "''"))
+			case strings.HasPrefix(value, "'"):
+				// Значение экранировано в декларации, повторно не трогаем
+			default:
+				// Приводим значение к типу колонки: без этого предикат
+				// индекса по time.Time, uuid.UUID или postgres.BYTEA —
+				// невалидный SQL, см. ConditionSQLLiteral
+				value = ConditionSQLLiteral(fieldFormat, value)
 			}
+
 			part = fmt.Sprintf("%s %s %s", fieldExpr, cond.ConditionType, value)
 		}
 
@@ -280,16 +284,6 @@ func (g *PostgresSchemaGenerator) generateConditionClause(conditions map[int]ds.
 	}
 
 	return strings.Join(parts, " AND ")
-}
-
-// isStringType проверяет является ли тип строковым
-func (g *PostgresSchemaGenerator) isStringType(format ds.Format) bool {
-	switch format {
-	case "string", "[]byte":
-		return true
-	default:
-		return false
-	}
 }
 
 // GenerateFullSchema генерирует полную DDL схему
