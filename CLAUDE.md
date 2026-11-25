@@ -60,7 +60,11 @@ nothing to install by hand:
 - **mockery.** Stays on v2: the `//go:generate` directives use the v2 CLI flags
   (`--name`, `--structname`, `--inpackage`), which v3 replaced with a `.mockery.yml`.
   `make generate` puts `./bin` in front of `PATH`, so the pinned binary generates the
-  mocks even when another version is installed globally.
+  mocks even when another version is installed globally. `MOCKERY_TAG` is additionally
+  capped by the `go` directive of our `go.mod`: a mockery release that declares a newer
+  `go` than ours cannot be built by the toolchain the repository targets, so bumping the
+  pin past that point breaks `make generate` on a pinned (`GOTOOLCHAIN=local`) Go 1.24.
+  Raise it together with `go.mod`, not before.
 
 ### Running argen
 

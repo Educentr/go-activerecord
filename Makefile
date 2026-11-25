@@ -11,8 +11,11 @@ GOLANGCI_TAG:=1.64.8
 LOCAL_BIN:=$(CURDIR)/bin
 # Путь до бинарника golang-ci
 GOLANGCI_BIN:=$(LOCAL_BIN)/golangci-lint
-# Тег mockery (генерация моков по директивам //go:generate)
-MOCKERY_TAG:=2.53.8
+# Тег mockery (генерация моков по директивам //go:generate). Не поднимать выше
+# версии, у которой директива go в go.mod больше GO_MOD_VERSION ниже: go install
+# откажется её собирать нужным репозиторию тулчейном (v2.53.6 -> go 1.24.0,
+# v2.53.7 -> 1.25.0, v2.53.8 -> 1.26.0). Поднимать вместе с go.mod, не раньше.
+MOCKERY_TAG:=2.53.6
 # Путь до бинарника mockery
 MOCKERY_BIN:=$(LOCAL_BIN)/mockery
 # Минимальная верси гошки
