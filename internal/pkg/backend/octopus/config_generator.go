@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
-	"strings"
 	"text/template"
 
 	"github.com/Educentr/go-activerecord/v3/internal/pkg/ds"
@@ -41,13 +40,18 @@ func (g *OctopusConfigGenerator) GenerateSchemaJSON(pkgInterface any) (*schema.T
 		return nil, fmt.Errorf("expected *ds.RecordPackage, got %T", pkgInterface)
 	}
 
-	// Получаем номер спейса из ServerConfKey (формат namespace:ID или просто namespace)
-	spaceID := g.extractSpaceID(pkg.ServerConfKey)
+	// Номер спейса объявлен в //ar:namespace:<N> — это тот же namespace, в
+	// который ходит сгенерированный рантайм-код. ServerConfKey задаёт базу
+	// (ключ конфига сервера) и номера спейса в себе не несёт
+	spaceID, err := strconv.ParseUint(pkg.Namespace.ObjectName, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("octopus namespace %q of package %q is not a space number: %w", pkg.Namespace.ObjectName, pkg.Namespace.PackageName, err)
+	}
 
 	table := &schema.Table{
 		Name:    pkg.Namespace.PublicName,
 		Backend: "octopus",
-		SpaceID: spaceID,
+		SpaceID: uint(spaceID),
 		Columns: make([]schema.Column, 0, len(pkg.Fields)),
 		Indexes: make([]schema.Index, 0, len(pkg.Indexes)),
 	}
@@ -69,18 +73,6 @@ func (g *OctopusConfigGenerator) GenerateSchemaJSON(pkgInterface any) (*schema.T
 	}
 
 	return table, nil
-}
-
-// extractSpaceID извлекает ID спейса из ServerConfKey
-func (g *OctopusConfigGenerator) extractSpaceID(confKey string) uint {
-	// Пытаемся найти число в конце строки
-	parts := strings.Split(confKey, ":")
-	if len(parts) > 1 {
-		if id, err := strconv.ParseUint(parts[len(parts)-1], 10, 32); err == nil {
-			return uint(id)
-		}
-	}
-	return 0
 }
 
 // fieldToColumn конвертирует FieldDeclaration в schema.Column

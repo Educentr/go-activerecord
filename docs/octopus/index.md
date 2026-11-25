@@ -103,6 +103,43 @@ type ProcFieldsStats struct {
 
 Подробнее: [Хранимые процедуры](procedures.md)
 
+## Генерация space.cfg
+
+С флагом `--schema_path` argen складывает конфиг спейсов рядом с остальными
+артефактами схемы — `<schema_path>/octopus/<serverConf>/`:
+
+```text
+etc/database/
+└── octopus/
+    └── octconf/
+        ├── space.cfg       # блоки object_space всех спейсов этой базы
+        └── schema.json     # машинное описание схемы
+```
+
+Номер спейса берётся из `//ar:namespace:<N>` — это тот же номер, в который
+ходит сгенерированный рантайм-код:
+
+```go
+//ar:serverConf:octconf
+//ar:namespace:5
+//ar:backend:octopus
+type FieldsUser struct { /* ... */ }
+```
+
+```text
+# Space ID: 5
+
+object_space[5] = { enabled = 1
+...
+```
+
+!!! note "Процедуры в space.cfg не попадают"
+    У декларации `ProcFields*` нет спейса, а в `//ar:namespace` лежит имя
+    процедуры. Такие пакеты в `space.cfg` и `schema.json` не включаются.
+
+Миграций у octopus нет: конфиг спейсов применяется перезапуском базы, поэтому
+`space.cfg` перегенерируется целиком, а каталог `migrations/` не создаётся.
+
 ## Установка
 
 ```bash
