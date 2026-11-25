@@ -33,8 +33,12 @@ func TestOctopusConfigGenerator_GenerateSchemaJSON(t *testing.T) {
 	g := NewConfigGenerator()
 
 	pkg := ds.NewRecordPackage()
-	pkg.ServerConfKey = "users:512"
+	// ServerConfKey — ключ конфига сервера, номера спейса в нём нет:
+	// спейс берётся из //ar:namespace:512 (Namespace.ObjectName)
+	pkg.ServerConfKey = "ocdb"
+	pkg.Namespace.ObjectName = "512"
 	pkg.Namespace.PublicName = "users"
+	pkg.Namespace.PackageName = "users"
 	pkg.Fields = []ds.FieldDeclaration{
 		{Name: "Id", Format: "uint64", PrimaryKey: true},
 		{Name: "Email", Format: "string", Size: 255},
@@ -84,8 +88,10 @@ func TestOctopusConfigGenerator_GenerateFullSchema(t *testing.T) {
 	g := NewConfigGenerator()
 
 	pkg := ds.NewRecordPackage()
-	pkg.ServerConfKey = "users:512"
+	pkg.ServerConfKey = "ocdb"
+	pkg.Namespace.ObjectName = "512"
 	pkg.Namespace.PublicName = "users"
+	pkg.Namespace.PackageName = "users"
 	pkg.Fields = []ds.FieldDeclaration{
 		{Name: "Id", Format: "uint64", PrimaryKey: true},
 		{Name: "Email", Format: "string", Size: 255},
@@ -110,6 +116,10 @@ func TestOctopusConfigGenerator_GenerateFullSchema(t *testing.T) {
 
 	if !strings.Contains(cfgStr, "object_space[512]") {
 		t.Error("expected config to contain object_space declaration")
+	}
+
+	if !strings.Contains(cfgStr, "# Space ID: 512") {
+		t.Error("expected config comment to contain space ID from //ar:namespace")
 	}
 	if !strings.Contains(cfgStr, "enabled = 1") {
 		t.Error("expected config to contain enabled = 1")
@@ -174,23 +184,66 @@ func TestOctopusConfigGenerator_goTypeToOctopusType(t *testing.T) {
 	}
 }
 
-func TestOctopusConfigGenerator_extractSpaceID(t *testing.T) {
+// Номер спейса берётся из //ar:namespace и не зависит от ServerConfKey:
+// ключ конфига сервера с числовым хвостом не должен подменять номер спейса
+func TestOctopusConfigGenerator_SpaceIDFromNamespace(t *testing.T) {
 	g := NewConfigGenerator()
 
 	tests := []struct {
-		confKey string
-		want    uint
+		name          string
+		objectName    string
+		serverConfKey string
+		want          uint
 	}{
-		{"users:512", 512},
-		{"orders:1024", 1024},
-		{"simple", 0},
-		{"", 0},
+		{name: "простой ключ конфига", objectName: "3", serverConfKey: "ocdb", want: 3},
+		{name: "ключ конфига с числовым хвостом", objectName: "4", serverConfKey: "ocdb:512", want: 4},
+		{name: "спейс 0 остаётся нулём", objectName: "0", serverConfKey: "ocdb:512", want: 0},
+		{name: "пустой ключ конфига", objectName: "1024", serverConfKey: "", want: 1024},
 	}
 
 	for _, tt := range tests {
-		got := g.extractSpaceID(tt.confKey)
-		if got != tt.want {
-			t.Errorf("extractSpaceID(%s) = %d, want %d", tt.confKey, got, tt.want)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			pkg := ds.NewRecordPackage()
+			pkg.ServerConfKey = tt.serverConfKey
+			pkg.Namespace.ObjectName = tt.objectName
+			pkg.Namespace.PublicName = "users"
+			pkg.Namespace.PackageName = "users"
+			pkg.Fields = []ds.FieldDeclaration{
+				{Name: "Id", Format: "uint64", PrimaryKey: true},
+			}
+
+			table, err := g.GenerateSchemaJSON(pkg)
+			if err != nil {
+				t.Fatalf("GenerateSchemaJSON error: %v", err)
+			}
+
+			if table.SpaceID != tt.want {
+				t.Errorf("SpaceID = %d, want %d", table.SpaceID, tt.want)
+			}
+		})
+	}
+}
+
+// Нечисловой namespace — это не спейс: тихий 0 вместо ошибки дал бы
+// невалидный object_space[0] в space.cfg
+func TestOctopusConfigGenerator_GenerateSchemaJSON_NonNumericNamespace(t *testing.T) {
+	g := NewConfigGenerator()
+
+	pkg := ds.NewRecordPackage()
+	pkg.ServerConfKey = "ocdb"
+	pkg.Namespace.ObjectName = "users"
+	pkg.Namespace.PublicName = "users"
+	pkg.Namespace.PackageName = "users"
+	pkg.Fields = []ds.FieldDeclaration{
+		{Name: "Id", Format: "uint64", PrimaryKey: true},
+	}
+
+	table, err := g.GenerateSchemaJSON(pkg)
+	if err == nil {
+		t.Fatalf("expected error for non-numeric namespace, got table %+v", table)
+	}
+
+	if !strings.Contains(err.Error(), "users") {
+		t.Errorf("expected error to mention namespace, got: %v", err)
 	}
 }

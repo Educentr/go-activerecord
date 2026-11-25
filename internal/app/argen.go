@@ -345,7 +345,7 @@ type schemaKey struct {
 	serverConfKey string
 }
 
-// generateSchemaArtifacts генерирует DDL схемы и миграции для всех пакетов
+// generateSchemaArtifacts генерирует DDL схемы и миграции для пакетов с полями
 // Таблицы группируются по backend и serverConfKey (база данных)
 //
 // Вывод детерминирован: пакеты обходятся в порядке имён, таблицы внутри группы
@@ -358,6 +358,13 @@ func (a *ArGen) generateSchemaArtifacts() error {
 	for _, pkgName := range sortedPackageNames(a.packagesParsed) {
 		pkg := a.packagesParsed[pkgName]
 		if len(pkg.Backends) == 0 {
+			continue
+		}
+
+		// Пакеты без полей — это декларации хранимых процедур (ProcFields*):
+		// у них нет ни таблицы, ни спейса, а //ar:namespace несёт имя
+		// процедуры, а не номер. В схему такие пакеты не попадают
+		if len(pkg.Fields) == 0 {
 			continue
 		}
 
